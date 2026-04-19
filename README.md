@@ -1,56 +1,34 @@
-# ERP System
+# BTP ERP
 
-Welcome to the ERP (Enterprise Resource Planning) System project built with TypeScript and pnpm workspace.
+Application ERP simple pour chantier, construite avec `React`, `Vite`, `Supabase` et prete pour `Vercel`.
 
-## Overview
-
-This is a modular ERP application created with Replit and now available on GitHub.
-
-## Tech Stack
-
-- **Language**: TypeScript 5.9+
-- **Package Manager**: pnpm (monorepo workspace)
-- **Build Tools**: TypeScript compilation with type checking
-
-## Getting Started
-
-### Prerequisites
-- Node.js (latest LTS recommended)
-- pnpm
-
-### Installation
+## Scripts
 
 ```bash
 pnpm install
+pnpm dev
+pnpm typecheck
+pnpm build
 ```
 
-### Running the Application
+## Variables d'environnement
+
+Creer un fichier `.env` a partir de `.env.example` :
 
 ```bash
-pnpm run build
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
 ```
 
-### Type Checking
+## Structure
 
-```bash
-pnpm run typecheck
-```
+- `src/pages` : ecrans metier
+- `src/lib/erp.ts` : couche metier Supabase centralisee
+- `src/components` : layout et composants simples
+- `public` : assets statiques
 
-## Project Structure
+## Deploiement Vercel
 
-This is a pnpm workspace with multiple packages. See `pnpm-workspace.yaml` for workspace configuration.
-
-## Development
-
-The project uses:
-- TypeScript for type safety
-- Prettier for code formatting
-- pnpm for efficient dependency management
-
-## License
-
-MIT
-
-## Notes
-
-This project was initially developed on Replit and is now maintained on GitHub.
+- Framework preset : `Vite`
+- Root directory : `/`
+- Variables a definir : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
