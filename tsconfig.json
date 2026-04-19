@@ -1,16 +1,8 @@
 {
   "extends": "./tsconfig.base.json",
-  "compileOnSave": false,
+  "compilerOptions": {
+    "noEmit": true
+  },
   "files": [],
-  "references": [
-    {
-      "path": "./lib/db"
-    },
-    {
-      "path": "./lib/api-client-react"
-    },
-    {
-      "path": "./lib/api-zod"
-    }
-  ]
+  "exclude": ["node_modules", "apps"]
 }
