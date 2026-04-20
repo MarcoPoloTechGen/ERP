@@ -14,8 +14,8 @@ import {
 import { useLang, type Lang } from "@/lib/i18n";
 
 const languages: Array<{ value: Lang; label: string }> = [
-  { value: "fr", label: "FR" },
   { value: "en", label: "EN" },
+  { value: "ku", label: "کوردی" },
 ];
 
 function NavLink({
@@ -74,7 +74,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         />
       ) : null}
 
-      <div className="mx-auto flex min-h-screen max-w-[1600px]">
+      <div className="flex min-h-screen w-full">
         <aside
           className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform md:static md:translate-x-0 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"

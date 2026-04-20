@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createProduct,
   deleteProduct,
@@ -12,6 +12,7 @@ import {
   updateProduct,
 } from "@/lib/erp";
 import { formatCurrency } from "@/lib/format";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
@@ -133,6 +134,23 @@ export default function Products() {
     queryFn: listProducts,
   });
 
+  function exportProducts(format: "csv" | "xlsx") {
+    const rows =
+      products?.map((product) => ({
+        Name: product.name,
+        Supplier: product.supplierName ?? "",
+        Unit: product.unit ?? "",
+        UnitPrice: product.unitPrice ?? "",
+      })) ?? [];
+
+    if (format === "csv") {
+      exportRowsToCsv("products.csv", rows);
+      return;
+    }
+
+    exportRowsToExcel("products.xlsx", "Products", rows);
+  }
+
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: async () => {
@@ -149,15 +167,25 @@ export default function Products() {
         title={t.productsTitle}
         subtitle={t.product_count(products?.length ?? 0)}
         action={
-          <PrimaryButton
-            onClick={() => {
-              setSelectedProduct(undefined);
-              setOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            {t.addProduct}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SecondaryButton onClick={() => exportProducts("csv")}>
+              <Download size={16} />
+              CSV
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportProducts("xlsx")}>
+              <FileSpreadsheet size={16} />
+              Excel
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setSelectedProduct(undefined);
+                setOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              {t.addProduct}
+            </PrimaryButton>
+          </div>
         }
       />
 

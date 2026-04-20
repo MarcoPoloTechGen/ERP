@@ -1,19 +1,21 @@
 import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Image as ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileSpreadsheet, Image as ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createInvoice,
   deleteInvoice,
   erpKeys,
   listInvoices,
+  listProjectBuildings,
   listProjects,
   listSuppliers,
   type Invoice,
   updateInvoice,
 } from "@/lib/erp";
 import { formatCurrency, formatDate, formatDateInput, statusColors } from "@/lib/format";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import { deleteInvoiceImageByUrl, uploadInvoiceImage } from "@/lib/supabase";
 import {
@@ -34,6 +36,8 @@ type InvoiceFormValues = {
   number: string;
   supplierId: string;
   projectId: string;
+  assignmentScope: "project" | "building";
+  buildingId: string;
   totalAmount: string;
   paidAmount: string;
   status: "unpaid" | "partial" | "paid";
@@ -54,7 +58,7 @@ function InvoiceImageField({
   label: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const displayUrl = previewUrl ?? value
+  const displayUrl = previewUrl ?? value;
 
   return (
     <div className="space-y-2">
@@ -101,6 +105,10 @@ function InvoiceModal({
   onClose: () => void;
 }) {
   const { t } = useLang();
+  const invoiceAssignment = t.invoiceAssignment ?? "Assignment";
+  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
+  const projectBuildingCost = t.projectBuildingCost ?? "Specific building";
+  const buildingLabel = t.buildingLabel ?? "Building";
   const queryClient = useQueryClient();
   const [storedImageUrl, setStoredImageUrl] = useState<string | null>(invoice?.imageUrl ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -114,11 +122,13 @@ function InvoiceModal({
     queryFn: listProjects,
   });
 
-  const { register, handleSubmit, formState } = useForm<InvoiceFormValues>({
+  const { register, control, handleSubmit, formState, setValue } = useForm<InvoiceFormValues>({
     defaultValues: {
       number: invoice?.number ?? "",
       supplierId: invoice?.supplierId != null ? String(invoice.supplierId) : "",
       projectId: invoice?.projectId != null ? String(invoice.projectId) : "",
+      assignmentScope: invoice?.buildingId != null ? "building" : "project",
+      buildingId: invoice?.buildingId != null ? String(invoice.buildingId) : "",
       totalAmount: String(invoice?.totalAmount ?? ""),
       paidAmount: String(invoice?.paidAmount ?? 0),
       status: invoice?.status ?? "unpaid",
@@ -126,6 +136,16 @@ function InvoiceModal({
       dueDate: formatDateInput(invoice?.dueDate),
       notes: invoice?.notes ?? "",
     },
+  });
+
+  const projectId = useWatch({ control, name: "projectId" });
+  const assignmentScope = useWatch({ control, name: "assignmentScope" });
+  const selectedProjectId = projectId ? Number(projectId) : null;
+
+  const { data: projectBuildings } = useQuery({
+    queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
+    queryFn: () => listProjectBuildings(selectedProjectId ?? undefined),
+    enabled: selectedProjectId != null,
   });
 
   const saveMutation = useMutation({
@@ -148,6 +168,10 @@ function InvoiceModal({
         number: values.number.trim(),
         supplierId: values.supplierId ? Number(values.supplierId) : null,
         projectId: values.projectId ? Number(values.projectId) : null,
+        buildingId:
+          values.projectId && values.assignmentScope === "building" && values.buildingId
+            ? Number(values.buildingId)
+            : null,
         totalAmount,
         paidAmount,
         status:
@@ -220,7 +244,15 @@ function InvoiceModal({
           </Field>
 
           <Field label={t.projectOption}>
-            <select {...register("projectId")} className={inputClassName}>
+            <select
+              {...register("projectId", {
+                onChange: () => {
+                  setValue("assignmentScope", "project");
+                  setValue("buildingId", "");
+                },
+              })}
+              className={inputClassName}
+            >
               <option value="">{t.noneOption}</option>
               {projects?.map((project) => (
                 <option key={project.id} value={project.id}>
@@ -229,6 +261,38 @@ function InvoiceModal({
               ))}
             </select>
           </Field>
+
+          <Field label={invoiceAssignment}>
+            <select
+              {...register("assignmentScope", {
+                onChange: (event) => {
+                  if (event.target.value !== "building") {
+                    setValue("buildingId", "");
+                  }
+                },
+              })}
+              className={inputClassName}
+              disabled={!projectId}
+            >
+              <option value="project">{projectGlobalCost}</option>
+              <option value="building" disabled={!projectBuildings?.length}>
+                {projectBuildingCost}
+              </option>
+            </select>
+          </Field>
+
+          {projectId && assignmentScope === "building" ? (
+            <Field label={buildingLabel}>
+              <select {...register("buildingId")} className={inputClassName}>
+                <option value="">{t.noneOption}</option>
+                {projectBuildings?.map((building) => (
+                  <option key={building.id} value={building.id}>
+                    {building.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
 
           <Field
             label={t.totalAmount}
@@ -288,6 +352,8 @@ function InvoiceModal({
 
 export default function Invoices() {
   const { t } = useLang();
+  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
+  const projectBuildingCost = t.projectBuildingCost ?? "Specific building";
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | undefined>(undefined);
   const [open, setOpen] = useState(false);
@@ -300,9 +366,9 @@ export default function Invoices() {
 
   const deleteMutation = useMutation({
     mutationFn: async (invoice: Invoice) => {
-      await deleteInvoice(invoice.id)
+      await deleteInvoice(invoice.id);
       if (invoice.imageUrl) {
-        await deleteInvoiceImageByUrl(invoice.imageUrl)
+        await deleteInvoiceImageByUrl(invoice.imageUrl);
       }
     },
     onSuccess: async () => {
@@ -316,21 +382,56 @@ export default function Invoices() {
   const filteredInvoices =
     filter === "all" ? invoices : invoices?.filter((invoice) => invoice.status === filter);
 
+  function exportInvoices(format: "csv" | "xlsx") {
+    const rows =
+      filteredInvoices?.map((invoice) => ({
+        Number: invoice.number,
+        Status: t[invoice.status],
+        Assignment: invoice.buildingName ? projectBuildingCost : projectGlobalCost,
+        Building: invoice.buildingName ?? "",
+        Supplier: invoice.supplierName ?? "",
+        Project: invoice.projectName ?? "",
+        Total: invoice.totalAmount,
+        Paid: invoice.paidAmount,
+        Remaining: Math.max(0, invoice.totalAmount - invoice.paidAmount),
+        InvoiceDate: formatDateInput(invoice.invoiceDate),
+        DueDate: formatDateInput(invoice.dueDate),
+        Notes: invoice.notes ?? "",
+      })) ?? [];
+
+    if (format === "csv") {
+      exportRowsToCsv("invoices.csv", rows);
+      return;
+    }
+
+    exportRowsToExcel("invoices.xlsx", "Invoices", rows);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={t.invoicesTitle}
         subtitle={t.invoice_count(invoices?.length ?? 0)}
         action={
-          <PrimaryButton
-            onClick={() => {
-              setSelectedInvoice(undefined);
-              setOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            {t.addInvoice}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SecondaryButton onClick={() => exportInvoices("csv")}>
+              <Download size={16} />
+              CSV
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportInvoices("xlsx")}>
+              <FileSpreadsheet size={16} />
+              Excel
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setSelectedInvoice(undefined);
+                setOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              {t.addInvoice}
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -383,12 +484,28 @@ export default function Invoices() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate text-base font-semibold text-foreground">{invoice.number}</p>
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}
+                      >
                         {t[invoice.status]}
+                      </span>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                          invoice.buildingName
+                            ? "bg-sky-100 text-sky-800"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {invoice.buildingName ? "Bâtiment" : "Global"}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {[invoice.supplierName, invoice.projectName, formatDate(invoice.invoiceDate)]
+                      {[
+                        invoice.supplierName,
+                        invoice.projectName,
+                        invoice.buildingName ?? projectGlobalCost,
+                        formatDate(invoice.invoiceDate),
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>

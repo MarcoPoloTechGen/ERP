@@ -37,6 +37,13 @@ export interface Project {
   createdAt: string | null;
 }
 
+export interface ProjectBuilding {
+  id: number;
+  projectId: number;
+  name: string;
+  createdAt: string | null;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -55,6 +62,8 @@ export interface Invoice {
   supplierName: string | null;
   projectId: number | null;
   projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   totalAmount: number;
   paidAmount: number;
   invoiceDate: string | null;
@@ -141,6 +150,7 @@ export interface ProjectInput {
   budget: number | null;
   startDate: string | null;
   endDate: string | null;
+  buildings: string[];
 }
 
 export interface ProductInput {
@@ -154,6 +164,7 @@ export interface InvoiceInput {
   number: string;
   supplierId: number | null;
   projectId: number | null;
+  buildingId: number | null;
   totalAmount: number;
   paidAmount: number;
   status: InvoiceStatus;
@@ -180,6 +191,7 @@ export const erpKeys = {
   suppliers: ["suppliers"] as const,
   projects: ["projects"] as const,
   project: (id: number) => ["project", id] as const,
+  projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
   products: ["products"] as const,
   invoices: ["invoices"] as const,
   invoice: (id: number) => ["invoice", id] as const,
@@ -317,13 +329,24 @@ function normalizeProduct(row: Row, suppliersById: Map<number, Supplier>): Produ
   };
 }
 
+function normalizeProjectBuilding(row: Row): ProjectBuilding {
+  return {
+    id: readId(row, "id"),
+    projectId: readId(row, "project_id", "projectId"),
+    name: readString(row, "name") ?? "Building",
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
 function normalizeInvoice(
   row: Row,
   suppliersById: Map<number, Supplier>,
   projectsById: Map<number, Project>,
+  buildingsById: Map<number, ProjectBuilding>,
 ): Invoice {
   const supplierId = readNumber(row, "supplier_id", "supplierId");
   const projectId = readNumber(row, "project_id", "projectId");
+  const buildingId = readNumber(row, "building_id", "buildingId");
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
 
@@ -339,6 +362,10 @@ function normalizeInvoice(
     projectName:
       readString(row, "project_name", "projectName") ??
       (projectId != null ? projectsById.get(projectId)?.name ?? null : null),
+    buildingId,
+    buildingName:
+      readString(row, "building_name", "buildingName") ??
+      (buildingId != null ? buildingsById.get(buildingId)?.name ?? null : null),
     totalAmount,
     paidAmount,
     invoiceDate: readDate(row, "invoice_date", "invoiceDate"),
@@ -446,6 +473,41 @@ export async function getProject(id: number) {
   return normalizeProject(row);
 }
 
+export async function listProjectBuildings(projectId?: number) {
+  let query = supabase.from("project_buildings").select("*").order("created_at", { ascending: true });
+  if (projectId != null) {
+    query = query.eq("project_id", projectId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Row[]).map(normalizeProjectBuilding);
+}
+
+async function replaceProjectBuildings(projectId: number, buildingNames: string[]) {
+  const trimmedNames = buildingNames.map((name) => name.trim()).filter(Boolean);
+
+  const deleteResult = await supabase.from("project_buildings").delete().eq("project_id", projectId);
+  if (deleteResult.error) {
+    throw deleteResult.error;
+  }
+
+  if (!trimmedNames.length) {
+    return;
+  }
+
+  const insertResult = await supabase
+    .from("project_buildings")
+    .insert(trimmedNames.map((name) => ({ project_id: projectId, name })));
+
+  if (insertResult.error) {
+    throw insertResult.error;
+  }
+}
+
 export async function createProject(input: ProjectInput) {
   const camelPayload = {
     name: input.name,
@@ -466,7 +528,19 @@ export async function createProject(input: ProjectInput) {
     end_date: input.endDate,
   };
 
-  await insertWithFallback("projects", camelPayload, snakePayload);
+  const primaryResult = await supabase.from("projects").insert(camelPayload).select("id").single();
+
+  if (!primaryResult.error) {
+    await replaceProjectBuildings(readId(asRow(primaryResult.data), "id"), input.buildings);
+    return;
+  }
+
+  const secondaryResult = await supabase.from("projects").insert(snakePayload).select("id").single();
+  if (secondaryResult.error) {
+    throw secondaryResult.error;
+  }
+
+  await replaceProjectBuildings(readId(asRow(secondaryResult.data), "id"), input.buildings);
 }
 
 export async function updateProject(id: number, input: ProjectInput) {
@@ -490,6 +564,7 @@ export async function updateProject(id: number, input: ProjectInput) {
   };
 
   await updateWithFallback("projects", id, camelPayload, snakePayload);
+  await replaceProjectBuildings(id, input.buildings);
 }
 
 export async function deleteProject(id: number) {
@@ -626,29 +701,33 @@ export async function deleteProduct(id: number) {
 }
 
 export async function listInvoices() {
-  const [rows, suppliers, projects] = await Promise.all([
+  const [rows, suppliers, projects, buildings] = await Promise.all([
     selectAll("invoices"),
     listSuppliers(),
     listProjects(),
+    listProjectBuildings(),
   ]);
 
   const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
   const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const buildingsById = new Map(buildings.map((building) => [building.id, building]));
 
-  return rows.map((row) => normalizeInvoice(row, suppliersById, projectsById));
+  return rows.map((row) => normalizeInvoice(row, suppliersById, projectsById, buildingsById));
 }
 
 export async function getInvoice(id: number) {
-  const [row, suppliers, projects] = await Promise.all([
+  const [row, suppliers, projects, buildings] = await Promise.all([
     selectOne("invoices", id),
     listSuppliers(),
     listProjects(),
+    listProjectBuildings(),
   ]);
 
   const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
   const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const buildingsById = new Map(buildings.map((building) => [building.id, building]));
 
-  return normalizeInvoice(row, suppliersById, projectsById);
+  return normalizeInvoice(row, suppliersById, projectsById, buildingsById);
 }
 
 export async function createInvoice(input: InvoiceInput) {
@@ -656,6 +735,7 @@ export async function createInvoice(input: InvoiceInput) {
     number: input.number,
     supplierId: input.supplierId,
     projectId: input.projectId,
+    buildingId: input.buildingId,
     totalAmount: input.totalAmount,
     paidAmount: input.paidAmount,
     status: input.status,
@@ -668,6 +748,7 @@ export async function createInvoice(input: InvoiceInput) {
     number: input.number,
     supplier_id: input.supplierId,
     project_id: input.projectId,
+    building_id: input.buildingId,
     total_amount: input.totalAmount,
     paid_amount: input.paidAmount,
     status: input.status,
@@ -685,6 +766,7 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
     number: input.number,
     supplierId: input.supplierId,
     projectId: input.projectId,
+    buildingId: input.buildingId,
     totalAmount: input.totalAmount,
     paidAmount: input.paidAmount,
     status: input.status,
@@ -697,6 +779,7 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
     number: input.number,
     supplier_id: input.supplierId,
     project_id: input.projectId,
+    building_id: input.buildingId,
     total_amount: input.totalAmount,
     paid_amount: input.paidAmount,
     status: input.status,

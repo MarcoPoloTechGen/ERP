@@ -11,6 +11,8 @@ export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
   const { t } = useLang();
+  const invoiceAssignment = t.invoiceAssignment ?? "Assignment";
+  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
 
@@ -101,6 +103,10 @@ export default function InvoiceDetail() {
           <div>
             <p className="text-xs text-muted-foreground">{t.projectOption}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.projectName ?? "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{invoiceAssignment}</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? projectGlobalCost}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t.invoiceDate}</p>

@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createProject,
   deleteProject,
   erpKeys,
+  listProjectBuildings,
   listProjects,
   type Project,
   updateProject,
 } from "@/lib/erp";
 import { formatCurrency, formatDateInput, statusColors } from "@/lib/format";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
@@ -46,6 +48,27 @@ function ProjectModal({
 }) {
   const { t } = useLang();
   const queryClient = useQueryClient();
+  const buildingsTitle = t.buildingsTitle ?? "Buildings";
+  const buildingsHint = t.buildingsHint ?? "Add the buildings that belong to this project.";
+  const addBuildingLabel = t.addBuilding ?? "Add building";
+  const buildingNamePlaceholder = t.buildingNamePlaceholder ?? "Building A, Block B, Tower C...";
+  const { data: projectBuildings } = useQuery({
+    queryKey: erpKeys.projectBuildings(project?.id ?? 0),
+    queryFn: () => listProjectBuildings(project?.id),
+    enabled: Boolean(project),
+  });
+  const [buildings, setBuildings] = useState<string[]>([""]);
+
+  useEffect(() => {
+    if (project) {
+      const next = projectBuildings?.map((building) => building.name).filter(Boolean) ?? [];
+      setBuildings(next.length ? next : [""]);
+      return;
+    }
+
+    setBuildings([""]);
+  }, [project, projectBuildings]);
+
   const { register, handleSubmit, formState } = useForm<ProjectFormValues>({
     defaultValues: {
       name: project?.name ?? "",
@@ -68,6 +91,7 @@ function ProjectModal({
         budget: values.budget ? Number(values.budget) : null,
         startDate: values.startDate || null,
         endDate: values.endDate || null,
+        buildings,
       };
 
       if (project) {
@@ -129,6 +153,50 @@ function ProjectModal({
           </Field>
         </div>
 
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">{buildingsTitle}</p>
+              <p className="text-xs text-muted-foreground">{buildingsHint}</p>
+            </div>
+            <SecondaryButton type="button" onClick={() => setBuildings((current) => [...current, ""])}>
+              <Plus size={16} />
+              {addBuildingLabel}
+            </SecondaryButton>
+          </div>
+
+          <div className="space-y-3">
+            {buildings.map((building, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <input
+                  value={building}
+                  onChange={(event) =>
+                    setBuildings((current) => {
+                      const next = [...current];
+                      next[index] = event.target.value;
+                      return next;
+                    })
+                  }
+                  className={inputClassName}
+                  placeholder={buildingNamePlaceholder}
+                />
+                <IconButton
+                  type="button"
+                  className="shrink-0 hover:text-rose-700"
+                  onClick={() =>
+                    setBuildings((current) => {
+                      const next = current.filter((_, currentIndex) => currentIndex !== index);
+                      return next.length ? next : [""];
+                    })
+                  }
+                >
+                  <Trash2 size={16} />
+                </IconButton>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex justify-end gap-3 pt-2">
           <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
           <PrimaryButton type="submit" disabled={saveMutation.isPending}>
@@ -143,6 +211,7 @@ function ProjectModal({
 export default function Projects() {
   const { t } = useLang();
   const queryClient = useQueryClient();
+  const buildingCountLabel = t.building_count ?? ((count: number) => `${count} building${count > 1 ? "s" : ""}`);
   const [selectedProject, setSelectedProject] = useState<Project | undefined>(undefined);
   const [open, setOpen] = useState(false);
 
@@ -150,6 +219,39 @@ export default function Projects() {
     queryKey: erpKeys.projects,
     queryFn: listProjects,
   });
+  const { data: allBuildings } = useQuery({
+    queryKey: ["projectBuildings", "all"],
+    queryFn: () => listProjectBuildings(),
+  });
+
+  const buildingCountByProjectId = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const building of allBuildings ?? []) {
+      counts.set(building.projectId, (counts.get(building.projectId) ?? 0) + 1);
+    }
+    return counts;
+  }, [allBuildings]);
+
+  function exportProjects(format: "csv" | "xlsx") {
+    const rows =
+      projects?.map((project) => ({
+        Name: project.name,
+        Client: project.client ?? "",
+        Location: project.location ?? "",
+        Status: t[project.status],
+        Buildings: buildingCountByProjectId.get(project.id) ?? 0,
+        Budget: project.budget ?? "",
+        StartDate: formatDateInput(project.startDate),
+        EndDate: formatDateInput(project.endDate),
+      })) ?? [];
+
+    if (format === "csv") {
+      exportRowsToCsv("projects.csv", rows);
+      return;
+    }
+
+    exportRowsToExcel("projects.xlsx", "Projects", rows);
+  }
 
   const deleteMutation = useMutation({
     mutationFn: deleteProject,
@@ -167,15 +269,25 @@ export default function Projects() {
         title={t.projectsTitle}
         subtitle={t.project_count(projects?.length ?? 0)}
         action={
-          <PrimaryButton
-            onClick={() => {
-              setSelectedProject(undefined);
-              setOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            {t.addProject}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SecondaryButton onClick={() => exportProjects("csv")}>
+              <Download size={16} />
+              CSV
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportProjects("xlsx")}>
+              <FileSpreadsheet size={16} />
+              Excel
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setSelectedProject(undefined);
+                setOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              {t.addProject}
+            </PrimaryButton>
+          </div>
         }
       />
 
@@ -203,6 +315,9 @@ export default function Projects() {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {[project.client, project.location].filter(Boolean).join(" · ") || t.noDetail}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {buildingCountLabel(buildingCountByProjectId.get(project.id) ?? 0)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {project.startDate ? `${t.from} ${formatDateInput(project.startDate)}` : ""}

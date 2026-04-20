@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, FileText } from "lucide-react";
 import { Card, EmptyState } from "@/components/ui-kit";
-import { erpKeys, getProject, listInvoices } from "@/lib/erp";
+import { erpKeys, getProject, listInvoices, listProjectBuildings } from "@/lib/erp";
 import { formatCurrency, formatDate, statusColors } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
@@ -10,6 +10,10 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const { t } = useLang();
+  const buildingsTitle = t.buildingsTitle ?? "Buildings";
+  const noBuildings = t.noBuildings ?? "No buildings configured for this project.";
+  const buildingCountLabel = t.building_count ?? ((count: number) => `${count} building${count > 1 ? "s" : ""}`);
+  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
 
   const { data: project, isLoading } = useQuery({
     queryKey: erpKeys.project(projectId),
@@ -22,7 +26,14 @@ export default function ProjectDetail() {
     queryFn: listInvoices,
   });
 
+  const { data: buildings } = useQuery({
+    queryKey: erpKeys.projectBuildings(projectId),
+    queryFn: () => listProjectBuildings(projectId),
+    enabled: Number.isFinite(projectId),
+  });
+
   const relatedInvoices = invoices?.filter((invoice) => invoice.projectId === projectId) ?? [];
+  const globalInvoices = relatedInvoices.filter((invoice) => invoice.buildingId == null);
 
   if (isLoading || !project) {
     return isLoading ? (
@@ -72,7 +83,42 @@ export default function ProjectDetail() {
             <p className="text-xs text-muted-foreground">{t.endDate}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{formatDate(project.endDate)}</p>
           </div>
+          <div>
+            <p className="text-xs text-muted-foreground">{buildingsTitle}</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{buildingCountLabel(buildings?.length ?? 0)}</p>
+          </div>
         </div>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{buildingsTitle}</h2>
+        </div>
+
+        {!buildings?.length ? (
+          <div className="p-5">
+            <EmptyState title={noBuildings} />
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {buildings.map((building) => {
+              const buildingInvoices = relatedInvoices.filter((invoice) => invoice.buildingId === building.id);
+              const total = buildingInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+
+              return (
+                <div key={building.id} className="px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{building.name}</p>
+                      <p className="text-xs text-muted-foreground">{t.relatedInvoices_count(buildingInvoices.length)}</p>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{formatCurrency(total)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       <Card className="overflow-hidden">
@@ -87,6 +133,11 @@ export default function ProjectDetail() {
           </div>
         ) : (
           <div className="divide-y divide-border">
+            {globalInvoices.length ? (
+              <div className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {projectGlobalCost}
+              </div>
+            ) : null}
             {relatedInvoices.map((invoice) => (
               <Link href={`/invoices/${invoice.id}`} key={invoice.id}>
                 <div className="cursor-pointer px-5 py-4 transition hover:bg-muted/40">
@@ -94,7 +145,9 @@ export default function ProjectDetail() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{invoice.number}</p>
                       <p className="text-xs text-muted-foreground">
-                        {invoice.supplierName ?? t.noSupplier} · {formatDate(invoice.invoiceDate)}
+                        {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? projectGlobalCost, formatDate(invoice.invoiceDate)]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
                     <div className="text-right">

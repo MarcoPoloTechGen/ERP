@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createSupplier,
   deleteSupplier,
@@ -10,6 +10,7 @@ import {
   type Supplier,
   updateSupplier,
 } from "@/lib/erp";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
@@ -129,6 +130,24 @@ export default function Suppliers() {
     queryFn: listSuppliers,
   });
 
+  function exportSuppliers(format: "csv" | "xlsx") {
+    const rows =
+      suppliers?.map((supplier) => ({
+        Name: supplier.name,
+        Contact: supplier.contact ?? "",
+        Phone: supplier.phone ?? "",
+        Email: supplier.email ?? "",
+        Address: supplier.address ?? "",
+      })) ?? [];
+
+    if (format === "csv") {
+      exportRowsToCsv("suppliers.csv", rows);
+      return;
+    }
+
+    exportRowsToExcel("suppliers.xlsx", "Suppliers", rows);
+  }
+
   const deleteMutation = useMutation({
     mutationFn: deleteSupplier,
     onSuccess: async () => {
@@ -145,15 +164,25 @@ export default function Suppliers() {
         title={t.suppliersTitle}
         subtitle={t.supplier_count(suppliers?.length ?? 0)}
         action={
-          <PrimaryButton
-            onClick={() => {
-              setSelectedSupplier(undefined);
-              setOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            {t.addSupplier}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SecondaryButton onClick={() => exportSuppliers("csv")}>
+              <Download size={16} />
+              CSV
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportSuppliers("xlsx")}>
+              <FileSpreadsheet size={16} />
+              Excel
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setSelectedSupplier(undefined);
+                setOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              {t.addSupplier}
+            </PrimaryButton>
+          </div>
         }
       />
 

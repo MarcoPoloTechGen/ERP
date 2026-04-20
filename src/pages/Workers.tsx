@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createWorker,
   deleteWorker,
@@ -12,6 +12,7 @@ import {
   updateWorker,
 } from "@/lib/erp";
 import { formatCurrency } from "@/lib/format";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
@@ -130,6 +131,24 @@ export default function Workers() {
     queryFn: listWorkers,
   });
 
+  function exportWorkers(format: "csv" | "xlsx") {
+    const rows =
+      workers?.map((worker) => ({
+        Name: worker.name,
+        Role: worker.role,
+        Phone: worker.phone ?? "",
+        Balance: worker.balance,
+        Status: worker.balance >= 0 ? t.toReceive : t.owes,
+      })) ?? [];
+
+    if (format === "csv") {
+      exportRowsToCsv("workers.csv", rows);
+      return;
+    }
+
+    exportRowsToExcel("workers.xlsx", "Workers", rows);
+  }
+
   const deleteMutation = useMutation({
     mutationFn: deleteWorker,
     onSuccess: async () => {
@@ -146,15 +165,25 @@ export default function Workers() {
         title={t.workersTitle}
         subtitle={t.worker_count(workers?.length ?? 0)}
         action={
-          <PrimaryButton
-            onClick={() => {
-              setSelectedWorker(undefined);
-              setOpen(true);
-            }}
-          >
-            <Plus size={16} />
-            {t.addWorker}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <SecondaryButton onClick={() => exportWorkers("csv")}>
+              <Download size={16} />
+              CSV
+            </SecondaryButton>
+            <SecondaryButton onClick={() => exportWorkers("xlsx")}>
+              <FileSpreadsheet size={16} />
+              Excel
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={() => {
+                setSelectedWorker(undefined);
+                setOpen(true);
+              }}
+            >
+              <Plus size={16} />
+              {t.addWorker}
+            </PrimaryButton>
+          </div>
         }
       />
 
