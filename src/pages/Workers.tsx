@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -31,6 +31,7 @@ const inputClassName =
 type WorkerFormValues = {
   name: string;
   role: string;
+  category: string;
   phone: string;
 };
 
@@ -47,6 +48,7 @@ function WorkerModal({
     defaultValues: {
       name: worker?.name ?? "",
       role: worker?.role ?? "",
+      category: worker?.category ?? "",
       phone: worker?.phone ?? "",
     },
   });
@@ -56,6 +58,7 @@ function WorkerModal({
       const payload = {
         name: values.name.trim(),
         role: values.role.trim(),
+        category: values.category.trim() || null,
         phone: values.phone.trim() || null,
       };
 
@@ -77,11 +80,7 @@ function WorkerModal({
   return (
     <Modal title={worker ? t.editWorker : t.newWorker} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field
-          label={t.name}
-          required
-          error={formState.errors.name ? t.nameRequired : null}
-        >
+        <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
           <input
             {...register("name", { required: true })}
             className={inputClassName}
@@ -89,25 +88,31 @@ function WorkerModal({
           />
         </Field>
 
-        <Field
-          label={t.role}
-          required
-          error={formState.errors.role ? t.roleRequired : null}
-        >
-          <input
-            {...register("role", { required: true })}
-            className={inputClassName}
-            placeholder={t.rolePlaceholder}
-          />
-        </Field>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label={t.role} required error={formState.errors.role ? t.roleRequired : null}>
+            <input
+              {...register("role", { required: true })}
+              className={inputClassName}
+              placeholder={t.rolePlaceholder}
+            />
+          </Field>
 
-        <Field label={t.phone}>
-          <input
-            {...register("phone")}
-            className={inputClassName}
-            placeholder={t.phonePlaceholder}
-          />
-        </Field>
+          <Field label="Categorie">
+            <input
+              {...register("category")}
+              className={inputClassName}
+              placeholder="Macon, electricien, chauffeur..."
+            />
+          </Field>
+
+          <Field label={t.phone}>
+            <input
+              {...register("phone")}
+              className={inputClassName}
+              placeholder={t.phonePlaceholder}
+            />
+          </Field>
+        </div>
 
         <div className="flex justify-end gap-3 pt-2">
           <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
@@ -125,17 +130,32 @@ export default function Workers() {
   const queryClient = useQueryClient();
   const [selectedWorker, setSelectedWorker] = useState<Worker | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const { data: workers, isLoading } = useQuery({
     queryKey: erpKeys.workers,
     queryFn: listWorkers,
   });
 
+  const categories = useMemo(() => {
+    const values = Array.from(
+      new Set((workers ?? []).map((worker) => worker.category).filter(Boolean) as string[]),
+    );
+    values.sort((left, right) => left.localeCompare(right));
+    return values;
+  }, [workers]);
+
+  const filteredWorkers =
+    categoryFilter === "all"
+      ? workers
+      : workers?.filter((worker) => worker.category === categoryFilter);
+
   function exportWorkers(format: "csv" | "xlsx") {
     const rows =
-      workers?.map((worker) => ({
+      filteredWorkers?.map((worker) => ({
         Name: worker.name,
         Role: worker.role,
+        Category: worker.category ?? "",
         Phone: worker.phone ?? "",
         Balance: worker.balance,
         Status: worker.balance >= 0 ? t.toReceive : t.owes,
@@ -163,7 +183,7 @@ export default function Workers() {
     <div className="space-y-6">
       <PageHeader
         title={t.workersTitle}
-        subtitle={t.worker_count(workers?.length ?? 0)}
+        subtitle={t.worker_count(filteredWorkers?.length ?? 0)}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SecondaryButton onClick={() => exportWorkers("csv")}>
@@ -187,24 +207,50 @@ export default function Workers() {
         }
       />
 
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-foreground">
+            Categorie
+          </span>
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className={`${inputClassName} max-w-xs`}
+          >
+            <option value="all">{t.all ?? "Tous"}</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Card>
+
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
           ))}
         </div>
-      ) : !workers?.length ? (
+      ) : !filteredWorkers?.length ? (
         <EmptyState title={t.noWorkers} />
       ) : (
         <div className="space-y-3">
-          {workers.map((worker) => (
+          {filteredWorkers.map((worker) => (
             <Card key={worker.id} className="p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-foreground">{worker.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-base font-semibold text-foreground">{worker.name}</p>
+                    {worker.category ? (
+                      <span className="inline-flex rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
+                        {worker.category}
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {worker.role}
-                    {worker.phone ? ` · ${worker.phone}` : ""}
+                    {[worker.role, worker.phone].filter(Boolean).join(" · ")}
                   </p>
                 </div>
 

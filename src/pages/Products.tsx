@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
@@ -7,7 +7,10 @@ import {
   deleteProduct,
   erpKeys,
   listProducts,
+  listProjectBuildings,
+  listProjects,
   listSuppliers,
+  type Currency,
   type Product,
   updateProduct,
 } from "@/lib/erp";
@@ -31,8 +34,11 @@ const inputClassName =
 type ProductFormValues = {
   name: string;
   supplierId: string;
+  projectId: string;
+  buildingId: string;
   unit: string;
   unitPrice: string;
+  currency: Currency;
 };
 
 function ProductModal({
@@ -48,14 +54,29 @@ function ProductModal({
     queryKey: erpKeys.suppliers,
     queryFn: listSuppliers,
   });
+  const { data: projects } = useQuery({
+    queryKey: erpKeys.projects,
+    queryFn: listProjects,
+  });
 
-  const { register, handleSubmit, formState } = useForm<ProductFormValues>({
+  const { register, control, handleSubmit, formState, setValue } = useForm<ProductFormValues>({
     defaultValues: {
       name: product?.name ?? "",
       supplierId: product?.supplierId != null ? String(product.supplierId) : "",
+      projectId: product?.projectId != null ? String(product.projectId) : "",
+      buildingId: product?.buildingId != null ? String(product.buildingId) : "",
       unit: product?.unit ?? "",
       unitPrice: product?.unitPrice != null ? String(product.unitPrice) : "",
+      currency: product?.currency ?? "USD",
     },
+  });
+
+  const projectId = useWatch({ control, name: "projectId" });
+  const selectedProjectId = projectId ? Number(projectId) : undefined;
+  const { data: buildings } = useQuery({
+    queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
+    queryFn: () => listProjectBuildings(selectedProjectId),
+    enabled: selectedProjectId != null,
   });
 
   const saveMutation = useMutation({
@@ -63,8 +84,11 @@ function ProductModal({
       const payload = {
         name: values.name.trim(),
         supplierId: values.supplierId ? Number(values.supplierId) : null,
+        projectId: values.projectId ? Number(values.projectId) : null,
+        buildingId: values.buildingId ? Number(values.buildingId) : null,
         unit: values.unit.trim() || null,
         unitPrice: values.unitPrice ? Number(values.unitPrice) : null,
+        currency: values.currency,
       };
 
       if (product) {
@@ -85,11 +109,7 @@ function ProductModal({
   return (
     <Modal title={product ? t.editProduct : t.newProduct} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field
-          label={t.name}
-          required
-          error={formState.errors.name ? t.nameRequired : null}
-        >
+        <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
           <input {...register("name", { required: true })} className={inputClassName} />
         </Field>
 
@@ -104,11 +124,47 @@ function ProductModal({
               ))}
             </select>
           </Field>
+
+          <Field label={t.projectOption ?? "Projet"}>
+            <select
+              {...register("projectId", {
+                onChange: () => setValue("buildingId", ""),
+              })}
+              className={inputClassName}
+            >
+              <option value="">{t.noneOption}</option>
+              {projects?.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={t.buildingLabel ?? "Batiment"}>
+            <select {...register("buildingId")} className={inputClassName} disabled={!selectedProjectId}>
+              <option value="">{t.noneOption}</option>
+              {buildings?.map((building) => (
+                <option key={building.id} value={building.id}>
+                  {building.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
           <Field label={t.unit}>
             <input {...register("unit")} className={inputClassName} placeholder={t.unitPlaceholder} />
           </Field>
+
           <Field label={t.unitPrice}>
             <input type="number" step="0.01" {...register("unitPrice")} className={inputClassName} />
+          </Field>
+
+          <Field label="Devise">
+            <select {...register("currency")} className={inputClassName}>
+              <option value="USD">USD</option>
+              <option value="IQD">IQD</option>
+            </select>
           </Field>
         </div>
 
@@ -134,13 +190,18 @@ export default function Products() {
     queryFn: listProducts,
   });
 
+  const groupedProducts = useMemo(() => products ?? [], [products]);
+
   function exportProducts(format: "csv" | "xlsx") {
     const rows =
-      products?.map((product) => ({
+      groupedProducts.map((product) => ({
         Name: product.name,
         Supplier: product.supplierName ?? "",
+        Project: product.projectName ?? "",
+        Building: product.buildingName ?? "",
         Unit: product.unit ?? "",
         UnitPrice: product.unitPrice ?? "",
+        Currency: product.currency,
       })) ?? [];
 
     if (format === "csv") {
@@ -165,7 +226,7 @@ export default function Products() {
     <div className="space-y-6">
       <PageHeader
         title={t.productsTitle}
-        subtitle={t.product_count(products?.length ?? 0)}
+        subtitle={t.product_count(groupedProducts.length)}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SecondaryButton onClick={() => exportProducts("csv")}>
@@ -195,25 +256,34 @@ export default function Products() {
             <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
           ))}
         </div>
-      ) : !products?.length ? (
+      ) : !groupedProducts.length ? (
         <EmptyState title={t.noProducts} />
       ) : (
         <div className="space-y-3">
-          {products.map((product) => (
+          {groupedProducts.map((product) => (
             <Card key={product.id} className="p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-foreground">{product.name}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-base font-semibold text-foreground">{product.name}</p>
+                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                      {product.currency}
+                    </span>
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">
+                    {[product.projectName, product.buildingName, product.supplierName]
+                      .filter(Boolean)
+                      .join(" · ") || t.noDetail}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {product.unit ?? t.noDetail}
-                    {product.supplierName ? ` · ${t.supplier_prefix}: ${product.supplierName}` : ""}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="min-w-[120px] text-right">
                     <p className="text-base font-semibold text-foreground">
-                      {product.unitPrice != null ? formatCurrency(product.unitPrice) : "-"}
+                      {product.unitPrice != null ? formatCurrency(product.unitPrice, product.currency) : "-"}
                     </p>
                     <p className="text-xs text-muted-foreground">{t.unitPrice}</p>
                   </div>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -8,12 +8,15 @@ import {
   deleteInvoice,
   erpKeys,
   listInvoices,
+  listProducts,
   listProjectBuildings,
   listProjects,
   listSuppliers,
+  type Currency,
   type Invoice,
   updateInvoice,
 } from "@/lib/erp";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency, formatDate, formatDateInput, statusColors } from "@/lib/format";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
@@ -38,15 +41,17 @@ type InvoiceFormValues = {
   projectId: string;
   assignmentScope: "project" | "building";
   buildingId: string;
+  productId: string;
   totalAmount: string;
   paidAmount: string;
+  currency: Currency;
   status: "unpaid" | "partial" | "paid";
   invoiceDate: string;
   dueDate: string;
   notes: string;
 };
 
-function InvoiceImageField({
+function ExpenseImageField({
   value,
   previewUrl,
   onChange,
@@ -105,10 +110,7 @@ function InvoiceModal({
   onClose: () => void;
 }) {
   const { t } = useLang();
-  const invoiceAssignment = t.invoiceAssignment ?? "Assignment";
-  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
-  const projectBuildingCost = t.projectBuildingCost ?? "Specific building";
-  const buildingLabel = t.buildingLabel ?? "Building";
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
   const [storedImageUrl, setStoredImageUrl] = useState<string | null>(invoice?.imageUrl ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -121,6 +123,10 @@ function InvoiceModal({
     queryKey: erpKeys.projects,
     queryFn: listProjects,
   });
+  const { data: products } = useQuery({
+    queryKey: erpKeys.products,
+    queryFn: listProducts,
+  });
 
   const { register, control, handleSubmit, formState, setValue } = useForm<InvoiceFormValues>({
     defaultValues: {
@@ -129,8 +135,10 @@ function InvoiceModal({
       projectId: invoice?.projectId != null ? String(invoice.projectId) : "",
       assignmentScope: invoice?.buildingId != null ? "building" : "project",
       buildingId: invoice?.buildingId != null ? String(invoice.buildingId) : "",
+      productId: invoice?.productId != null ? String(invoice.productId) : "",
       totalAmount: String(invoice?.totalAmount ?? ""),
       paidAmount: String(invoice?.paidAmount ?? 0),
+      currency: invoice?.currency ?? "USD",
       status: invoice?.status ?? "unpaid",
       invoiceDate: formatDateInput(invoice?.invoiceDate) || new Date().toISOString().slice(0, 10),
       dueDate: formatDateInput(invoice?.dueDate),
@@ -148,6 +156,15 @@ function InvoiceModal({
     enabled: selectedProjectId != null,
   });
 
+  const projectProducts = useMemo(() => {
+    return (products ?? []).filter((product) => {
+      if (selectedProjectId == null) {
+        return true;
+      }
+      return product.projectId === selectedProjectId;
+    });
+  }, [products, selectedProjectId]);
+
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
       const totalAmount = Number(values.totalAmount || 0);
@@ -157,7 +174,7 @@ function InvoiceModal({
       const previousImageUrl = invoice?.imageUrl ?? null;
 
       if (selectedImageFile) {
-        const uploaded = await uploadInvoiceImage(selectedImageFile, values.number);
+        const uploaded = await uploadInvoiceImage(selectedImageFile, values.number || "expense");
         uploadedPublicUrl = uploaded.publicUrl;
         nextImageUrl = uploaded.publicUrl;
       } else if (!previewUrl && storedImageUrl) {
@@ -172,8 +189,10 @@ function InvoiceModal({
           values.projectId && values.assignmentScope === "building" && values.buildingId
             ? Number(values.buildingId)
             : null,
+        productId: values.productId ? Number(values.productId) : null,
         totalAmount,
         paidAmount,
+        currency: values.currency,
         status:
           paidAmount <= 0 ? "unpaid" : paidAmount >= totalAmount && totalAmount > 0 ? "paid" : values.status,
         invoiceDate: values.invoiceDate || null,
@@ -209,27 +228,31 @@ function InvoiceModal({
   });
 
   return (
-    <Modal title={invoice ? t.editInvoice : t.newInvoice} onClose={onClose}>
+    <Modal title={invoice ? "Modifier la depense" : "Nouvelle depense"} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field
-            label={t.invoiceNumber}
-            required
-            error={formState.errors.number ? t.nameRequired : null}
-          >
+          <Field label="Reference" required error={formState.errors.number ? t.nameRequired : null}>
             <input
               {...register("number", { required: true })}
               className={inputClassName}
-              placeholder={t.invoiceNumberPlaceholder}
+              placeholder="DEP-001"
             />
           </Field>
 
-          <Field label={t.invoiceStatus_label}>
+          <Field label={t.invoiceStatus_label ?? "Statut"}>
             <select {...register("status")} className={inputClassName}>
               <option value="unpaid">{t.unpaid}</option>
               <option value="partial">{t.partial}</option>
               <option value="paid">{t.paid}</option>
             </select>
+          </Field>
+
+          <Field label="Utilisateur">
+            <input
+              readOnly
+              value={profile?.fullName ?? profile?.email ?? ""}
+              className={`${inputClassName} bg-muted`}
+            />
           </Field>
 
           <Field label={t.supplierOption}>
@@ -249,6 +272,7 @@ function InvoiceModal({
                 onChange: () => {
                   setValue("assignmentScope", "project");
                   setValue("buildingId", "");
+                  setValue("productId", "");
                 },
               })}
               className={inputClassName}
@@ -262,7 +286,7 @@ function InvoiceModal({
             </select>
           </Field>
 
-          <Field label={invoiceAssignment}>
+          <Field label={t.invoiceAssignment ?? "Affectation"}>
             <select
               {...register("assignmentScope", {
                 onChange: (event) => {
@@ -274,15 +298,15 @@ function InvoiceModal({
               className={inputClassName}
               disabled={!projectId}
             >
-              <option value="project">{projectGlobalCost}</option>
+              <option value="project">{t.projectGlobalCost ?? "Cout global du projet"}</option>
               <option value="building" disabled={!projectBuildings?.length}>
-                {projectBuildingCost}
+                {t.projectBuildingCost ?? "Batiment specifique"}
               </option>
             </select>
           </Field>
 
           {projectId && assignmentScope === "building" ? (
-            <Field label={buildingLabel}>
+            <Field label={t.buildingLabel ?? "Batiment"}>
               <select {...register("buildingId")} className={inputClassName}>
                 <option value="">{t.noneOption}</option>
                 {projectBuildings?.map((building) => (
@@ -294,11 +318,19 @@ function InvoiceModal({
             </Field>
           ) : null}
 
-          <Field
-            label={t.totalAmount}
-            required
-            error={formState.errors.totalAmount ? t.amountRequired : null}
-          >
+          <Field label="Produit">
+            <select {...register("productId")} className={inputClassName}>
+              <option value="">{t.noneOption}</option>
+              {projectProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                  {product.buildingName ? ` - ${product.buildingName}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={t.totalAmount} required error={formState.errors.totalAmount ? t.amountRequired : null}>
             <input
               type="number"
               step="0.01"
@@ -311,11 +343,18 @@ function InvoiceModal({
             <input type="number" step="0.01" {...register("paidAmount")} className={inputClassName} />
           </Field>
 
-          <Field label={t.invoiceDate}>
+          <Field label="Devise">
+            <select {...register("currency")} className={inputClassName}>
+              <option value="USD">USD</option>
+              <option value="IQD">IQD</option>
+            </select>
+          </Field>
+
+          <Field label={t.invoiceDate ?? "Date"}>
             <input type="date" {...register("invoiceDate")} className={inputClassName} />
           </Field>
 
-          <Field label={t.dueDate}>
+          <Field label={t.dueDate ?? "Echeance"}>
             <input type="date" {...register("dueDate")} className={inputClassName} />
           </Field>
         </div>
@@ -324,7 +363,7 @@ function InvoiceModal({
           <textarea {...register("notes")} rows={3} className={`${inputClassName} resize-none`} />
         </Field>
 
-        <InvoiceImageField
+        <ExpenseImageField
           value={storedImageUrl}
           previewUrl={previewUrl}
           onChange={(file) => {
@@ -336,7 +375,7 @@ function InvoiceModal({
               setStoredImageUrl(null);
             }
           }}
-          label={t.invoiceImage}
+          label="Justificatif"
         />
 
         <div className="flex justify-end gap-3 pt-2">
@@ -352,8 +391,6 @@ function InvoiceModal({
 
 export default function Invoices() {
   const { t } = useLang();
-  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
-  const projectBuildingCost = t.projectBuildingCost ?? "Specific building";
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | undefined>(undefined);
   const [open, setOpen] = useState(false);
@@ -385,33 +422,36 @@ export default function Invoices() {
   function exportInvoices(format: "csv" | "xlsx") {
     const rows =
       filteredInvoices?.map((invoice) => ({
-        Number: invoice.number,
+        Reference: invoice.number,
         Status: t[invoice.status],
-        Assignment: invoice.buildingName ? projectBuildingCost : projectGlobalCost,
+        Scope: invoice.buildingName ? "Batiment" : "Global",
         Building: invoice.buildingName ?? "",
         Supplier: invoice.supplierName ?? "",
+        Product: invoice.productName ?? "",
         Project: invoice.projectName ?? "",
+        CreatedBy: invoice.createdByName ?? "",
         Total: invoice.totalAmount,
         Paid: invoice.paidAmount,
+        Currency: invoice.currency,
         Remaining: Math.max(0, invoice.totalAmount - invoice.paidAmount),
-        InvoiceDate: formatDateInput(invoice.invoiceDate),
+        Date: formatDateInput(invoice.invoiceDate),
         DueDate: formatDateInput(invoice.dueDate),
         Notes: invoice.notes ?? "",
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("invoices.csv", rows);
+      exportRowsToCsv("expenses.csv", rows);
       return;
     }
 
-    exportRowsToExcel("invoices.xlsx", "Invoices", rows);
+    exportRowsToExcel("expenses.xlsx", "Expenses", rows);
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t.invoicesTitle}
-        subtitle={t.invoice_count(invoices?.length ?? 0)}
+        title="Depenses"
+        subtitle={`${filteredInvoices?.length ?? 0} depenses`}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SecondaryButton onClick={() => exportInvoices("csv")}>
@@ -429,7 +469,7 @@ export default function Invoices() {
               }}
             >
               <Plus size={16} />
-              {t.addInvoice}
+              Ajouter
             </PrimaryButton>
           </div>
         }
@@ -438,7 +478,7 @@ export default function Invoices() {
       <div className="flex flex-wrap gap-2">
         {(
           [
-            ["all", t.all],
+            ["all", t.all ?? "Tous"],
             ["unpaid", t.unpaidFilter],
             ["partial", t.partialFilter],
             ["paid", t.paidFilter],
@@ -466,7 +506,7 @@ export default function Invoices() {
           ))}
         </div>
       ) : !filteredInvoices?.length ? (
-        <EmptyState title={t.noInvoices} />
+        <EmptyState title="Aucune depense" />
       ) : (
         <div className="space-y-3">
           {filteredInvoices.map((invoice) => (
@@ -500,25 +540,24 @@ export default function Invoices() {
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {[
-                        invoice.supplierName,
-                        invoice.projectName,
-                        invoice.buildingName ?? projectGlobalCost,
-                        formatDate(invoice.invoiceDate),
-                      ]
+                      {[invoice.supplierName, invoice.projectName, invoice.productName, formatDate(invoice.invoiceDate)]
                         .filter(Boolean)
                         .join(" · ")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {invoice.createdByName ?? "-"}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="min-w-[150px] text-right">
+                  <div className="min-w-[160px] text-right">
                     <p className="text-base font-semibold text-foreground">
-                      {formatCurrency(invoice.totalAmount)}
+                      {formatCurrency(invoice.totalAmount, invoice.currency)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {t.remaining_label}: {formatCurrency(Math.max(0, invoice.totalAmount - invoice.paidAmount))}
+                      {t.remaining_label}:{" "}
+                      {formatCurrency(Math.max(0, invoice.totalAmount - invoice.paidAmount), invoice.currency)}
                     </p>
                   </div>
 
@@ -541,7 +580,7 @@ export default function Invoices() {
                     >
                       <Trash2 size={16} />
                     </IconButton>
-                    <Link href={`/invoices/${invoice.id}`}>
+                    <Link href={`/expenses/${invoice.id}`}>
                       <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
                         <ChevronRight size={16} />
                       </div>

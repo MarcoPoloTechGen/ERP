@@ -5,11 +5,29 @@ type Row = Record<string, unknown>;
 export type ProjectStatus = "active" | "completed" | "paused";
 export type InvoiceStatus = "unpaid" | "partial" | "paid";
 export type TransactionType = "credit" | "debit";
+export type Currency = "USD" | "IQD";
+export type UserRole = "admin" | "user";
+
+export interface AppUserProfile {
+  id: string;
+  email: string | null;
+  fullName: string | null;
+  role: UserRole;
+  createdAt: string | null;
+}
+
+export interface ProjectMembership {
+  id: number;
+  projectId: number;
+  userId: string;
+  createdAt: string | null;
+}
 
 export interface Worker {
   id: number;
   name: string;
   role: string;
+  category: string | null;
   phone: string | null;
   balance: number;
   createdAt: string | null;
@@ -49,8 +67,13 @@ export interface Product {
   name: string;
   supplierId: number | null;
   supplierName: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   unit: string | null;
   unitPrice: number | null;
+  currency: Currency;
   createdAt: string | null;
 }
 
@@ -64,12 +87,17 @@ export interface Invoice {
   projectName: string | null;
   buildingId: number | null;
   buildingName: string | null;
+  productId: number | null;
+  productName: string | null;
   totalAmount: number;
   paidAmount: number;
+  currency: Currency;
   invoiceDate: string | null;
   dueDate: string | null;
   notes: string | null;
   imageUrl: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
   createdAt: string | null;
 }
 
@@ -78,10 +106,24 @@ export interface WorkerTransaction {
   workerId: number;
   type: TransactionType;
   amount: number;
+  currency: Currency;
   description: string | null;
   date: string | null;
   projectId: number | null;
   projectName: string | null;
+  createdAt: string | null;
+}
+
+export interface IncomeTransaction {
+  id: number;
+  projectId: number;
+  projectName: string | null;
+  amount: number;
+  currency: Currency;
+  description: string | null;
+  date: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
   createdAt: string | null;
 }
 
@@ -131,6 +173,7 @@ export interface DashboardOverview {
 export interface WorkerInput {
   name: string;
   role: string;
+  category: string | null;
   phone: string | null;
 }
 
@@ -156,8 +199,11 @@ export interface ProjectInput {
 export interface ProductInput {
   name: string;
   supplierId: number | null;
+  projectId: number | null;
+  buildingId: number | null;
   unit: string | null;
   unitPrice: number | null;
+  currency: Currency;
 }
 
 export interface InvoiceInput {
@@ -165,8 +211,10 @@ export interface InvoiceInput {
   supplierId: number | null;
   projectId: number | null;
   buildingId: number | null;
+  productId: number | null;
   totalAmount: number;
   paidAmount: number;
+  currency: Currency;
   status: InvoiceStatus;
   invoiceDate: string | null;
   dueDate: string | null;
@@ -178,12 +226,24 @@ export interface WorkerTransactionInput {
   workerId: number;
   type: TransactionType;
   amount: number;
+  currency: Currency;
   description: string | null;
   date: string | null;
   projectId: number | null;
 }
 
+export interface IncomeTransactionInput {
+  projectId: number;
+  amount: number;
+  currency: Currency;
+  description: string | null;
+  date: string | null;
+}
+
 export const erpKeys = {
+  profile: ["profile"] as const,
+  users: ["users"] as const,
+  projectMemberships: ["projectMemberships"] as const,
   dashboard: ["dashboard"] as const,
   workers: ["workers"] as const,
   worker: (id: number) => ["worker", id] as const,
@@ -195,6 +255,7 @@ export const erpKeys = {
   products: ["products"] as const,
   invoices: ["invoices"] as const,
   invoice: (id: number) => ["invoice", id] as const,
+  incomes: ["incomes"] as const,
 };
 
 function readValue(row: Row, ...keys: string[]) {
@@ -259,6 +320,14 @@ function toTransactionType(value: unknown): TransactionType {
   return value === "debit" ? "debit" : "credit";
 }
 
+function toCurrency(value: unknown): Currency {
+  return value === "IQD" ? "IQD" : "USD";
+}
+
+function toUserRole(value: unknown): UserRole {
+  return value === "admin" ? "admin" : "user";
+}
+
 function asRow(value: unknown): Row {
   return typeof value === "object" && value !== null ? (value as Row) : {};
 }
@@ -276,14 +345,100 @@ function computeWorkerBalance(
   }, 0);
 }
 
+async function getCurrentUserId() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    throw error;
+  }
+  return data.user?.id ?? null;
+}
+
+async function getCurrentUserProfile() {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return null;
+  }
+
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (error) {
+    throw error;
+  }
+
+  return data ? normalizeProfile(asRow(data)) : null;
+}
+
+async function getAccessibleProjectIds() {
+  const profile = await getCurrentUserProfile();
+  if (!profile) {
+    return [];
+  }
+  if (profile.role === "admin") {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("project_memberships")
+    .select("project_id")
+    .eq("user_id", profile.id);
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as Row[]).map((row) => readId(row, "project_id", "projectId"));
+}
+
+function filterRowsByProjectIds(rows: Row[], projectIds: number[] | null, key = "project_id") {
+  if (projectIds == null) {
+    return rows;
+  }
+  const allowed = new Set(projectIds);
+  return rows.filter((row) => {
+    const projectId = readNumber(row, key, key.replace("_id", "Id"));
+    return projectId != null && allowed.has(projectId);
+  });
+}
+
+async function requireProjectAccess(projectId: number | null | undefined) {
+  if (projectId == null) {
+    return;
+  }
+  const projectIds = await getAccessibleProjectIds();
+  if (projectIds == null) {
+    return;
+  }
+  if (!projectIds.includes(projectId)) {
+    throw new Error("You do not have access to this project.");
+  }
+}
+
 function normalizeWorker(row: Row, transactions: WorkerTransaction[] = []): Worker {
   const storedBalance = readNumber(row, "balance");
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Sans nom",
     role: readString(row, "role") ?? "-",
+    category: readString(row, "category"),
     phone: readString(row, "phone"),
     balance: computeWorkerBalance(storedBalance, transactions),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeProfile(row: Row): AppUserProfile {
+  return {
+    id: readString(row, "id") ?? "",
+    email: readString(row, "email"),
+    fullName: readString(row, "full_name", "fullName"),
+    role: toUserRole(readString(row, "role")),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeProjectMembership(row: Row): ProjectMembership {
+  return {
+    id: readId(row, "id"),
+    projectId: readId(row, "project_id", "projectId"),
+    userId: readString(row, "user_id", "userId") ?? "",
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -314,8 +469,15 @@ function normalizeProject(row: Row): Project {
   };
 }
 
-function normalizeProduct(row: Row, suppliersById: Map<number, Supplier>): Product {
+function normalizeProduct(
+  row: Row,
+  suppliersById: Map<number, Supplier>,
+  projectsById: Map<number, Project>,
+  buildingsById: Map<number, ProjectBuilding>,
+): Product {
   const supplierId = readNumber(row, "supplier_id", "supplierId");
+  const projectId = readNumber(row, "project_id", "projectId");
+  const buildingId = readNumber(row, "building_id", "buildingId");
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Sans nom",
@@ -323,8 +485,17 @@ function normalizeProduct(row: Row, suppliersById: Map<number, Supplier>): Produ
     supplierName:
       readString(row, "supplier_name", "supplierName") ??
       (supplierId != null ? suppliersById.get(supplierId)?.name ?? null : null),
+    projectId,
+    projectName:
+      readString(row, "project_name", "projectName") ??
+      (projectId != null ? projectsById.get(projectId)?.name ?? null : null),
+    buildingId,
+    buildingName:
+      readString(row, "building_name", "buildingName") ??
+      (buildingId != null ? buildingsById.get(buildingId)?.name ?? null : null),
     unit: readString(row, "unit"),
     unitPrice: readNumber(row, "unit_price", "unitPrice"),
+    currency: toCurrency(readString(row, "currency")),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -343,10 +514,14 @@ function normalizeInvoice(
   suppliersById: Map<number, Supplier>,
   projectsById: Map<number, Project>,
   buildingsById: Map<number, ProjectBuilding>,
+  productsById: Map<number, Product>,
+  profilesById: Map<string, AppUserProfile>,
 ): Invoice {
   const supplierId = readNumber(row, "supplier_id", "supplierId");
   const projectId = readNumber(row, "project_id", "projectId");
   const buildingId = readNumber(row, "building_id", "buildingId");
+  const productId = readNumber(row, "product_id", "productId");
+  const createdBy = readString(row, "created_by", "createdBy");
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
 
@@ -366,12 +541,19 @@ function normalizeInvoice(
     buildingName:
       readString(row, "building_name", "buildingName") ??
       (buildingId != null ? buildingsById.get(buildingId)?.name ?? null : null),
+    productId,
+    productName:
+      readString(row, "product_name", "productName") ??
+      (productId != null ? productsById.get(productId)?.name ?? null : null),
     totalAmount,
     paidAmount,
+    currency: toCurrency(readString(row, "currency")),
     invoiceDate: readDate(row, "invoice_date", "invoiceDate"),
     dueDate: readDate(row, "due_date", "dueDate"),
     notes: readString(row, "notes"),
     imageUrl: readString(row, "image_url", "imageUrl"),
+    createdBy,
+    createdByName: createdBy ? profilesById.get(createdBy)?.fullName ?? profilesById.get(createdBy)?.email ?? null : null,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -388,12 +570,37 @@ function normalizeWorkerTransaction(
     workerId: readId(row, "worker_id", "workerId"),
     type: toTransactionType(readString(row, "type")),
     amount: readNumber(row, "amount") ?? 0,
+    currency: toCurrency(readString(row, "currency")),
     description: readString(row, "description"),
     date: readDate(row, "date"),
     projectId,
     projectName:
       readString(nestedProject, "name") ??
       (projectId != null ? projectsById.get(projectId)?.name ?? null : null),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeIncomeTransaction(
+  row: Row,
+  projectsById: Map<number, Project>,
+  profilesById: Map<string, AppUserProfile>,
+): IncomeTransaction {
+  const projectId = readId(row, "project_id", "projectId");
+  const createdBy = readString(row, "created_by", "createdBy");
+
+  return {
+    id: readId(row, "id"),
+    projectId,
+    projectName: projectsById.get(projectId)?.name ?? null,
+    amount: readNumber(row, "amount") ?? 0,
+    currency: toCurrency(readString(row, "currency")),
+    description: readString(row, "description"),
+    date: readDate(row, "date"),
+    createdBy,
+    createdByName: createdBy
+      ? profilesById.get(createdBy)?.fullName ?? profilesById.get(createdBy)?.email ?? null
+      : null,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -448,6 +655,45 @@ export async function listSuppliers() {
   return rows.map(normalizeSupplier);
 }
 
+export async function getMyProfile() {
+  return getCurrentUserProfile();
+}
+
+export async function listProfiles() {
+  const rows = await selectAll("profiles");
+  return rows.map(normalizeProfile);
+}
+
+export async function updateProfileRole(id: string, role: UserRole) {
+  const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function listProjectMemberships() {
+  const rows = await selectAll("project_memberships");
+  return rows.map(normalizeProjectMembership);
+}
+
+export async function replaceUserProjectMemberships(userId: string, projectIds: number[]) {
+  const deleteResult = await supabase.from("project_memberships").delete().eq("user_id", userId);
+  if (deleteResult.error) {
+    throw deleteResult.error;
+  }
+
+  if (!projectIds.length) {
+    return;
+  }
+
+  const insertResult = await supabase
+    .from("project_memberships")
+    .insert(projectIds.map((projectId) => ({ user_id: userId, project_id: projectId })));
+  if (insertResult.error) {
+    throw insertResult.error;
+  }
+}
+
 export async function createSupplier(input: SupplierInput) {
   await insertWithFallback("suppliers", { ...input });
 }
@@ -464,16 +710,20 @@ export async function deleteSupplier(id: number) {
 }
 
 export async function listProjects() {
-  const rows = await selectAll("projects");
+  const rows = filterRowsByProjectIds(await selectAll("projects"), await getAccessibleProjectIds());
   return rows.map(normalizeProject);
 }
 
 export async function getProject(id: number) {
+  await requireProjectAccess(id);
   const row = await selectOne("projects", id);
   return normalizeProject(row);
 }
 
 export async function listProjectBuildings(projectId?: number) {
+  if (projectId != null) {
+    await requireProjectAccess(projectId);
+  }
   let query = supabase.from("project_buildings").select("*").order("created_at", { ascending: true });
   if (projectId != null) {
     query = query.eq("project_id", projectId);
@@ -596,10 +846,12 @@ export async function listWorkerTransactions(workerId?: number) {
 }
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
+  await requireProjectAccess(input.projectId);
   const snakePayload = {
     worker_id: input.workerId,
     type: input.type,
     amount: input.amount,
+    currency: input.currency,
     description: input.description,
     date: input.date,
     project_id: input.projectId,
@@ -608,6 +860,7 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     workerId: input.workerId,
     type: input.type,
     amount: input.amount,
+    currency: input.currency,
     description: input.description,
     date: input.date,
     projectId: input.projectId,
@@ -654,40 +907,61 @@ export async function deleteWorker(id: number) {
 }
 
 export async function listProducts() {
-  const [rows, suppliers] = await Promise.all([selectAll("products"), listSuppliers()]);
+  const [rows, suppliers, projects, buildings] = await Promise.all([
+    selectAll("products"),
+    listSuppliers(),
+    listProjects(),
+    listProjectBuildings(),
+  ]);
   const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
-  return rows.map((row) => normalizeProduct(row, suppliersById));
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const buildingsById = new Map(buildings.map((building) => [building.id, building]));
+  return rows.map((row) => normalizeProduct(row, suppliersById, projectsById, buildingsById));
 }
 
 export async function createProduct(input: ProductInput) {
+  await requireProjectAccess(input.projectId);
   const camelPayload = {
     name: input.name,
     supplierId: input.supplierId,
+    projectId: input.projectId,
+    buildingId: input.buildingId,
     unit: input.unit,
     unitPrice: input.unitPrice,
+    currency: input.currency,
   };
   const snakePayload = {
     name: input.name,
     supplier_id: input.supplierId,
+    project_id: input.projectId,
+    building_id: input.buildingId,
     unit: input.unit,
     unit_price: input.unitPrice,
+    currency: input.currency,
   };
 
   await insertWithFallback("products", camelPayload, snakePayload);
 }
 
 export async function updateProduct(id: number, input: ProductInput) {
+  await requireProjectAccess(input.projectId);
   const camelPayload = {
     name: input.name,
     supplierId: input.supplierId,
+    projectId: input.projectId,
+    buildingId: input.buildingId,
     unit: input.unit,
     unitPrice: input.unitPrice,
+    currency: input.currency,
   };
   const snakePayload = {
     name: input.name,
     supplier_id: input.supplierId,
+    project_id: input.projectId,
+    building_id: input.buildingId,
     unit: input.unit,
     unit_price: input.unitPrice,
+    currency: input.currency,
   };
 
   await updateWithFallback("products", id, camelPayload, snakePayload);
@@ -701,74 +975,96 @@ export async function deleteProduct(id: number) {
 }
 
 export async function listInvoices() {
-  const [rows, suppliers, projects, buildings] = await Promise.all([
-    selectAll("invoices"),
+  const [rows, suppliers, projects, buildings, profiles] = await Promise.all([
+    filterRowsByProjectIds(await selectAll("invoices"), await getAccessibleProjectIds()),
     listSuppliers(),
     listProjects(),
     listProjectBuildings(),
+    listProfiles(),
   ]);
 
+  const products = await listProducts();
   const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const buildingsById = new Map(buildings.map((building) => [building.id, building]));
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
 
-  return rows.map((row) => normalizeInvoice(row, suppliersById, projectsById, buildingsById));
+  return rows.map((row) =>
+    normalizeInvoice(row, suppliersById, projectsById, buildingsById, productsById, profilesById),
+  );
 }
 
 export async function getInvoice(id: number) {
-  const [row, suppliers, projects, buildings] = await Promise.all([
+  const [row, suppliers, projects, buildings, profiles] = await Promise.all([
     selectOne("invoices", id),
     listSuppliers(),
     listProjects(),
     listProjectBuildings(),
+    listProfiles(),
   ]);
 
+  await requireProjectAccess(readNumber(row, "project_id", "projectId"));
+  const products = await listProducts();
   const suppliersById = new Map(suppliers.map((supplier) => [supplier.id, supplier]));
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const buildingsById = new Map(buildings.map((building) => [building.id, building]));
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
 
-  return normalizeInvoice(row, suppliersById, projectsById, buildingsById);
+  return normalizeInvoice(row, suppliersById, projectsById, buildingsById, productsById, profilesById);
 }
 
 export async function createInvoice(input: InvoiceInput) {
+  await requireProjectAccess(input.projectId);
+  const currentUserId = await getCurrentUserId();
   const camelPayload = {
     number: input.number,
     supplierId: input.supplierId,
     projectId: input.projectId,
     buildingId: input.buildingId,
+    productId: input.productId,
     totalAmount: input.totalAmount,
     paidAmount: input.paidAmount,
+    currency: input.currency,
     status: input.status,
     invoiceDate: input.invoiceDate,
     dueDate: input.dueDate,
     notes: input.notes,
     imageUrl: input.imageUrl,
+    createdBy: currentUserId,
   };
   const snakePayload = {
     number: input.number,
     supplier_id: input.supplierId,
     project_id: input.projectId,
     building_id: input.buildingId,
+    product_id: input.productId,
     total_amount: input.totalAmount,
     paid_amount: input.paidAmount,
+    currency: input.currency,
     status: input.status,
     invoice_date: input.invoiceDate,
     due_date: input.dueDate,
     notes: input.notes,
     image_url: input.imageUrl,
+    created_by: currentUserId,
   };
 
   await insertWithFallback("invoices", camelPayload, snakePayload);
 }
 
 export async function updateInvoice(id: number, input: InvoiceInput) {
+  await requireProjectAccess(input.projectId);
   const camelPayload = {
     number: input.number,
     supplierId: input.supplierId,
     projectId: input.projectId,
     buildingId: input.buildingId,
+    productId: input.productId,
     totalAmount: input.totalAmount,
     paidAmount: input.paidAmount,
+    currency: input.currency,
     status: input.status,
     invoiceDate: input.invoiceDate,
     dueDate: input.dueDate,
@@ -780,8 +1076,10 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
     supplier_id: input.supplierId,
     project_id: input.projectId,
     building_id: input.buildingId,
+    product_id: input.productId,
     total_amount: input.totalAmount,
     paid_amount: input.paidAmount,
+    currency: input.currency,
     status: input.status,
     invoice_date: input.invoiceDate,
     due_date: input.dueDate,
@@ -803,6 +1101,34 @@ export async function markInvoicePaid(id: number, totalAmount: number) {
 
 export async function deleteInvoice(id: number) {
   const { error } = await supabase.from("invoices").delete().eq("id", id);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function listIncomeTransactions() {
+  const [rows, projects, profiles] = await Promise.all([
+    filterRowsByProjectIds(await selectAll("income_transactions"), await getAccessibleProjectIds()),
+    listProjects(),
+    listProfiles(),
+  ]);
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+  return rows.map((row) => normalizeIncomeTransaction(row, projectsById, profilesById));
+}
+
+export async function createIncomeTransaction(input: IncomeTransactionInput) {
+  await requireProjectAccess(input.projectId);
+  const currentUserId = await getCurrentUserId();
+  const payload = {
+    project_id: input.projectId,
+    amount: input.amount,
+    currency: input.currency,
+    description: input.description,
+    date: input.date,
+    created_by: currentUserId,
+  };
+  const { error } = await supabase.from("income_transactions").insert(payload);
   if (error) {
     throw error;
   }

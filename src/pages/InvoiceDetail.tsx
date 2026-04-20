@@ -52,7 +52,7 @@ export default function InvoiceDetail() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/invoices">
+        <Link href="/expenses">
           <div className="cursor-pointer rounded-xl border border-border bg-background p-2 text-foreground transition hover:bg-muted">
             <ArrowLeft size={18} />
           </div>
@@ -80,11 +80,11 @@ export default function InvoiceDetail() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">{t.invoiceImage}</h2>
+            <h2 className="text-sm font-semibold text-foreground">Justificatif</h2>
           </div>
           <img
             src={invoice.imageUrl}
-            alt={t.invoiceImage}
+            alt="Justificatif"
             onClick={() => setExpanded((current) => !current)}
             className={`cursor-zoom-in rounded-2xl border border-border object-contain transition ${
               expanded ? "max-h-[70vh] w-full" : "max-h-56"
@@ -94,7 +94,7 @@ export default function InvoiceDetail() {
       ) : null}
 
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">{t.invoiceDetails}</h2>
+        <h2 className="text-sm font-semibold text-foreground">Details de la depense</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">{t.supplierOption}</p>
@@ -107,6 +107,14 @@ export default function InvoiceDetail() {
           <div>
             <p className="text-xs text-muted-foreground">{invoiceAssignment}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? projectGlobalCost}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Produit</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{invoice.productName ?? "-"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Utilisateur</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{invoice.createdByName ?? "-"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t.invoiceDate}</p>
@@ -131,15 +139,21 @@ export default function InvoiceDetail() {
         <div className="mt-4 space-y-3">
           <div className="flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
             <span className="text-sm text-muted-foreground">{t.totalAmount}</span>
-            <span className="text-sm font-semibold text-foreground">{formatCurrency(invoice.totalAmount)}</span>
+            <span className="text-sm font-semibold text-foreground">
+              {formatCurrency(invoice.totalAmount, invoice.currency)}
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3">
             <span className="text-sm text-emerald-700">{t.alreadyPaid}</span>
-            <span className="text-sm font-semibold text-emerald-800">{formatCurrency(invoice.paidAmount)}</span>
+            <span className="text-sm font-semibold text-emerald-800">
+              {formatCurrency(invoice.paidAmount, invoice.currency)}
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3">
             <span className="text-sm text-amber-700">{t.remaining_label}</span>
-            <span className="text-sm font-semibold text-amber-900">{formatCurrency(remaining)}</span>
+            <span className="text-sm font-semibold text-amber-900">
+              {formatCurrency(remaining, invoice.currency)}
+            </span>
           </div>
 
           <div>

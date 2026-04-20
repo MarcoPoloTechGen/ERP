@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -17,6 +17,7 @@ import {
   getWorker,
   listProjects,
   listWorkerTransactions,
+  type Currency,
 } from "@/lib/erp";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
@@ -27,6 +28,7 @@ const inputClassName =
 type TransactionFormValues = {
   type: "credit" | "debit";
   amount: string;
+  currency: Currency;
   description: string;
   date: string;
   projectId: string;
@@ -50,6 +52,7 @@ function TransactionModal({
     defaultValues: {
       type: "credit",
       amount: "",
+      currency: "USD",
       description: "",
       date: new Date().toISOString().slice(0, 10),
       projectId: "",
@@ -62,6 +65,7 @@ function TransactionModal({
         workerId,
         type: values.type,
         amount: Number(values.amount),
+        currency: values.currency,
         description: values.description.trim() || null,
         date: values.date || null,
         projectId: values.projectId ? Number(values.projectId) : null,
@@ -89,11 +93,7 @@ function TransactionModal({
             </select>
           </Field>
 
-          <Field
-            label={t.amount}
-            required
-            error={formState.errors.amount ? t.amountRequired : null}
-          >
+          <Field label={t.amount} required error={formState.errors.amount ? t.amountRequired : null}>
             <input
               type="number"
               step="0.01"
@@ -102,6 +102,13 @@ function TransactionModal({
               className={inputClassName}
               placeholder="500.00"
             />
+          </Field>
+
+          <Field label="Devise">
+            <select {...register("currency")} className={inputClassName}>
+              <option value="USD">USD</option>
+              <option value="IQD">IQD</option>
+            </select>
           </Field>
 
           <Field label={t.txProject}>
@@ -115,11 +122,7 @@ function TransactionModal({
             </select>
           </Field>
 
-          <Field
-            label={t.date}
-            required
-            error={formState.errors.date ? t.dateRequired : null}
-          >
+          <Field label={t.date} required error={formState.errors.date ? t.dateRequired : null}>
             <input type="date" {...register("date", { required: true })} className={inputClassName} />
           </Field>
         </div>
@@ -174,10 +177,16 @@ export default function WorkerDetail() {
           </div>
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold text-foreground">{worker.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold text-foreground">{worker.name}</h1>
+            {worker.category ? (
+              <span className="inline-flex rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
+                {worker.category}
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {worker.role}
-            {worker.phone ? ` · ${worker.phone}` : ""}
+            {[worker.role, worker.phone].filter(Boolean).join(" · ")}
           </p>
         </div>
         <div className="min-w-[180px] text-right">
@@ -200,10 +209,7 @@ export default function WorkerDetail() {
             <h2 className="text-sm font-semibold text-foreground">{t.transactions}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{transactions?.length ?? 0} mouvements</p>
           </div>
-          <PrimaryButton onClick={() => setShowModal(true)}>
-            <Plus size={16} />
-            {t.addTransaction}
-          </PrimaryButton>
+          <PrimaryButton onClick={() => setShowModal(true)}>{t.addTransaction}</PrimaryButton>
         </div>
       </Card>
 
@@ -236,8 +242,7 @@ export default function WorkerDetail() {
                         (transaction.type === "credit" ? t.creditLabel : t.debitLabel)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(transaction.date)}
-                      {transaction.projectName ? ` · ${transaction.projectName}` : ""}
+                      {[formatDate(transaction.date), transaction.projectName].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                 </div>
@@ -248,7 +253,7 @@ export default function WorkerDetail() {
                   }`}
                 >
                   {transaction.type === "credit" ? "+" : "-"}
-                  {formatCurrency(transaction.amount)}
+                  {formatCurrency(transaction.amount, transaction.currency)}
                 </p>
               </div>
             </Card>

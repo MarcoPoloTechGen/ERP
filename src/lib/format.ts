@@ -1,8 +1,10 @@
-export function formatCurrency(amount: number) {
+import type { Currency } from "@/lib/erp";
+
+export function formatCurrency(amount: number, currency: Currency = "USD") {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2,
+    currency,
+    maximumFractionDigits: currency === "IQD" ? 0 : 2,
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 

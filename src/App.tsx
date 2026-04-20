@@ -1,7 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Route, Router as WouterRouter, Switch } from "wouter";
 import Layout from "@/components/Layout";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import Dashboard from "@/pages/Dashboard";
+import AuthPage from "@/pages/Auth";
+import Admin from "@/pages/Admin";
+import Income from "@/pages/Income";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import Invoices from "@/pages/Invoices";
 import Products from "@/pages/Products";
@@ -28,6 +32,20 @@ function NotFound() {
 }
 
 function AppRouter() {
+  const { loading, session } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-16 w-16 animate-pulse rounded-3xl border border-card-border bg-card" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthPage />;
+  }
+
   return (
     <Layout>
       <Switch>
@@ -38,6 +56,10 @@ function AppRouter() {
         <Route path="/projects/:id" component={ProjectDetail} />
         <Route path="/suppliers" component={Suppliers} />
         <Route path="/products" component={Products} />
+        <Route path="/income" component={Income} />
+        <Route path="/expenses" component={Invoices} />
+        <Route path="/expenses/:id" component={InvoiceDetail} />
+        <Route path="/admin" component={Admin} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/invoices/:id" component={InvoiceDetail} />
         <Route component={NotFound} />
@@ -90,15 +112,17 @@ function MissingConfigScreen() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <LangProvider>
-        {supabaseConfigError ? (
-          <MissingConfigScreen />
-        ) : (
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppRouter />
-          </WouterRouter>
-        )}
-      </LangProvider>
+      <AuthProvider>
+        <LangProvider>
+          {supabaseConfigError ? (
+            <MissingConfigScreen />
+          ) : (
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppRouter />
+            </WouterRouter>
+          )}
+        </LangProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

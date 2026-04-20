@@ -214,6 +214,7 @@ export default function Projects() {
   const buildingCountLabel = t.building_count ?? ((count: number) => `${count} building${count > 1 ? "s" : ""}`);
   const [selectedProject, setSelectedProject] = useState<Project | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed" | "paused">("all");
 
   const { data: projects, isLoading } = useQuery({
     queryKey: erpKeys.projects,
@@ -232,9 +233,14 @@ export default function Projects() {
     return counts;
   }, [allBuildings]);
 
+  const filteredProjects =
+    statusFilter === "all"
+      ? projects
+      : projects?.filter((project) => project.status === statusFilter);
+
   function exportProjects(format: "csv" | "xlsx") {
     const rows =
-      projects?.map((project) => ({
+      filteredProjects?.map((project) => ({
         Name: project.name,
         Client: project.client ?? "",
         Location: project.location ?? "",
@@ -267,7 +273,7 @@ export default function Projects() {
     <div className="space-y-6">
       <PageHeader
         title={t.projectsTitle}
-        subtitle={t.project_count(projects?.length ?? 0)}
+        subtitle={t.project_count(filteredProjects?.length ?? 0)}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SecondaryButton onClick={() => exportProjects("csv")}>
@@ -291,17 +297,46 @@ export default function Projects() {
         }
       />
 
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
+            Filtrer par statut
+          </span>
+          {(
+            [
+              ["all", t.all ?? "Tous"],
+              ["active", t.active],
+              ["completed", t.completed],
+              ["paused", t.paused],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                statusFilter === value
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Card>
+
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-28 animate-pulse rounded-2xl border border-card-border bg-card" />
           ))}
         </div>
-      ) : !projects?.length ? (
+      ) : !filteredProjects?.length ? (
         <EmptyState title={t.noProjects} />
       ) : (
         <div className="space-y-3">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <Card key={project.id} className="p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 flex-1">

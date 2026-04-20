@@ -1,21 +1,26 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  BadgeDollarSign,
   FileText,
   FolderKanban,
   HardHat,
   LayoutDashboard,
+  LogOut,
   Menu,
   Package2,
+  ShieldCheck,
   Truck,
   Users,
   X,
 } from "lucide-react";
+import { SecondaryButton } from "@/components/ui-kit";
+import { useAuth } from "@/lib/auth";
 import { useLang, type Lang } from "@/lib/i18n";
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "en", label: "EN" },
-  { value: "ku", label: "کوردی" },
+  { value: "ku", label: "KU" },
 ];
 
 function NavLink({
@@ -53,6 +58,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [location] = useLocation();
   const { t, lang, setLang } = useLang();
+  const { profile, signOut } = useAuth();
 
   const navItems = [
     { href: "/", label: t.dashboard, icon: LayoutDashboard },
@@ -60,7 +66,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: t.projects, icon: FolderKanban },
     { href: "/suppliers", label: t.suppliers, icon: Truck },
     { href: "/products", label: t.products, icon: Package2 },
-    { href: "/invoices", label: t.invoices, icon: FileText },
+    { href: "/income", label: "Revenus", icon: BadgeDollarSign },
+    { href: "/expenses", label: "Depenses", icon: FileText },
   ];
 
   return (
@@ -108,9 +115,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {...item}
               />
             ))}
+            {profile?.role === "admin" ? (
+              <NavLink
+                href="/admin"
+                label="Administration"
+                icon={ShieldCheck}
+                currentPath={location}
+                onSelect={() => setMobileOpen(false)}
+              />
+            ) : null}
           </nav>
 
           <div className="space-y-3 border-t border-sidebar-border pt-4">
+            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
+              <p className="truncate text-sm font-medium text-sidebar-foreground">
+                {profile?.fullName ?? profile?.email ?? "Utilisateur"}
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-sidebar-foreground/55">
+                {profile?.role === "admin" ? "Admin" : "Utilisateur"}
+              </p>
+            </div>
+
             <div className="flex rounded-2xl bg-sidebar-accent p-1">
               {languages.map((item) => (
                 <button
@@ -127,6 +152,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               ))}
             </div>
+
+            <SecondaryButton
+              className="w-full justify-center border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
+              onClick={() => {
+                void signOut();
+              }}
+            >
+              <LogOut size={16} />
+              Deconnexion
+            </SecondaryButton>
+
             <p className="text-center text-xs text-sidebar-foreground/45">{t.version}</p>
           </div>
         </aside>

@@ -124,12 +124,14 @@ export default function ProjectDetail() {
       <Card className="overflow-hidden">
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
           <FileText size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">{t.relatedInvoices_count(relatedInvoices.length)}</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            {`${relatedInvoices.length} depenses`}
+          </h2>
         </div>
 
         {!relatedInvoices.length ? (
           <div className="p-5">
-            <EmptyState title={t.noInvoicesForProject} />
+            <EmptyState title="Aucune depense pour ce projet" />
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -139,7 +141,7 @@ export default function ProjectDetail() {
               </div>
             ) : null}
             {relatedInvoices.map((invoice) => (
-              <Link href={`/invoices/${invoice.id}`} key={invoice.id}>
+              <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
                 <div className="cursor-pointer px-5 py-4 transition hover:bg-muted/40">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -151,7 +153,9 @@ export default function ProjectDetail() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(invoice.totalAmount)}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {formatCurrency(invoice.totalAmount, invoice.currency)}
+                      </p>
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}>
                         {t[invoice.status]}
                       </span>

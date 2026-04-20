@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { AlertTriangle, Euro, FolderKanban, Truck, Users } from "lucide-react";
+import { AlertTriangle, Banknote, FolderKanban, Truck, Users } from "lucide-react";
 import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui-kit";
 import { erpKeys, getDashboardOverview } from "@/lib/erp";
 import { formatCurrency, statusColors } from "@/lib/format";
@@ -158,9 +158,7 @@ export default function Dashboard() {
                         </span>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatCurrency(project.totalInvoiced)}
-                        </p>
+                        <p className="text-sm font-semibold text-foreground">{formatCurrency(project.totalInvoiced)}</p>
                         <p className="text-xs text-muted-foreground">
                           {project.invoiceCount} fact.
                         </p>
@@ -218,7 +216,7 @@ export default function Dashboard() {
           ) : (
             <div className="divide-y divide-border">
               {data.invoicesSummary.slice(0, 6).map((invoice) => (
-                <Link href={`/invoices/${invoice.id}`} key={invoice.id}>
+                <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
                   <div className="cursor-pointer px-5 py-4 transition hover:bg-muted/40">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -254,7 +252,7 @@ export default function Dashboard() {
       <Card className="p-5">
         <div className="flex items-start gap-4">
           <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-            <Euro size={20} />
+            <Banknote size={20} />
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">
