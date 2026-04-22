@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getMyProfile, type AppUserProfile } from "@/lib/erp";
-import { clearSupabaseBrowserState, supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 type AuthContextValue = {
   session: Session | null;
@@ -42,13 +42,20 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   });
 }
 
-async function resetBrokenSession() {
-  clearSupabaseBrowserState();
+async function loadProfileSafely(nextSession: Session | null) {
+  if (!nextSession) {
+    return null;
+  }
 
   try {
-    await supabase.auth.signOut({ scope: "local" });
+    return await withTimeout(
+      getMyProfile().catch(() => null),
+      AUTH_BOOTSTRAP_TIMEOUT_MS,
+      "Timed out while loading the user profile.",
+    );
   } catch (error) {
-    console.warn("Local Supabase sign out failed during recovery", error);
+    console.warn("Failed to load the user profile without clearing the active session.", error);
+    return null;
   }
 }
 
@@ -80,13 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const nextSession = sessionData.session;
-        const nextProfile = nextSession
-          ? await withTimeout(
-              getMyProfile().catch(() => null),
-              AUTH_BOOTSTRAP_TIMEOUT_MS,
-              "Timed out while loading the user profile.",
-            )
-          : null;
+        const nextProfile = await loadProfileSafely(nextSession);
 
         if (!active) {
           return;
@@ -95,11 +96,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(nextSession);
         setProfile(nextProfile);
       } catch (error) {
-        console.error("Failed to load auth session", error);
+        console.error("Failed to restore auth session", error);
         if (!active) {
           return;
         }
-        await resetBrokenSession();
         setSession(null);
         setProfile(null);
       } finally {
@@ -111,32 +111,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      try {
-        const nextProfile = nextSession
-          ? await withTimeout(
-              getMyProfile().catch(() => null),
-              AUTH_BOOTSTRAP_TIMEOUT_MS,
-              "Timed out while refreshing the user profile.",
-            )
-          : null;
-        if (!active) {
-          return;
-        }
-        setSession(nextSession);
-        setProfile(nextProfile);
-      } catch (error) {
-        console.error(`Failed to refresh auth state during ${event}`, error);
-        if (!active) {
-          return;
-        }
-        await resetBrokenSession();
-        setSession(null);
-        setProfile(null);
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!active) {
         return;
-      } finally {
-        finishBootstrap();
       }
+
+      setSession(nextSession);
+      finishBootstrap();
+
+      void loadProfileSafely(nextSession).then((nextProfile) => {
+        if (!active) {
+          return;
+        }
+        setProfile(nextProfile);
+      }).catch((error) => {
+        console.error(`Failed to refresh auth state during ${event}`, error);
+      });
     });
 
     // A final safety net so the UI never stays on the loading screen forever.
@@ -145,15 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.warn("Auth bootstrap guard triggered; resetting local session state.");
-      void resetBrokenSession().finally(() => {
-        if (!active) {
-          return;
-        }
-        setSession(null);
-        setProfile(null);
-        finishBootstrap();
-      });
+      console.warn("Auth bootstrap guard triggered; continuing without clearing the saved session.");
+      finishBootstrap();
     }, AUTH_BOOTSTRAP_TIMEOUT_MS * 2);
 
     return () => {

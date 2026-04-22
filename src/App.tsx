@@ -53,10 +53,6 @@ class AppErrorBoundary extends Component<
     console.error("Application render failure", error, errorInfo);
   }
 
-  handleReload = () => {
-    window.location.reload();
-  };
-
   render() {
     if (this.state.hasError) {
       return (
@@ -70,23 +66,15 @@ class AppErrorBoundary extends Component<
                 The application hit an error.
               </h1>
               <p className="mt-4 text-sm leading-6 text-slate-600 sm:text-base">
-                A problem is preventing the interface from rendering correctly. Reload the page to
-                try again.
+                A problem is preventing the interface from rendering correctly. Please try again in
+                a moment. If the issue continues, review the browser console and Supabase
+                configuration.
               </p>
               {this.state.errorMessage ? (
                 <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                   {this.state.errorMessage}
                 </div>
               ) : null}
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={this.handleReload}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
-                >
-                  Reload page
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -149,19 +137,10 @@ function AppRouter() {
           </p>
           {showDelayedMessage ? (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950">
-              Loading is taking longer than expected. If nothing changes, reload the page or check
-              Supabase.
+              Loading is taking longer than expected. We are still waiting for Supabase to respond.
+              If this keeps happening, verify the project configuration and network access.
             </div>
           ) : null}
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
-            >
-              Reload
-            </button>
-          </div>
         </div>
       </div>
     );

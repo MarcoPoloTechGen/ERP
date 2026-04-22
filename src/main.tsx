@@ -18,19 +18,14 @@ function renderFatalError(message: string, details?: string) {
         <h1 style="margin:20px 0 0;font-size:32px;line-height:1.15;">The application could not start.</h1>
         <p style="margin:16px 0 0;font-size:15px;line-height:1.7;color:#475569;">${safeMessage}</p>
         ${safeDetails ? `<pre style="margin:20px 0 0;padding:16px;background:#fff1f2;border:1px solid #fecdd3;border-radius:18px;white-space:pre-wrap;font-size:13px;line-height:1.55;color:#881337;">${safeDetails}</pre>` : ""}
-        <button id="app-reload-button" style="margin-top:24px;border:0;border-radius:14px;background:#0f172a;color:white;padding:12px 18px;font-size:14px;font-weight:600;cursor:pointer;">Reload page</button>
       </div>
     </div>
   `;
-
-  document.getElementById("app-reload-button")?.addEventListener("click", () => {
-    window.location.reload();
-  });
 }
 
 window.addEventListener("error", (event) => {
   renderFatalError(
-    "A JavaScript error blocked rendering. Reload the page. If the problem continues, verify the Supabase configuration and open the browser console.",
+    "A JavaScript error blocked rendering. If the problem continues, verify the Supabase configuration and open the browser console.",
     event.error instanceof Error ? event.error.message : undefined,
   );
 });
