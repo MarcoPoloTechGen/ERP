@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
@@ -6,7 +6,7 @@ import {
   createProduct,
   deleteProduct,
   erpKeys,
-  listProducts,
+  listProductsPage,
   listProjectBuildings,
   listProjects,
   listSuppliers,
@@ -19,17 +19,17 @@ import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
+  controlClassName,
   EmptyState,
+  ErrorState,
   Field,
   IconButton,
   Modal,
   PageHeader,
+  PaginationControls,
   PrimaryButton,
   SecondaryButton,
 } from "@/components/ui-kit";
-
-const inputClassName =
-  "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 type ProductFormValues = {
   name: string;
@@ -110,12 +110,12 @@ function ProductModal({
     <Modal title={product ? t.editProduct : t.newProduct} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
         <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
-          <input {...register("name", { required: true })} className={inputClassName} />
+          <input {...register("name", { required: true })} className={controlClassName} />
         </Field>
 
         <div className="grid gap-4 md:grid-cols-2">
           <Field label={t.supplierLabel}>
-            <select {...register("supplierId")} className={inputClassName}>
+            <select {...register("supplierId")} className={controlClassName}>
               <option value="">{t.noneOption}</option>
               {suppliers?.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
@@ -125,12 +125,12 @@ function ProductModal({
             </select>
           </Field>
 
-          <Field label={t.projectOption ?? "Project"}>
+          <Field label={t.projectOption}>
             <select
               {...register("projectId", {
                 onChange: () => setValue("buildingId", ""),
               })}
-              className={inputClassName}
+              className={controlClassName}
             >
               <option value="">{t.noneOption}</option>
               {projects?.map((project) => (
@@ -141,8 +141,8 @@ function ProductModal({
             </select>
           </Field>
 
-          <Field label={t.buildingLabel ?? "Building"}>
-            <select {...register("buildingId")} className={inputClassName} disabled={!selectedProjectId}>
+          <Field label={t.buildingLabel}>
+            <select {...register("buildingId")} className={controlClassName} disabled={!selectedProjectId}>
               <option value="">{t.noneOption}</option>
               {buildings?.map((building) => (
                 <option key={building.id} value={building.id}>
@@ -153,15 +153,15 @@ function ProductModal({
           </Field>
 
           <Field label={t.unit}>
-            <input {...register("unit")} className={inputClassName} placeholder={t.unitPlaceholder} />
+            <input {...register("unit")} className={controlClassName} placeholder={t.unitPlaceholder} />
           </Field>
 
           <Field label={t.unitPrice}>
-            <input type="number" step="0.01" {...register("unitPrice")} className={inputClassName} />
+            <input type="number" step="0.01" min="0" {...register("unitPrice")} className={controlClassName} />
           </Field>
 
-          <Field label="Currency">
-            <select {...register("currency")} className={inputClassName}>
+          <Field label={t.currency}>
+            <select {...register("currency")} className={controlClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
             </select>
@@ -184,17 +184,49 @@ export default function Products() {
   const queryClient = useQueryClient();
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
+  const deferredSearch = useDeferredValue(searchInput.trim());
 
-  const { data: products, isLoading } = useQuery({
-    queryKey: erpKeys.products,
-    queryFn: listProducts,
+  useEffect(() => {
+    setPage(1);
+  }, [currencyFilter, deferredSearch, projectFilter, supplierFilter]);
+
+  const { data: projects } = useQuery({
+    queryKey: erpKeys.projects,
+    queryFn: listProjects,
+  });
+  const { data: suppliers } = useQuery({
+    queryKey: erpKeys.suppliers,
+    queryFn: listSuppliers,
   });
 
-  const groupedProducts = useMemo(() => products ?? [], [products]);
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: erpKeys.productsPage({
+      page,
+      pageSize: 10,
+      search: deferredSearch,
+      projectId: projectFilter === "all" ? null : Number(projectFilter),
+      supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
+      currency: currencyFilter,
+    }),
+    queryFn: () =>
+      listProductsPage({
+        page,
+        pageSize: 10,
+        search: deferredSearch,
+        projectId: projectFilter === "all" ? null : Number(projectFilter),
+        supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
+        currency: currencyFilter,
+      }),
+  });
 
   function exportProducts(format: "csv" | "xlsx") {
     const rows =
-      groupedProducts.map((product) => ({
+      data?.items.map((product) => ({
         Name: product.name,
         Supplier: product.supplierName ?? "",
         Project: product.projectName ?? "",
@@ -226,14 +258,14 @@ export default function Products() {
     <div className="space-y-6">
       <PageHeader
         title={t.productsTitle}
-        subtitle={t.product_count(groupedProducts.length)}
+        subtitle={t.product_count(data?.total ?? 0)}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportProducts("csv")}>
+            <SecondaryButton onClick={() => exportProducts("csv")} disabled={!data?.items.length}>
               <Download size={16} />
               CSV
             </SecondaryButton>
-            <SecondaryButton onClick={() => exportProducts("xlsx")}>
+            <SecondaryButton onClick={() => exportProducts("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
               Excel
             </SecondaryButton>
@@ -250,70 +282,166 @@ export default function Products() {
         }
       />
 
-      {isLoading ? (
+      <Card className="p-4">
+        <div className="grid gap-4 xl:grid-cols-4">
+          <div className="xl:col-span-4">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className={controlClassName}
+              placeholder={`${t.search} ${t.products.toLowerCase()}`}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.projectOption}</label>
+            <select
+              value={projectFilter}
+              onChange={(event) => setProjectFilter(event.target.value)}
+              className={controlClassName}
+            >
+              <option value="all">{t.allProjects}</option>
+              {projects?.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.supplierLabel}</label>
+            <select
+              value={supplierFilter}
+              onChange={(event) => setSupplierFilter(event.target.value)}
+              className={controlClassName}
+            >
+              <option value="all">{t.allSuppliers}</option>
+              {suppliers?.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.currency}</label>
+            <select
+              value={currencyFilter}
+              onChange={(event) => setCurrencyFilter(event.target.value as Currency | "all")}
+              className={controlClassName}
+            >
+              <option value="all">{t.allCurrencies}</option>
+              <option value="USD">USD</option>
+              <option value="IQD">IQD</option>
+            </select>
+          </div>
+          <div className="flex items-end justify-end">
+            <SecondaryButton
+              onClick={() => {
+                setSearchInput("");
+                setProjectFilter("all");
+                setSupplierFilter("all");
+                setCurrencyFilter("all");
+              }}
+              disabled={
+                !searchInput &&
+                projectFilter === "all" &&
+                supplierFilter === "all" &&
+                currencyFilter === "all"
+              }
+            >
+              {t.clearFilters}
+            </SecondaryButton>
+          </div>
+        </div>
+      </Card>
+
+      {isError ? (
+        <ErrorState
+          title={t.productsTitle}
+          description={error instanceof Error ? error.message : undefined}
+          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+        />
+      ) : isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
           ))}
         </div>
-      ) : !groupedProducts.length ? (
+      ) : !data?.items.length ? (
         <EmptyState title={t.noProducts} />
       ) : (
-        <div className="space-y-3">
-          {groupedProducts.map((product) => (
-            <Card key={product.id} className="p-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-base font-semibold text-foreground">{product.name}</p>
-                    <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {product.currency}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {[product.projectName, product.buildingName, product.supplierName]
-                      .filter(Boolean)
-                      .join(" | ") || t.noDetail}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {product.unit ?? t.noDetail}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="min-w-[120px] text-right">
-                    <p className="text-base font-semibold text-foreground">
-                      {product.unitPrice != null ? formatCurrency(product.unitPrice, product.currency) : "-"}
+        <>
+          <div className="space-y-3">
+            {data.items.map((product) => (
+              <Card key={product.id} className="p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-base font-semibold text-foreground">{product.name}</p>
+                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                        {product.currency}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {[product.projectName, product.buildingName, product.supplierName]
+                        .filter(Boolean)
+                        .join(" | ") || t.noDetail}
                     </p>
-                    <p className="text-xs text-muted-foreground">{t.unitPrice}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{product.unit ?? t.noDetail}</p>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <IconButton
-                      onClick={() => {
-                        setSelectedProduct(product);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </IconButton>
-                    <IconButton
-                      className="hover:text-rose-700"
-                      onClick={() => {
-                        if (window.confirm(t.deleteProductConfirm)) {
-                          deleteMutation.mutate(product.id);
-                        }
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </IconButton>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-[120px] text-right">
+                      <p className="text-base font-semibold text-foreground">
+                        {product.unitPrice != null ? formatCurrency(product.unitPrice, product.currency) : "-"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t.unitPrice}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <IconButton
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil size={16} />
+                      </IconButton>
+                      <IconButton
+                        className="hover:text-rose-700"
+                        onClick={() => {
+                          if (window.confirm(t.deleteProductConfirm)) {
+                            deleteMutation.mutate(product.id);
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+
+          <PaginationControls
+            page={data.page}
+            pageCount={data.pageCount}
+            total={data.total}
+            itemLabel={t.products.toLowerCase()}
+            previousLabel={t.previous}
+            nextLabel={t.next}
+            onPageChange={(nextPage) => {
+              startTransition(() => {
+                setPage(nextPage);
+              });
+            }}
+          />
+        </>
       )}
+
+      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
 
       {open ? <ProductModal product={selectedProduct} onClose={() => setOpen(false)} /> : null}
     </div>

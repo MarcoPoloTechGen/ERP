@@ -63,18 +63,18 @@ export default function Admin() {
   });
 
   if (profile?.role !== "admin") {
-    return <EmptyState title="This page is restricted to administrators." />;
+    return <EmptyState title={t.adminRestricted} />;
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Admin"
-        subtitle="Manage roles and project access"
+        title={t.adminTitle}
+        subtitle={t.adminSubtitle}
       />
 
       {!profiles?.length ? (
-        <EmptyState title="No users found" />
+        <EmptyState title={t.noUsersFound} />
       ) : (
         <div className="space-y-3">
           {profiles.map((user) => {
@@ -93,7 +93,7 @@ export default function Admin() {
 
                     <div className="w-full max-w-xs">
                       <label className="mb-1 block text-sm font-medium text-foreground">
-                        {t.role ?? "Role"}
+                        {t.roleLabel}
                       </label>
                       <select
                         className={selectClassName}
@@ -113,7 +113,7 @@ export default function Admin() {
 
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      Allowed projects
+                      {t.allowedProjects}
                     </p>
                     <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {(projects ?? []).map((project) => {

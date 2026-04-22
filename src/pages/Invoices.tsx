@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -7,7 +7,7 @@ import {
   createInvoice,
   deleteInvoice,
   erpKeys,
-  listInvoices,
+  listInvoicesPage,
   listProducts,
   listProjectBuildings,
   listProjects,
@@ -23,17 +23,17 @@ import { useLang } from "@/lib/i18n";
 import { deleteInvoiceImageByUrl, uploadInvoiceImage } from "@/lib/supabase";
 import {
   Card,
+  controlClassName,
   EmptyState,
+  ErrorState,
   Field,
   IconButton,
   Modal,
   PageHeader,
+  PaginationControls,
   PrimaryButton,
   SecondaryButton,
 } from "@/components/ui-kit";
-
-const inputClassName =
-  "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 type InvoiceFormValues = {
   number: string;
@@ -56,11 +56,13 @@ function ExpenseImageField({
   previewUrl,
   onChange,
   label,
+  removeLabel,
 }: {
   value: string | null;
   previewUrl?: string | null;
   onChange: (value: File | null) => void;
   label: string;
+  removeLabel: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const displayUrl = previewUrl ?? value;
@@ -70,7 +72,7 @@ function ExpenseImageField({
       <span className="text-sm font-medium text-foreground">{label}</span>
       {displayUrl ? (
         <div className="flex items-center gap-4">
-          <img src={displayUrl} alt="" className="h-20 rounded-xl border border-border object-cover" />
+          <img src={displayUrl} alt={label} className="h-20 rounded-xl border border-border object-cover" />
           <SecondaryButton
             onClick={() => {
               onChange(null);
@@ -79,13 +81,13 @@ function ExpenseImageField({
               }
             }}
           >
-            Remove
+            {removeLabel}
           </SecondaryButton>
         </div>
       ) : (
         <SecondaryButton onClick={() => inputRef.current?.click()}>
           <ImageIcon size={16} />
-          Add
+          {label}
         </SecondaryButton>
       )}
       <input
@@ -112,7 +114,7 @@ function InvoiceModal({
   const { t } = useLang();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
-  const [storedImageUrl, setStoredImageUrl] = useState<string | null>(invoice?.imageUrl ?? null);
+  const [storedImagePath, setStoredImagePath] = useState<string | null>(invoice?.imagePath ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(invoice?.imageUrl ?? null);
   const { data: suppliers } = useQuery({
@@ -161,7 +163,8 @@ function InvoiceModal({
       if (selectedProjectId == null) {
         return true;
       }
-      return product.projectId === selectedProjectId;
+
+      return product.projectId === selectedProjectId || product.projectId == null;
     });
   }, [products, selectedProjectId]);
 
@@ -169,16 +172,20 @@ function InvoiceModal({
     mutationFn: async (values: InvoiceFormValues) => {
       const totalAmount = Number(values.totalAmount || 0);
       const paidAmount = Number(values.paidAmount || 0);
-      let nextImageUrl = storedImageUrl;
-      let uploadedPublicUrl: string | null = null;
-      const previousImageUrl = invoice?.imageUrl ?? null;
+      let nextImagePath = storedImagePath;
+      let uploadedPath: string | null = null;
+      const previousImagePath = invoice?.imagePath ?? null;
 
       if (selectedImageFile) {
-        const uploaded = await uploadInvoiceImage(selectedImageFile, values.number || "expense");
-        uploadedPublicUrl = uploaded.publicUrl;
-        nextImageUrl = uploaded.publicUrl;
-      } else if (!previewUrl && storedImageUrl) {
-        nextImageUrl = null;
+        const uploaded = await uploadInvoiceImage(
+          selectedImageFile,
+          values.number || "expense",
+          values.projectId ? Number(values.projectId) : null,
+        );
+        uploadedPath = uploaded.path;
+        nextImagePath = uploaded.path;
+      } else if (!previewUrl && storedImagePath) {
+        nextImagePath = null;
       }
 
       const payload = {
@@ -193,12 +200,11 @@ function InvoiceModal({
         totalAmount,
         paidAmount,
         currency: values.currency,
-        status:
-          paidAmount <= 0 ? "unpaid" : paidAmount >= totalAmount && totalAmount > 0 ? "paid" : values.status,
+        status: values.status,
         invoiceDate: values.invoiceDate || null,
         dueDate: values.dueDate || null,
         notes: values.notes.trim() || null,
-        imageUrl: nextImageUrl,
+        imagePath: nextImagePath,
       } as const;
 
       try {
@@ -208,14 +214,14 @@ function InvoiceModal({
           await createInvoice(payload);
         }
       } catch (error) {
-        if (uploadedPublicUrl) {
-          await deleteInvoiceImageByUrl(uploadedPublicUrl);
+        if (uploadedPath) {
+          await deleteInvoiceImageByUrl(uploadedPath);
         }
         throw error;
       }
 
-      if (previousImageUrl && previousImageUrl !== nextImageUrl) {
-        await deleteInvoiceImageByUrl(previousImageUrl);
+      if (previousImagePath && previousImagePath !== nextImagePath) {
+        await deleteInvoiceImageByUrl(previousImagePath);
       }
     },
     onSuccess: async () => {
@@ -228,35 +234,35 @@ function InvoiceModal({
   });
 
   return (
-    <Modal title={invoice ? "Edit expense" : "New expense"} onClose={onClose}>
+    <Modal title={invoice ? t.editInvoice : t.newInvoice} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Reference" required error={formState.errors.number ? t.nameRequired : null}>
+          <Field label={t.invoiceNumber} required error={formState.errors.number ? t.nameRequired : null}>
             <input
               {...register("number", { required: true })}
-              className={inputClassName}
-              placeholder="DEP-001"
+              className={controlClassName}
+              placeholder={t.invoiceNumberPlaceholder}
             />
           </Field>
 
-          <Field label={t.invoiceStatus_label ?? "Status"}>
-            <select {...register("status")} className={inputClassName}>
+          <Field label={t.invoiceStatus_label}>
+            <select {...register("status")} className={controlClassName}>
               <option value="unpaid">{t.unpaid}</option>
               <option value="partial">{t.partial}</option>
               <option value="paid">{t.paid}</option>
             </select>
           </Field>
 
-          <Field label="User">
+          <Field label={t.user}>
             <input
               readOnly
               value={profile?.fullName ?? profile?.email ?? ""}
-              className={`${inputClassName} bg-muted`}
+              className={`${controlClassName} bg-muted`}
             />
           </Field>
 
           <Field label={t.supplierOption}>
-            <select {...register("supplierId")} className={inputClassName}>
+            <select {...register("supplierId")} className={controlClassName}>
               <option value="">{t.noneOption}</option>
               {suppliers?.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
@@ -275,7 +281,7 @@ function InvoiceModal({
                   setValue("productId", "");
                 },
               })}
-              className={inputClassName}
+              className={controlClassName}
             >
               <option value="">{t.noneOption}</option>
               {projects?.map((project) => (
@@ -286,7 +292,7 @@ function InvoiceModal({
             </select>
           </Field>
 
-          <Field label={t.invoiceAssignment ?? "Assignment"}>
+          <Field label={t.invoiceAssignment}>
             <select
               {...register("assignmentScope", {
                 onChange: (event) => {
@@ -295,19 +301,19 @@ function InvoiceModal({
                   }
                 },
               })}
-              className={inputClassName}
+              className={controlClassName}
               disabled={!projectId}
             >
-              <option value="project">{t.projectGlobalCost ?? "Project-wide cost"}</option>
+              <option value="project">{t.projectGlobalCost}</option>
               <option value="building" disabled={!projectBuildings?.length}>
-                {t.projectBuildingCost ?? "Specific building"}
+                {t.projectBuildingCost}
               </option>
             </select>
           </Field>
 
           {projectId && assignmentScope === "building" ? (
-            <Field label={t.buildingLabel ?? "Building"}>
-              <select {...register("buildingId")} className={inputClassName}>
+            <Field label={t.buildingLabel}>
+              <select {...register("buildingId")} className={controlClassName}>
                 <option value="">{t.noneOption}</option>
                 {projectBuildings?.map((building) => (
                   <option key={building.id} value={building.id}>
@@ -318,8 +324,8 @@ function InvoiceModal({
             </Field>
           ) : null}
 
-          <Field label="Product">
-            <select {...register("productId")} className={inputClassName}>
+          <Field label={t.products}>
+            <select {...register("productId")} className={controlClassName}>
               <option value="">{t.noneOption}</option>
               {projectProducts.map((product) => (
                 <option key={product.id} value={product.id}>
@@ -334,37 +340,38 @@ function InvoiceModal({
             <input
               type="number"
               step="0.01"
+              min="0"
               {...register("totalAmount", { required: true })}
-              className={inputClassName}
+              className={controlClassName}
             />
           </Field>
 
           <Field label={t.paidAmount}>
-            <input type="number" step="0.01" {...register("paidAmount")} className={inputClassName} />
+            <input type="number" step="0.01" min="0" {...register("paidAmount")} className={controlClassName} />
           </Field>
 
-          <Field label="Currency">
-            <select {...register("currency")} className={inputClassName}>
+          <Field label={t.currency}>
+            <select {...register("currency")} className={controlClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
             </select>
           </Field>
 
-          <Field label={t.invoiceDate ?? "Date"}>
-            <input type="date" {...register("invoiceDate")} className={inputClassName} />
+          <Field label={t.invoiceDate}>
+            <input type="date" {...register("invoiceDate")} className={controlClassName} />
           </Field>
 
-          <Field label={t.dueDate ?? "Due date"}>
-            <input type="date" {...register("dueDate")} className={inputClassName} />
+          <Field label={t.dueDate}>
+            <input type="date" {...register("dueDate")} className={controlClassName} />
           </Field>
         </div>
 
         <Field label={t.notes}>
-          <textarea {...register("notes")} rows={3} className={`${inputClassName} resize-none`} />
+          <textarea {...register("notes")} rows={3} className={`${controlClassName} resize-none`} />
         </Field>
 
         <ExpenseImageField
-          value={storedImageUrl}
+          value={storedImagePath ? invoice?.imageUrl ?? null : null}
           previewUrl={previewUrl}
           onChange={(file) => {
             setSelectedImageFile(file);
@@ -372,10 +379,11 @@ function InvoiceModal({
               setPreviewUrl(URL.createObjectURL(file));
             } else {
               setPreviewUrl(null);
-              setStoredImageUrl(null);
+              setStoredImagePath(null);
             }
           }}
-          label="Receipt image"
+          label={t.receiptImage}
+          removeLabel={t.remove}
         />
 
         <div className="flex justify-end gap-3 pt-2">
@@ -394,18 +402,60 @@ export default function Invoices() {
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<"all" | "unpaid" | "partial" | "paid">("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const deferredSearch = useDeferredValue(searchInput.trim());
 
-  const { data: invoices, isLoading } = useQuery({
-    queryKey: erpKeys.invoices,
-    queryFn: listInvoices,
+  useEffect(() => {
+    setPage(1);
+  }, [currencyFilter, dateFrom, dateTo, deferredSearch, filter, projectFilter, supplierFilter]);
+
+  const { data: projects } = useQuery({
+    queryKey: erpKeys.projects,
+    queryFn: listProjects,
+  });
+  const { data: suppliers } = useQuery({
+    queryKey: erpKeys.suppliers,
+    queryFn: listSuppliers,
+  });
+
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: erpKeys.invoicesPage({
+      page,
+      pageSize: 10,
+      search: deferredSearch,
+      status: filter,
+      projectId: projectFilter === "all" ? null : Number(projectFilter),
+      supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
+      currency: currencyFilter,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+    }),
+    queryFn: () =>
+      listInvoicesPage({
+        page,
+        pageSize: 10,
+        search: deferredSearch,
+        status: filter,
+        projectId: projectFilter === "all" ? null : Number(projectFilter),
+        supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
+        currency: currencyFilter,
+        dateFrom: dateFrom || null,
+        dateTo: dateTo || null,
+      }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (invoice: Invoice) => {
       await deleteInvoice(invoice.id);
-      if (invoice.imageUrl) {
-        await deleteInvoiceImageByUrl(invoice.imageUrl);
+      if (invoice.imagePath) {
+        await deleteInvoiceImageByUrl(invoice.imagePath);
       }
     },
     onSuccess: async () => {
@@ -416,15 +466,12 @@ export default function Invoices() {
     },
   });
 
-  const filteredInvoices =
-    filter === "all" ? invoices : invoices?.filter((invoice) => invoice.status === filter);
-
   function exportInvoices(format: "csv" | "xlsx") {
     const rows =
-      filteredInvoices?.map((invoice) => ({
+      data?.items.map((invoice) => ({
         Reference: invoice.number,
         Status: t[invoice.status],
-        Scope: invoice.buildingName ? "Building" : "Global",
+        Scope: invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost,
         Building: invoice.buildingName ?? "",
         Supplier: invoice.supplierName ?? "",
         Product: invoice.productName ?? "",
@@ -433,7 +480,7 @@ export default function Invoices() {
         Total: invoice.totalAmount,
         Paid: invoice.paidAmount,
         Currency: invoice.currency,
-        Remaining: Math.max(0, invoice.totalAmount - invoice.paidAmount),
+        Remaining: invoice.remainingAmount,
         Date: formatDateInput(invoice.invoiceDate),
         DueDate: formatDateInput(invoice.dueDate),
         Notes: invoice.notes ?? "",
@@ -450,15 +497,15 @@ export default function Invoices() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Expenses"
-        subtitle={`${filteredInvoices?.length ?? 0} expenses`}
+        title={t.invoicesTitle}
+        subtitle={t.expense_count(data?.total ?? 0)}
         action={
           <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportInvoices("csv")}>
+            <SecondaryButton onClick={() => exportInvoices("csv")} disabled={!data?.items.length}>
               <Download size={16} />
               CSV
             </SecondaryButton>
-            <SecondaryButton onClick={() => exportInvoices("xlsx")}>
+            <SecondaryButton onClick={() => exportInvoices("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
               Excel
             </SecondaryButton>
@@ -469,129 +516,227 @@ export default function Invoices() {
               }}
             >
               <Plus size={16} />
-              Add
+              {t.addInvoice}
             </PrimaryButton>
           </div>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["all", t.all ?? "All"],
-            ["unpaid", t.unpaidFilter],
-            ["partial", t.partialFilter],
-            ["paid", t.paidFilter],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setFilter(value)}
-            className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-              filter === value
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-            }`}
+      <Card className="p-4">
+        <div className="grid gap-4 xl:grid-cols-4">
+          <div className="xl:col-span-4">
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
+            <input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className={controlClassName}
+              placeholder={`${t.search} ${t.expenses.toLowerCase()}`}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.status}</label>
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as typeof filter)}
+              className={controlClassName}
+            >
+              <option value="all">{t.allStatuses}</option>
+              <option value="unpaid">{t.unpaidFilter}</option>
+              <option value="partial">{t.partialFilter}</option>
+              <option value="paid">{t.paidFilter}</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.projectOption}</label>
+            <select
+              value={projectFilter}
+              onChange={(event) => setProjectFilter(event.target.value)}
+              className={controlClassName}
+            >
+              <option value="all">{t.allProjects}</option>
+              {projects?.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.supplierOption}</label>
+            <select
+              value={supplierFilter}
+              onChange={(event) => setSupplierFilter(event.target.value)}
+              className={controlClassName}
+            >
+              <option value="all">{t.allSuppliers}</option>
+              {suppliers?.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.currency}</label>
+            <select
+              value={currencyFilter}
+              onChange={(event) => setCurrencyFilter(event.target.value as Currency | "all")}
+              className={controlClassName}
+            >
+              <option value="all">{t.allCurrencies}</option>
+              <option value="USD">USD</option>
+              <option value="IQD">IQD</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateFrom}</label>
+            <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={controlClassName} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateTo}</label>
+            <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={controlClassName} />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <SecondaryButton
+            onClick={() => {
+              setSearchInput("");
+              setFilter("all");
+              setProjectFilter("all");
+              setSupplierFilter("all");
+              setCurrencyFilter("all");
+              setDateFrom("");
+              setDateTo("");
+            }}
+            disabled={
+              !searchInput &&
+              filter === "all" &&
+              projectFilter === "all" &&
+              supplierFilter === "all" &&
+              currencyFilter === "all" &&
+              !dateFrom &&
+              !dateTo
+            }
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            {t.clearFilters}
+          </SecondaryButton>
+        </div>
+      </Card>
 
-      {isLoading ? (
+      {isError ? (
+        <ErrorState
+          title={t.invoicesTitle}
+          description={error instanceof Error ? error.message : undefined}
+          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+        />
+      ) : isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="h-28 animate-pulse rounded-2xl border border-card-border bg-card" />
           ))}
         </div>
-      ) : !filteredInvoices?.length ? (
-        <EmptyState title="No expenses yet" />
+      ) : !data?.items.length ? (
+        <EmptyState title={t.noExpenses} />
       ) : (
-        <div className="space-y-3">
-          {filteredInvoices.map((invoice) => (
-            <Card key={invoice.id} className="p-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 flex-1 items-center gap-4">
-                  {invoice.imageUrl ? (
-                    <img
-                      src={invoice.imageUrl}
-                      alt=""
-                      className="h-16 w-16 rounded-2xl border border-border object-cover"
-                    />
-                  ) : null}
+        <>
+          <div className="space-y-3">
+            {data.items.map((invoice) => (
+              <Card key={invoice.id} className="p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
+                    {invoice.imageUrl ? (
+                      <img
+                        src={invoice.imageUrl}
+                        alt={t.receiptImage}
+                        className="h-16 w-16 rounded-2xl border border-border object-cover"
+                      />
+                    ) : null}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{invoice.number}</p>
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}
-                      >
-                        {t[invoice.status]}
-                      </span>
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                          invoice.buildingName
-                            ? "bg-sky-100 text-sky-800"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        {invoice.buildingName ? "Building" : "Global"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[invoice.supplierName, invoice.projectName, invoice.productName, formatDate(invoice.invoiceDate)]
-                        .filter(Boolean)
-                        .join(" | ")}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {invoice.createdByName ?? "-"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="min-w-[160px] text-right">
-                    <p className="text-base font-semibold text-foreground">
-                      {formatCurrency(invoice.totalAmount, invoice.currency)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {t.remaining_label}:{" "}
-                      {formatCurrency(Math.max(0, invoice.totalAmount - invoice.paidAmount), invoice.currency)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <IconButton
-                      onClick={() => {
-                        setSelectedInvoice(invoice);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </IconButton>
-                    <IconButton
-                      className="hover:text-rose-700"
-                      onClick={() => {
-                        if (window.confirm(t.deleteInvoiceConfirm)) {
-                          deleteMutation.mutate(invoice);
-                        }
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </IconButton>
-                    <Link href={`/expenses/${invoice.id}`}>
-                      <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                        <ChevronRight size={16} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-base font-semibold text-foreground">{invoice.number}</p>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}
+                        >
+                          {t[invoice.status]}
+                        </span>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                            invoice.buildingName
+                              ? "bg-sky-100 text-sky-800"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost}
+                        </span>
                       </div>
-                    </Link>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {[invoice.supplierName, invoice.projectName, invoice.productName, formatDate(invoice.invoiceDate)]
+                          .filter(Boolean)
+                          .join(" | ")}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">{invoice.createdByName ?? "-"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-[160px] text-right">
+                      <p className="text-base font-semibold text-foreground">
+                        {formatCurrency(invoice.totalAmount, invoice.currency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t.remaining_label}: {formatCurrency(invoice.remainingAmount, invoice.currency)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <IconButton
+                        onClick={() => {
+                          setSelectedInvoice(invoice);
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil size={16} />
+                      </IconButton>
+                      <IconButton
+                        className="hover:text-rose-700"
+                        onClick={() => {
+                          if (window.confirm(t.deleteInvoiceConfirm)) {
+                            deleteMutation.mutate(invoice);
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                      <Link href={`/expenses/${invoice.id}`}>
+                        <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                          <ChevronRight size={16} />
+                        </div>
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+
+          <PaginationControls
+            page={data.page}
+            pageCount={data.pageCount}
+            total={data.total}
+            itemLabel={t.expenses.toLowerCase()}
+            previousLabel={t.previous}
+            nextLabel={t.next}
+            onPageChange={(nextPage) => {
+              startTransition(() => {
+                setPage(nextPage);
+              });
+            }}
+          />
+        </>
       )}
+
+      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
 
       {open ? <InvoiceModal invoice={selectedInvoice} onClose={() => setOpen(false)} /> : null}
     </div>

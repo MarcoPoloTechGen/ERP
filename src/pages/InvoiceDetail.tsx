@@ -80,11 +80,11 @@ export default function InvoiceDetail() {
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Receipt image</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t.receiptImage}</h2>
           </div>
           <img
             src={invoice.imageUrl}
-            alt="Receipt image"
+            alt={t.receiptImage}
             onClick={() => setExpanded((current) => !current)}
             className={`cursor-zoom-in rounded-2xl border border-border object-contain transition ${
               expanded ? "max-h-[70vh] w-full" : "max-h-56"
@@ -94,7 +94,7 @@ export default function InvoiceDetail() {
       ) : null}
 
       <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">Expense details</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.expenseDetails}</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">{t.supplierOption}</p>
@@ -109,11 +109,11 @@ export default function InvoiceDetail() {
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? projectGlobalCost}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Product</p>
+            <p className="text-xs text-muted-foreground">{t.products}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.productName ?? "-"}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">User</p>
+            <p className="text-xs text-muted-foreground">{t.user}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.createdByName ?? "-"}</p>
           </div>
           <div>

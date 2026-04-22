@@ -1,25 +1,37 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Component, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { Route, Router as WouterRouter, Switch } from "wouter";
 import Layout from "@/components/Layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import Dashboard from "@/pages/Dashboard";
 import AuthPage from "@/pages/Auth";
-import Admin from "@/pages/Admin";
-import Income from "@/pages/Income";
-import InvoiceDetail from "@/pages/InvoiceDetail";
-import Invoices from "@/pages/Invoices";
-import Products from "@/pages/Products";
-import ProjectDetail from "@/pages/ProjectDetail";
-import Projects from "@/pages/Projects";
-import Suppliers from "@/pages/Suppliers";
-import WorkerDetail from "@/pages/WorkerDetail";
-import Workers from "@/pages/Workers";
 import { LangProvider, useLang } from "@/lib/i18n";
 import { supabaseConfigError } from "@/lib/supabase";
 
 // AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Admin = lazy(() => import("@/pages/Admin"));
+const Income = lazy(() => import("@/pages/Income"));
+const InvoiceDetail = lazy(() => import("@/pages/InvoiceDetail"));
+const Invoices = lazy(() => import("@/pages/Invoices"));
+const Products = lazy(() => import("@/pages/Products"));
+const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
+const Projects = lazy(() => import("@/pages/Projects"));
+const Suppliers = lazy(() => import("@/pages/Suppliers"));
+const WorkerDetail = lazy(() => import("@/pages/WorkerDetail"));
+const Workers = lazy(() => import("@/pages/Workers"));
 
 class AppErrorBoundary extends Component<
   { children: ReactNode },
@@ -97,6 +109,16 @@ function NotFound() {
   );
 }
 
+function RouteLoading() {
+  const { t } = useLang();
+
+  return (
+    <div className="h-32 animate-pulse rounded-2xl border border-card-border bg-card p-6">
+      <p className="text-sm font-medium text-foreground">{t.loading}</p>
+    </div>
+  );
+}
+
 function AppRouter() {
   const { loading, session } = useAuth();
   const [showDelayedMessage, setShowDelayedMessage] = useState(false);
@@ -151,22 +173,24 @@ function AppRouter() {
 
   return (
     <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/workers" component={Workers} />
-        <Route path="/workers/:id" component={WorkerDetail} />
-        <Route path="/projects" component={Projects} />
-        <Route path="/projects/:id" component={ProjectDetail} />
-        <Route path="/suppliers" component={Suppliers} />
-        <Route path="/products" component={Products} />
-        <Route path="/income" component={Income} />
-        <Route path="/expenses" component={Invoices} />
-        <Route path="/expenses/:id" component={InvoiceDetail} />
-        <Route path="/admin" component={Admin} />
-        <Route path="/invoices" component={Invoices} />
-        <Route path="/invoices/:id" component={InvoiceDetail} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<RouteLoading />}>
+        <Switch>
+          <Route path="/" component={Dashboard} />
+          <Route path="/workers" component={Workers} />
+          <Route path="/workers/:id" component={WorkerDetail} />
+          <Route path="/projects" component={Projects} />
+          <Route path="/projects/:id" component={ProjectDetail} />
+          <Route path="/suppliers" component={Suppliers} />
+          <Route path="/products" component={Products} />
+          <Route path="/income" component={Income} />
+          <Route path="/expenses" component={Invoices} />
+          <Route path="/expenses/:id" component={InvoiceDetail} />
+          <Route path="/admin" component={Admin} />
+          <Route path="/invoices" component={Invoices} />
+          <Route path="/invoices/:id" component={InvoiceDetail} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </Layout>
   );
 }

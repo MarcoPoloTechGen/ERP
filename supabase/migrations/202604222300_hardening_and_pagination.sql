@@ -810,13 +810,12 @@ alter table public.worker_transactions enable row level security;
 alter table public.project_memberships enable row level security;
 alter table public.income_transactions enable row level security;
 
-drop policy if exists "profiles authenticated read" on public.profiles;
 drop policy if exists "profiles read own or admin" on public.profiles;
-create policy "profiles authenticated read"
+create policy "profiles read own or admin"
 on public.profiles
 for select
 to authenticated
-using (true);
+using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "profiles insert self" on public.profiles;
 create policy "profiles insert self"

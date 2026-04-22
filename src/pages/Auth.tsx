@@ -2,12 +2,14 @@ import { useState } from "react";
 import { HardHat } from "lucide-react";
 import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 
 const inputClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25";
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
+  const { t } = useLang();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,7 +43,7 @@ export default function AuthPage() {
             </div>
             <h1 className="mt-8 text-4xl font-semibold tracking-tight">BTP Manager</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-              Sign in to track projects, expenses, income, and team access.
+              {t.authIntro}
             </p>
           </div>
 
@@ -52,14 +54,14 @@ export default function AuthPage() {
                 onClick={() => setMode("signin")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium ${mode === "signin" ? "bg-white shadow-sm" : "text-slate-500"}`}
               >
-                Sign in
+                {t.signIn}
               </button>
               <button
                 type="button"
                 onClick={() => setMode("signup")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium ${mode === "signup" ? "bg-white shadow-sm" : "text-slate-500"}`}
               >
-                Create account
+                {t.createAccount}
               </button>
             </div>
 
@@ -69,30 +71,30 @@ export default function AuthPage() {
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
                   className={inputClassName}
-                  placeholder="Full name"
+                  placeholder={t.fullNamePlaceholder}
                 />
               ) : null}
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className={inputClassName}
-                placeholder="email@entreprise.com"
+                placeholder={t.emailPlaceholder}
                 type="email"
               />
               <input
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className={inputClassName}
-                placeholder="Mot de passe"
+                placeholder={t.passwordPlaceholder}
                 type="password"
               />
               {error ? <p className="text-sm text-rose-700">{error}</p> : null}
               <div className="flex gap-3">
                 <PrimaryButton type="button" onClick={handleSubmit} disabled={submitting}>
-                  {mode === "signin" ? "Sign in" : "Create account"}
+                  {mode === "signin" ? t.signIn : t.createAccount}
                 </PrimaryButton>
                 <SecondaryButton type="button" onClick={() => setError(null)}>
-                  Reset
+                  {t.reset}
                 </SecondaryButton>
               </div>
             </div>

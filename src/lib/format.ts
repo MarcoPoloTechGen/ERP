@@ -1,7 +1,19 @@
 import type { Currency } from "@/lib/erp";
 
+function getActiveLocale() {
+  if (typeof document !== "undefined" && document.documentElement.lang === "ku") {
+    return "ar-IQ";
+  }
+
+  if (typeof window !== "undefined" && window.localStorage.getItem("btp-lang") === "ku") {
+    return "ar-IQ";
+  }
+
+  return "en-GB";
+}
+
 export function formatCurrency(amount: number, currency: Currency = "USD") {
-  return new Intl.NumberFormat("fr-FR", {
+  return new Intl.NumberFormat(getActiveLocale(), {
     style: "currency",
     currency,
     maximumFractionDigits: currency === "IQD" ? 0 : 2,
@@ -18,7 +30,7 @@ export function formatDate(value: string | Date | null | undefined) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("fr-FR", {
+  return new Intl.DateTimeFormat(getActiveLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

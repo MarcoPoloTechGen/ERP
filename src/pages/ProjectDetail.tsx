@@ -124,14 +124,12 @@ export default function ProjectDetail() {
       <Card className="overflow-hidden">
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
           <FileText size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">
-            {`${relatedInvoices.length} expenses`}
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">{t.expense_count(relatedInvoices.length)}</h2>
         </div>
 
         {!relatedInvoices.length ? (
           <div className="p-5">
-            <EmptyState title="No expenses for this project" />
+            <EmptyState title={t.noInvoicesForProject} />
           </div>
         ) : (
           <div className="divide-y divide-border">

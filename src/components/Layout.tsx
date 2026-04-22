@@ -66,8 +66,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: t.projects, icon: FolderKanban },
     { href: "/suppliers", label: t.suppliers, icon: Truck },
     { href: "/products", label: t.products, icon: Package2 },
-    { href: "/income", label: "Income", icon: BadgeDollarSign },
-    { href: "/expenses", label: "Expenses", icon: FileText },
+    { href: "/income", label: t.income, icon: BadgeDollarSign },
+    { href: "/expenses", label: t.expenses, icon: FileText },
   ];
 
   return (
@@ -118,7 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {profile?.role === "admin" ? (
               <NavLink
                 href="/admin"
-                label="Admin"
+                label={t.adminTitle}
                 icon={ShieldCheck}
                 currentPath={location}
                 onSelect={() => setMobileOpen(false)}
@@ -160,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               }}
             >
               <LogOut size={16} />
-              Sign out
+              {t.signOut}
             </SecondaryButton>
 
             <p className="text-center text-xs text-sidebar-foreground/45">{t.version}</p>

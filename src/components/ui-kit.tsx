@@ -1,5 +1,8 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
+export const controlClassName =
+  "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+
 export function PageHeader({
   title,
   subtitle,
@@ -61,6 +64,24 @@ export function EmptyState({
     <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
       <p className="text-sm font-medium text-foreground">{title}</p>
       {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}
+    </div>
+  );
+}
+
+export function ErrorState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-6 py-8">
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      {description ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
@@ -130,6 +151,43 @@ export function Field({
       {children}
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
     </label>
+  );
+}
+
+export function PaginationControls({
+  page,
+  pageCount,
+  total,
+  itemLabel,
+  onPageChange,
+  previousLabel = "Previous",
+  nextLabel = "Next",
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  itemLabel: string;
+  onPageChange: (page: number) => void;
+  previousLabel?: string;
+  nextLabel?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        {total} {itemLabel}
+      </p>
+      <div className="flex items-center gap-2">
+        <SecondaryButton onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+          {previousLabel}
+        </SecondaryButton>
+        <span className="min-w-[90px] text-center text-sm text-foreground">
+          {page} / {pageCount}
+        </span>
+        <SecondaryButton onClick={() => onPageChange(page + 1)} disabled={page >= pageCount}>
+          {nextLabel}
+        </SecondaryButton>
+      </div>
+    </div>
   );
 }
 

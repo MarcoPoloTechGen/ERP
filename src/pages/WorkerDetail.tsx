@@ -21,9 +21,7 @@ import {
 } from "@/lib/erp";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
-
-const inputClassName =
-  "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+import { controlClassName } from "@/components/ui-kit";
 
 type TransactionFormValues = {
   type: "credit" | "debit";
@@ -87,7 +85,7 @@ function TransactionModal({
       <form className="space-y-4" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label={t.type} required>
-            <select {...register("type")} className={inputClassName}>
+            <select {...register("type")} className={controlClassName}>
               <option value="credit">{t.credit}</option>
               <option value="debit">{t.debit}</option>
             </select>
@@ -99,20 +97,20 @@ function TransactionModal({
               step="0.01"
               min="0.01"
               {...register("amount", { required: true, min: 0.01 })}
-              className={inputClassName}
+              className={controlClassName}
               placeholder="500.00"
             />
           </Field>
 
-          <Field label="Currency">
-            <select {...register("currency")} className={inputClassName}>
+          <Field label={t.currency}>
+            <select {...register("currency")} className={controlClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
             </select>
           </Field>
 
           <Field label={t.txProject}>
-            <select {...register("projectId")} className={inputClassName}>
+            <select {...register("projectId")} className={controlClassName}>
               <option value="">{t.noProjectOption}</option>
               {projects?.map((project) => (
                 <option key={project.id} value={project.id}>
@@ -123,12 +121,12 @@ function TransactionModal({
           </Field>
 
           <Field label={t.date} required error={formState.errors.date ? t.dateRequired : null}>
-            <input type="date" {...register("date", { required: true })} className={inputClassName} />
+            <input type="date" {...register("date", { required: true })} className={controlClassName} />
           </Field>
         </div>
 
         <Field label={t.description}>
-          <input {...register("description")} className={inputClassName} />
+          <input {...register("description")} className={controlClassName} />
         </Field>
 
         <div className="flex justify-end gap-3 pt-2">
@@ -207,7 +205,7 @@ export default function WorkerDetail() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-foreground">{t.transactions}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{transactions?.length ?? 0} mouvements</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t.transactionsCount(transactions?.length ?? 0)}</p>
           </div>
           <PrimaryButton onClick={() => setShowModal(true)}>{t.addTransaction}</PrimaryButton>
         </div>
