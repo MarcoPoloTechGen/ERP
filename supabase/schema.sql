@@ -128,9 +128,15 @@ returns trigger
 language plpgsql
 security definer
 as $$
+declare
+  assigned_role text := 'user';
 begin
+  if not exists (select 1 from public.profiles) then
+    assigned_role := 'admin';
+  end if;
+
   insert into public.profiles (id, email, full_name)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''))
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''), assigned_role)
   on conflict (id) do update
   set email = excluded.email;
   return new;
