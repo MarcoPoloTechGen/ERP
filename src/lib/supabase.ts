@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const invoiceImagesBucket = "invoice-images"
+const supabaseProjectRef = supabaseUrl ? new URL(supabaseUrl).hostname.split(".")[0] : null
+const supabaseStoragePrefix = supabaseProjectRef ? `sb-${supabaseProjectRef}-` : null
 
 export const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
@@ -21,6 +23,24 @@ const missingConfigClient = new Proxy(
 export const supabase = supabaseConfigError
   ? (missingConfigClient as ReturnType<typeof createClient>)
   : createClient(supabaseUrl, supabaseAnonKey)
+
+export function clearSupabaseBrowserState() {
+  if (typeof window === "undefined" || !supabaseStoragePrefix) {
+    return
+  }
+
+  const keysToRemove: string[] = []
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith(supabaseStoragePrefix)) {
+      keysToRemove.push(key)
+    }
+  }
+
+  for (const key of keysToRemove) {
+    window.localStorage.removeItem(key)
+  }
+}
 
 function getFileExtension(file: File) {
   const extFromName = file.name.split(".").pop()?.toLowerCase()
