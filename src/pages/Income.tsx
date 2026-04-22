@@ -70,10 +70,10 @@ function IncomeModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <Modal title="Nouvelle entree d'argent" onClose={onClose}>
+    <Modal title="New income entry" onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Utilisateur">
+          <Field label="User">
             <input
               readOnly
               value={profile?.fullName ?? profile?.email ?? ""}
@@ -81,7 +81,7 @@ function IncomeModal({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          <Field label={t.projectOption} required error={formState.errors.projectId ? "Champ requis" : null}>
+          <Field label={t.projectOption} required error={formState.errors.projectId ? "Required field" : null}>
             <select {...register("projectId", { required: true })} className={inputClassName}>
               <option value="">{t.noneOption}</option>
               {projects?.map((project) => (
@@ -101,7 +101,7 @@ function IncomeModal({ onClose }: { onClose: () => void }) {
             />
           </Field>
 
-          <Field label="Devise">
+          <Field label="Currency">
             <select {...register("currency")} className={inputClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
@@ -158,7 +158,7 @@ export default function Income() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Entrees d'argent"
+        title="Income"
         subtitle={`${incomes?.length ?? 0} transactions`}
         action={
           <div className="flex flex-wrap justify-end gap-2">
@@ -172,7 +172,7 @@ export default function Income() {
             </SecondaryButton>
             <PrimaryButton onClick={() => setOpen(true)}>
               <Plus size={16} />
-              Ajouter
+              Add
             </PrimaryButton>
           </div>
         }
@@ -185,7 +185,7 @@ export default function Income() {
           ))}
         </div>
       ) : !incomes?.length ? (
-        <EmptyState title="Aucune entree d'argent" />
+        <EmptyState title="No income entries yet" />
       ) : (
         <div className="space-y-3">
           {incomes.map((income) => (
@@ -196,7 +196,7 @@ export default function Income() {
                     {income.projectName ?? "-"}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {[income.description, income.createdByName, formatDate(income.date)].filter(Boolean).join(" · ")}
+                    {[income.description, income.createdByName, formatDate(income.date)].filter(Boolean).join(" | ")}
                   </p>
                 </div>
                 <div className="text-right">

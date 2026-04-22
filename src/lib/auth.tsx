@@ -30,30 +30,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
 
     async function loadSession() {
-      const [{ data: sessionData }, nextProfile] = await Promise.all([
-        supabase.auth.getSession(),
-        getMyProfile().catch(() => null),
-      ]);
-      if (!active) {
-        return;
+      try {
+        const { data: sessionData, error } = await supabase.auth.getSession();
+        if (error) {
+          throw error;
+        }
+
+        const nextSession = sessionData.session;
+        const nextProfile = nextSession ? await getMyProfile().catch(() => null) : null;
+
+        if (!active) {
+          return;
+        }
+
+        setSession(nextSession);
+        setProfile(nextProfile);
+      } catch (error) {
+        console.error("Failed to load auth session", error);
+        if (!active) {
+          return;
+        }
+        setSession(null);
+        setProfile(null);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      setSession(sessionData.session);
-      setProfile(nextProfile);
-      setLoading(false);
     }
 
-    loadSession();
+    void loadSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      setSession(nextSession);
-      const nextProfile = nextSession ? await getMyProfile().catch(() => null) : null;
-      if (!active) {
-        return;
+      try {
+        const nextProfile = nextSession ? await getMyProfile().catch(() => null) : null;
+        if (!active) {
+          return;
+        }
+        setSession(nextSession);
+        setProfile(nextProfile);
+      } catch (error) {
+        console.error("Failed to refresh auth state", error);
+        if (!active) {
+          return;
+        }
+        setSession(nextSession);
+        setProfile(null);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-      setProfile(nextProfile);
-      setLoading(false);
     });
 
     return () => {

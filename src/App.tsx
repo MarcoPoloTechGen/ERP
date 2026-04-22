@@ -18,6 +18,7 @@ import Workers from "@/pages/Workers";
 import { LangProvider, useLang } from "@/lib/i18n";
 import { supabaseConfigError } from "@/lib/supabase";
 
+// AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
 const queryClient = new QueryClient();
 
 class AppErrorBoundary extends Component<
@@ -32,7 +33,7 @@ class AppErrorBoundary extends Component<
   static getDerivedStateFromError(error: unknown) {
     return {
       hasError: true,
-      errorMessage: error instanceof Error ? error.message : "Une erreur inattendue est survenue.",
+      errorMessage: error instanceof Error ? error.message : "An unexpected error occurred.",
     };
   }
 
@@ -51,14 +52,14 @@ class AppErrorBoundary extends Component<
           <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-3xl items-center">
             <div className="w-full rounded-[28px] border border-rose-200/80 bg-white/95 p-8 shadow-xl shadow-rose-950/10 backdrop-blur sm:p-10">
               <div className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-800">
-                Erreur d&apos;affichage
+                Render error
               </div>
               <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-                L&apos;application a rencontre une erreur.
+                The application hit an error.
               </h1>
               <p className="mt-4 text-sm leading-6 text-slate-600 sm:text-base">
-                Un probleme empeche l&apos;interface de s&apos;afficher correctement. Vous pouvez
-                recharger la page pour tenter une reprise immediate.
+                A problem is preventing the interface from rendering correctly. Reload the page to
+                try again.
               </p>
               {this.state.errorMessage ? (
                 <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
@@ -71,7 +72,7 @@ class AppErrorBoundary extends Component<
                   onClick={this.handleReload}
                   className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
                 >
-                  Recharger la page
+                  Reload page
                 </button>
               </div>
             </div>
@@ -120,14 +121,14 @@ function AppRouter() {
       <div className="flex min-h-screen items-center justify-center bg-background px-6">
         <div className="w-full max-w-md rounded-[28px] border border-card-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto h-16 w-16 animate-pulse rounded-3xl border border-card-border bg-card" />
-          <h1 className="mt-5 text-xl font-semibold text-foreground">Chargement en cours</h1>
+          <h1 className="mt-5 text-xl font-semibold text-foreground">Loading</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            L&apos;application prepare votre session et la connexion a la base.
+            The application is preparing your session and database connection.
           </p>
           {showDelayedMessage ? (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950">
-              Le chargement prend plus de temps que prevu. Si rien ne change, rechargez la page ou
-              verifiez Supabase.
+              Loading is taking longer than expected. If nothing changes, reload the page or check
+              Supabase.
             </div>
           ) : null}
           <div className="mt-6">
@@ -136,7 +137,7 @@ function AppRouter() {
               onClick={() => window.location.reload()}
               className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-muted"
             >
-              Recharger
+              Reload
             </button>
           </div>
         </div>
@@ -178,14 +179,14 @@ function MissingConfigScreen() {
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-4xl items-center">
         <div className="w-full rounded-[28px] border border-amber-200/70 bg-white/90 p-8 shadow-xl shadow-amber-950/10 backdrop-blur sm:p-10">
           <div className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
-            Configuration Vercel requise
+            Vercel configuration required
           </div>
           <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            L&apos;application ne peut pas se connecter a Supabase.
+            The application cannot connect to Supabase.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-            {supabaseConfigError} Ajoute les variables d&apos;environnement suivantes dans le projet
-            Vercel, puis redeploie.
+            {supabaseConfigError} Add the following environment variables in the Vercel project and
+            redeploy.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -198,11 +199,11 @@ function MissingConfigScreen() {
           </div>
 
           <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 text-sm text-amber-950">
-            <p className="font-semibold">Ou verifier dans Vercel</p>
+            <p className="font-semibold">Where to check in Vercel</p>
             <p className="mt-2 leading-6">
-              Project Settings {'>'} Environment Variables. Renseigne les memes valeurs que dans le
-              fichier <code className="rounded bg-white px-1.5 py-0.5 text-xs">.env</code> local pour
-              les environnements de production et preview.
+              Project Settings {'>'} Environment Variables. Use the same values as the local{" "}
+              <code className="rounded bg-white px-1.5 py-0.5 text-xs">.env</code> file for
+              production and preview environments.
             </p>
           </div>
         </div>

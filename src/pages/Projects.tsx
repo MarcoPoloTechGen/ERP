@@ -304,7 +304,7 @@ export default function Projects() {
           </span>
           {(
             [
-              ["all", t.all ?? "Tous"],
+              ["all", t.all ?? "All"],
               ["active", t.active],
               ["completed", t.completed],
               ["paused", t.paused],
@@ -349,7 +349,7 @@ export default function Projects() {
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {[project.client, project.location].filter(Boolean).join(" · ") || t.noDetail}
+                    {[project.client, project.location].filter(Boolean).join(" | ") || t.noDetail}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {buildingCountLabel(buildingCountByProjectId.get(project.id) ?? 0)}

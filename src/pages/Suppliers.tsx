@@ -202,7 +202,7 @@ export default function Suppliers() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-foreground">{supplier.name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {[supplier.contact, supplier.phone, supplier.email].filter(Boolean).join(" · ") || t.noDetail}
+                    {[supplier.contact, supplier.phone, supplier.email].filter(Boolean).join(" | ") || t.noDetail}
                   </p>
                   {supplier.address ? <p className="mt-1 text-xs text-muted-foreground">{supplier.address}</p> : null}
                 </div>

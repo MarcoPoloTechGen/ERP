@@ -125,13 +125,13 @@ export default function ProjectDetail() {
         <div className="flex items-center gap-2 border-b border-border px-5 py-4">
           <FileText size={16} className="text-primary" />
           <h2 className="text-sm font-semibold text-foreground">
-            {`${relatedInvoices.length} depenses`}
+            {`${relatedInvoices.length} expenses`}
           </h2>
         </div>
 
         {!relatedInvoices.length ? (
           <div className="p-5">
-            <EmptyState title="Aucune depense pour ce projet" />
+            <EmptyState title="No expenses for this project" />
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -149,7 +149,7 @@ export default function ProjectDetail() {
                       <p className="text-xs text-muted-foreground">
                         {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? projectGlobalCost, formatDate(invoice.invoiceDate)]
                           .filter(Boolean)
-                          .join(" · ")}
+                          .join(" | ")}
                       </p>
                     </div>
                     <div className="text-right">

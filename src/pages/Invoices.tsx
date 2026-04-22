@@ -79,13 +79,13 @@ function ExpenseImageField({
               }
             }}
           >
-            Supprimer
+            Remove
           </SecondaryButton>
         </div>
       ) : (
         <SecondaryButton onClick={() => inputRef.current?.click()}>
           <ImageIcon size={16} />
-          Ajouter
+          Add
         </SecondaryButton>
       )}
       <input
@@ -228,7 +228,7 @@ function InvoiceModal({
   });
 
   return (
-    <Modal title={invoice ? "Modifier la depense" : "Nouvelle depense"} onClose={onClose}>
+    <Modal title={invoice ? "Edit expense" : "New expense"} onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Reference" required error={formState.errors.number ? t.nameRequired : null}>
@@ -239,7 +239,7 @@ function InvoiceModal({
             />
           </Field>
 
-          <Field label={t.invoiceStatus_label ?? "Statut"}>
+          <Field label={t.invoiceStatus_label ?? "Status"}>
             <select {...register("status")} className={inputClassName}>
               <option value="unpaid">{t.unpaid}</option>
               <option value="partial">{t.partial}</option>
@@ -247,7 +247,7 @@ function InvoiceModal({
             </select>
           </Field>
 
-          <Field label="Utilisateur">
+          <Field label="User">
             <input
               readOnly
               value={profile?.fullName ?? profile?.email ?? ""}
@@ -286,7 +286,7 @@ function InvoiceModal({
             </select>
           </Field>
 
-          <Field label={t.invoiceAssignment ?? "Affectation"}>
+          <Field label={t.invoiceAssignment ?? "Assignment"}>
             <select
               {...register("assignmentScope", {
                 onChange: (event) => {
@@ -298,15 +298,15 @@ function InvoiceModal({
               className={inputClassName}
               disabled={!projectId}
             >
-              <option value="project">{t.projectGlobalCost ?? "Cout global du projet"}</option>
+              <option value="project">{t.projectGlobalCost ?? "Project-wide cost"}</option>
               <option value="building" disabled={!projectBuildings?.length}>
-                {t.projectBuildingCost ?? "Batiment specifique"}
+                {t.projectBuildingCost ?? "Specific building"}
               </option>
             </select>
           </Field>
 
           {projectId && assignmentScope === "building" ? (
-            <Field label={t.buildingLabel ?? "Batiment"}>
+            <Field label={t.buildingLabel ?? "Building"}>
               <select {...register("buildingId")} className={inputClassName}>
                 <option value="">{t.noneOption}</option>
                 {projectBuildings?.map((building) => (
@@ -318,7 +318,7 @@ function InvoiceModal({
             </Field>
           ) : null}
 
-          <Field label="Produit">
+          <Field label="Product">
             <select {...register("productId")} className={inputClassName}>
               <option value="">{t.noneOption}</option>
               {projectProducts.map((product) => (
@@ -343,7 +343,7 @@ function InvoiceModal({
             <input type="number" step="0.01" {...register("paidAmount")} className={inputClassName} />
           </Field>
 
-          <Field label="Devise">
+          <Field label="Currency">
             <select {...register("currency")} className={inputClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
@@ -354,7 +354,7 @@ function InvoiceModal({
             <input type="date" {...register("invoiceDate")} className={inputClassName} />
           </Field>
 
-          <Field label={t.dueDate ?? "Echeance"}>
+          <Field label={t.dueDate ?? "Due date"}>
             <input type="date" {...register("dueDate")} className={inputClassName} />
           </Field>
         </div>
@@ -375,7 +375,7 @@ function InvoiceModal({
               setStoredImageUrl(null);
             }
           }}
-          label="Justificatif"
+          label="Receipt image"
         />
 
         <div className="flex justify-end gap-3 pt-2">
@@ -424,7 +424,7 @@ export default function Invoices() {
       filteredInvoices?.map((invoice) => ({
         Reference: invoice.number,
         Status: t[invoice.status],
-        Scope: invoice.buildingName ? "Batiment" : "Global",
+        Scope: invoice.buildingName ? "Building" : "Global",
         Building: invoice.buildingName ?? "",
         Supplier: invoice.supplierName ?? "",
         Product: invoice.productName ?? "",
@@ -450,8 +450,8 @@ export default function Invoices() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Depenses"
-        subtitle={`${filteredInvoices?.length ?? 0} depenses`}
+        title="Expenses"
+        subtitle={`${filteredInvoices?.length ?? 0} expenses`}
         action={
           <div className="flex flex-wrap justify-end gap-2">
             <SecondaryButton onClick={() => exportInvoices("csv")}>
@@ -469,7 +469,7 @@ export default function Invoices() {
               }}
             >
               <Plus size={16} />
-              Ajouter
+              Add
             </PrimaryButton>
           </div>
         }
@@ -478,7 +478,7 @@ export default function Invoices() {
       <div className="flex flex-wrap gap-2">
         {(
           [
-            ["all", t.all ?? "Tous"],
+            ["all", t.all ?? "All"],
             ["unpaid", t.unpaidFilter],
             ["partial", t.partialFilter],
             ["paid", t.paidFilter],
@@ -506,7 +506,7 @@ export default function Invoices() {
           ))}
         </div>
       ) : !filteredInvoices?.length ? (
-        <EmptyState title="Aucune depense" />
+        <EmptyState title="No expenses yet" />
       ) : (
         <div className="space-y-3">
           {filteredInvoices.map((invoice) => (
@@ -536,13 +536,13 @@ export default function Invoices() {
                             : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {invoice.buildingName ? "Bâtiment" : "Global"}
+                        {invoice.buildingName ? "Building" : "Global"}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {[invoice.supplierName, invoice.projectName, invoice.productName, formatDate(invoice.invoiceDate)]
                         .filter(Boolean)
-                        .join(" · ")}
+                        .join(" | ")}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {invoice.createdByName ?? "-"}

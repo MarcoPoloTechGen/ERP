@@ -66,8 +66,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: t.projects, icon: FolderKanban },
     { href: "/suppliers", label: t.suppliers, icon: Truck },
     { href: "/products", label: t.products, icon: Package2 },
-    { href: "/income", label: "Revenus", icon: BadgeDollarSign },
-    { href: "/expenses", label: "Depenses", icon: FileText },
+    { href: "/income", label: "Income", icon: BadgeDollarSign },
+    { href: "/expenses", label: "Expenses", icon: FileText },
   ];
 
   return (
@@ -118,7 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {profile?.role === "admin" ? (
               <NavLink
                 href="/admin"
-                label="Administration"
+                label="Admin"
                 icon={ShieldCheck}
                 currentPath={location}
                 onSelect={() => setMobileOpen(false)}
@@ -129,10 +129,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="space-y-3 border-t border-sidebar-border pt-4">
             <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
               <p className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile?.fullName ?? profile?.email ?? "Utilisateur"}
+                {profile?.fullName ?? profile?.email ?? "User"}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {profile?.role === "admin" ? "Admin" : "Utilisateur"}
+                {profile?.role === "admin" ? "Admin" : "User"}
               </p>
             </div>
 
@@ -160,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               }}
             >
               <LogOut size={16} />
-              Deconnexion
+              Sign out
             </SecondaryButton>
 
             <p className="text-center text-xs text-sidebar-foreground/45">{t.version}</p>

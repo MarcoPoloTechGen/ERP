@@ -160,7 +160,7 @@ export default function Dashboard() {
                       <div className="text-right">
                         <p className="text-sm font-semibold text-foreground">{formatCurrency(project.totalInvoiced)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {project.invoiceCount} fact.
+                          {project.invoiceCount} invoices
                         </p>
                       </div>
                     </div>
@@ -256,11 +256,11 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">
-              Base prete pour Vercel + Supabase
+              Vercel and Supabase are connected
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Toute la couche metier est maintenant centralisee. Les pages utilisent les memes mappings et les
-              memes conventions de donnees, ce qui evite les bugs lies aux colonnes melangees.
+              The data layer is centralized. Pages now use the same mappings and field conventions,
+              which reduces bugs caused by mismatched columns.
             </p>
           </div>
         </div>

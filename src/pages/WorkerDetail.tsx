@@ -104,7 +104,7 @@ function TransactionModal({
             />
           </Field>
 
-          <Field label="Devise">
+          <Field label="Currency">
             <select {...register("currency")} className={inputClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
@@ -186,7 +186,7 @@ export default function WorkerDetail() {
             ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {[worker.role, worker.phone].filter(Boolean).join(" · ")}
+            {[worker.role, worker.phone].filter(Boolean).join(" | ")}
           </p>
         </div>
         <div className="min-w-[180px] text-right">
@@ -242,7 +242,7 @@ export default function WorkerDetail() {
                         (transaction.type === "credit" ? t.creditLabel : t.debitLabel)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {[formatDate(transaction.date), transaction.projectName].filter(Boolean).join(" · ")}
+                      {[formatDate(transaction.date), transaction.projectName].filter(Boolean).join(" | ")}
                     </p>
                   </div>
                 </div>

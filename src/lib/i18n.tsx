@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type Lang = "en" | "ku";
 
+// AI note: UI strings in this app must remain English or Kurdish only. Do not add French copy.
+
 type TranslationShape = {
   dir: "ltr" | "rtl";
   dashboard: string;

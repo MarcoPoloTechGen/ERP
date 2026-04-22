@@ -63,18 +63,18 @@ export default function Admin() {
   });
 
   if (profile?.role !== "admin") {
-    return <EmptyState title="Cette page est reservee aux administrateurs." />;
+    return <EmptyState title="This page is restricted to administrators." />;
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Administration"
-        subtitle="Gestion des roles et des acces projet"
+        title="Admin"
+        subtitle="Manage roles and project access"
       />
 
       {!profiles?.length ? (
-        <EmptyState title="Aucun utilisateur" />
+        <EmptyState title="No users found" />
       ) : (
         <div className="space-y-3">
           {profiles.map((user) => {
@@ -86,7 +86,7 @@ export default function Admin() {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-base font-semibold text-foreground">
-                        {user.fullName ?? user.email ?? "Utilisateur"}
+                        {user.fullName ?? user.email ?? "User"}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">{user.email ?? "-"}</p>
                     </div>
@@ -106,14 +106,14 @@ export default function Admin() {
                         }
                       >
                         <option value="admin">Admin</option>
-                        <option value="user">Utilisateur</option>
+                        <option value="user">User</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      Projets autorises
+                      Allowed projects
                     </p>
                     <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {(projects ?? []).map((project) => {

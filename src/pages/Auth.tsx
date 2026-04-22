@@ -41,8 +41,7 @@ export default function AuthPage() {
             </div>
             <h1 className="mt-8 text-4xl font-semibold tracking-tight">BTP Manager</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-              Connectez-vous pour suivre vos projets, vos depenses, vos entrees d&apos;argent
-              et les acces de votre equipe.
+              Sign in to track projects, expenses, income, and team access.
             </p>
           </div>
 
@@ -53,14 +52,14 @@ export default function AuthPage() {
                 onClick={() => setMode("signin")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium ${mode === "signin" ? "bg-white shadow-sm" : "text-slate-500"}`}
               >
-                Connexion
+                Sign in
               </button>
               <button
                 type="button"
                 onClick={() => setMode("signup")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium ${mode === "signup" ? "bg-white shadow-sm" : "text-slate-500"}`}
               >
-                Creer un compte
+                Create account
               </button>
             </div>
 
@@ -70,7 +69,7 @@ export default function AuthPage() {
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
                   className={inputClassName}
-                  placeholder="Nom complet"
+                  placeholder="Full name"
                 />
               ) : null}
               <input
@@ -90,10 +89,10 @@ export default function AuthPage() {
               {error ? <p className="text-sm text-rose-700">{error}</p> : null}
               <div className="flex gap-3">
                 <PrimaryButton type="button" onClick={handleSubmit} disabled={submitting}>
-                  {mode === "signin" ? "Se connecter" : "Creer le compte"}
+                  {mode === "signin" ? "Sign in" : "Create account"}
                 </PrimaryButton>
                 <SecondaryButton type="button" onClick={() => setError(null)}>
-                  Reinitialiser
+                  Reset
                 </SecondaryButton>
               </div>
             </div>

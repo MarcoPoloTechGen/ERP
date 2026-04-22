@@ -217,7 +217,7 @@ export default function Workers() {
             onChange={(event) => setCategoryFilter(event.target.value)}
             className={`${inputClassName} max-w-xs`}
           >
-            <option value="all">{t.all ?? "Tous"}</option>
+            <option value="all">{t.all ?? "All"}</option>
             {categories.map((category) => (
               <option key={category} value={category}>
                 {category}
@@ -250,7 +250,7 @@ export default function Workers() {
                     ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {[worker.role, worker.phone].filter(Boolean).join(" · ")}
+                    {[worker.role, worker.phone].filter(Boolean).join(" | ")}
                   </p>
                 </div>
 

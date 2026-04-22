@@ -125,7 +125,7 @@ function ProductModal({
             </select>
           </Field>
 
-          <Field label={t.projectOption ?? "Projet"}>
+          <Field label={t.projectOption ?? "Project"}>
             <select
               {...register("projectId", {
                 onChange: () => setValue("buildingId", ""),
@@ -141,7 +141,7 @@ function ProductModal({
             </select>
           </Field>
 
-          <Field label={t.buildingLabel ?? "Batiment"}>
+          <Field label={t.buildingLabel ?? "Building"}>
             <select {...register("buildingId")} className={inputClassName} disabled={!selectedProjectId}>
               <option value="">{t.noneOption}</option>
               {buildings?.map((building) => (
@@ -160,7 +160,7 @@ function ProductModal({
             <input type="number" step="0.01" {...register("unitPrice")} className={inputClassName} />
           </Field>
 
-          <Field label="Devise">
+          <Field label="Currency">
             <select {...register("currency")} className={inputClassName}>
               <option value="USD">USD</option>
               <option value="IQD">IQD</option>
@@ -273,7 +273,7 @@ export default function Products() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {[product.projectName, product.buildingName, product.supplierName]
                       .filter(Boolean)
-                      .join(" · ") || t.noDetail}
+                      .join(" | ") || t.noDetail}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {product.unit ?? t.noDetail}
