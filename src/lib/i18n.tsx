@@ -39,6 +39,9 @@ type TranslationShape = {
   forgotPasswordIntro: string;
   sendResetLink: string;
   resetPasswordEmailSent: string;
+  accountCreatedCheckEmail: string;
+  accountAlreadyExists: string;
+  resetPasswordAction: string;
   backToSignIn: string;
   resetPasswordPageTitle: string;
   resetPasswordPageIntro: string;
@@ -292,6 +295,9 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     forgotPasswordIntro: "Enter your email and we will send a secure link to choose a new password.",
     sendResetLink: "Send reset link",
     resetPasswordEmailSent: "If that email exists, a password reset link has been sent.",
+    accountCreatedCheckEmail: "Your account was created. Check your email to confirm it, then sign in.",
+    accountAlreadyExists: "An account already exists for this email. Reset the password if you forgot it.",
+    resetPasswordAction: "Reset password",
     backToSignIn: "Back to sign in",
     resetPasswordPageTitle: "Reset password",
     resetPasswordPageIntro: "Choose a new password for your account.",

@@ -28,11 +28,13 @@ export default function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showResetSuggestion, setShowResetSuggestion] = useState(false);
 
   function switchMode(nextMode: "signin" | "signup" | "recover") {
     setMode(nextMode);
     setError(null);
     setNotice(null);
+    setShowResetSuggestion(false);
 
     if (nextMode !== "signup") {
       setFullName("");
@@ -50,6 +52,7 @@ export default function AuthPage() {
       setSubmitting(true);
       setError(null);
       setNotice(null);
+      setShowResetSuggestion(false);
 
       const normalizedEmail = email.trim();
       if (!normalizedEmail) {
@@ -59,7 +62,19 @@ export default function AuthPage() {
       if (mode === "signin") {
         await signIn(normalizedEmail, password);
       } else if (mode === "signup") {
-        await signUp(normalizedEmail, password, fullName.trim());
+        const result = await signUp(normalizedEmail, password, fullName.trim());
+
+        if (result.status === "existing-account") {
+          setError(t.accountAlreadyExists);
+          setShowResetSuggestion(true);
+          return;
+        }
+
+        if (result.status === "email-confirmation-required") {
+          setNotice(t.accountCreatedCheckEmail);
+          setPassword("");
+          return;
+        }
       } else {
         await requestPasswordReset(normalizedEmail);
         setNotice(t.resetPasswordEmailSent);
@@ -135,7 +150,10 @@ export default function AuthPage() {
                 <input
                   autoComplete="name"
                   value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
+                  onChange={(event) => {
+                    setFullName(event.target.value);
+                    setShowResetSuggestion(false);
+                  }}
                   className={inputClassName}
                   name="fullName"
                   placeholder={t.fullNamePlaceholder}
@@ -146,7 +164,10 @@ export default function AuthPage() {
                 autoComplete="email"
                 spellCheck={false}
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setShowResetSuggestion(false);
+                }}
                 className={inputClassName}
                 name="email"
                 placeholder={t.emailPlaceholder}
@@ -157,7 +178,10 @@ export default function AuthPage() {
                   <input
                     autoComplete={mode === "signin" ? "current-password" : "new-password"}
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      setShowResetSuggestion(false);
+                    }}
                     className={inputClassName}
                     name="password"
                     placeholder={t.passwordPlaceholder}
@@ -176,8 +200,30 @@ export default function AuthPage() {
                   ) : null}
                 </>
               ) : null}
-              {notice ? <p className="text-sm text-emerald-700">{notice}</p> : null}
-              {error ? <p className="text-sm text-rose-700">{error}</p> : null}
+              {notice ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  {notice}
+                </div>
+              ) : null}
+              {error ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  <p>{error}</p>
+                  {mode === "signup" && showResetSuggestion ? (
+                    <div className="mt-3">
+                      <SecondaryButton
+                        type="button"
+                        className="border-rose-200 bg-white text-rose-900 hover:bg-rose-100"
+                        onClick={() => {
+                          setShowResetSuggestion(false);
+                          switchMode("recover");
+                        }}
+                      >
+                        {t.resetPasswordAction}
+                      </SecondaryButton>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="flex gap-3">
                 <PrimaryButton type="submit" disabled={submitting}>
                   {mode === "signin" ? t.signIn : mode === "signup" ? t.createAccount : t.sendResetLink}

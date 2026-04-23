@@ -1,7 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import {
+  isDuplicateSignUpErrorMessage,
+  isEmailConfirmationRequiredErrorMessage,
+  isObfuscatedDuplicateSignUpUser,
+} from "@/lib/auth-utils";
 import { getMyProfile, type AppUserProfile } from "@/lib/erp";
 import { supabase } from "@/lib/supabase";
+
+export type SignUpResult = {
+  status: "signed-in" | "existing-account" | "email-confirmation-required";
+};
 
 type AuthContextValue = {
   session: Session | null;
@@ -9,7 +18,7 @@ type AuthContextValue = {
   loading: boolean;
   refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string) => Promise<SignUpResult>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -21,7 +30,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   refreshProfile: async () => {},
   signIn: async () => {},
-  signUp: async () => {},
+  signUp: async (): Promise<SignUpResult> => ({ status: "signed-in" }),
   requestPasswordReset: async () => {},
   updatePassword: async () => {},
   signOut: async () => {},
@@ -175,8 +184,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw error;
         }
       },
-      signUp: async (email: string, password: string, fullName: string) => {
-        const { error } = await supabase.auth.signUp({
+      signUp: async (email: string, password: string, fullName: string): Promise<SignUpResult> => {
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -186,8 +195,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         });
         if (error) {
+          if (isDuplicateSignUpErrorMessage(error.message)) {
+            return { status: "existing-account" };
+          }
+
           throw error;
         }
+
+        if (isObfuscatedDuplicateSignUpUser(data.user)) {
+          return { status: "existing-account" };
+        }
+
+        if (data.session) {
+          return { status: "signed-in" };
+        }
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (!signInError) {
+          return { status: "signed-in" };
+        }
+
+        if (isEmailConfirmationRequiredErrorMessage(signInError.message)) {
+          return { status: "email-confirmation-required" };
+        }
+
+        throw signInError;
       },
       requestPasswordReset: async (email: string) => {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
