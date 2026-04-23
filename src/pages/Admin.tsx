@@ -1,25 +1,47 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   erpKeys,
+  getAppSettings,
   listProfiles,
   listProjectMemberships,
   listProjects,
   replaceUserProjectMemberships,
+  updateCompanyLogoPath,
+  updateProfileName,
   updateProfileRole,
 } from "@/lib/erp";
+import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
-import { Card, EmptyState, PageHeader } from "@/components/ui-kit";
+import { Card, EmptyState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useLang } from "@/lib/i18n";
+import { deleteCompanyLogo, uploadCompanyLogo } from "@/lib/supabase";
 
 const selectClassName =
   "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
 
 export default function Admin() {
   const { t } = useLang();
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
+  const [draftNames, setDraftNames] = useState<Record<string, string>>({});
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [brandingNotice, setBrandingNotice] = useState<string | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl) {
+        URL.revokeObjectURL(logoPreviewUrl);
+      }
+    };
+  }, [logoPreviewUrl]);
+
+  const { data: appSettings } = useQuery({
+    queryKey: erpKeys.appSettings,
+    queryFn: getAppSettings,
+    enabled: profile?.role === "admin",
+  });
   const { data: profiles } = useQuery({
     queryKey: erpKeys.users,
     queryFn: listProfiles,
@@ -48,8 +70,28 @@ export default function Admin() {
     mutationFn: async ({ userId, role }: { userId: string; role: "admin" | "user" }) => {
       await updateProfileRole(userId, role);
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: erpKeys.users });
+      if (variables.userId === profile?.id) {
+        await refreshProfile();
+      }
+    },
+  });
+
+  const nameMutation = useMutation({
+    mutationFn: async ({ userId, fullName }: { userId: string; fullName: string }) => {
+      await updateProfileName(userId, fullName);
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: erpKeys.users });
+      if (variables.userId === profile?.id) {
+        await refreshProfile();
+      }
+      setDraftNames((current) => {
+        const next = { ...current };
+        delete next[variables.userId];
+        return next;
+      });
     },
   });
 
@@ -59,6 +101,48 @@ export default function Admin() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: erpKeys.projectMemberships });
+    },
+  });
+
+  const brandingMutation = useMutation({
+    mutationFn: async ({ remove }: { remove: boolean }) => {
+      const previousPath = appSettings?.companyLogoPath ?? null;
+      let uploadedPath: string | null = null;
+
+      if (!remove && !selectedLogoFile) {
+        return;
+      }
+
+      let resolvedNextPath: string | null = null;
+      if (!remove && selectedLogoFile) {
+        const uploaded = await uploadCompanyLogo(selectedLogoFile);
+        uploadedPath = uploaded.path;
+        resolvedNextPath = uploaded.path;
+      }
+
+      const targetPath = remove ? null : resolvedNextPath;
+
+      try {
+        await updateCompanyLogoPath(targetPath);
+      } catch (error) {
+        if (uploadedPath) {
+          await deleteCompanyLogo(uploadedPath);
+        }
+        throw error;
+      }
+
+      if (previousPath && previousPath !== targetPath) {
+        await deleteCompanyLogo(previousPath);
+      }
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: erpKeys.appSettings });
+      setSelectedLogoFile(null);
+      if (logoPreviewUrl) {
+        URL.revokeObjectURL(logoPreviewUrl);
+      }
+      setLogoPreviewUrl(null);
+      setBrandingNotice(variables.remove ? t.companyLogoRemoved : t.companyLogoUpdated);
     },
   });
 
@@ -73,22 +157,132 @@ export default function Admin() {
         subtitle={t.adminSubtitle}
       />
 
+      <Card className="p-5">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-base font-semibold text-foreground">{t.brandingTitle}</p>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t.brandingSubtitle}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{t.companyLogoHint}</p>
+          </div>
+
+          <div className="w-full max-w-xl rounded-3xl border border-border bg-background/60 p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <BrandMark
+                companyLogoUrl={logoPreviewUrl ?? appSettings?.companyLogoUrl}
+                alt={t.companyLogo}
+                className="h-20 w-20 border border-border bg-white"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">{t.companyLogo}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {appSettings?.companyLogoPath || selectedLogoFile ? t.changeCompanyLogo : t.noCompanyLogo}
+                </p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="mt-3 block w-full text-sm text-muted-foreground file:mr-3 file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setSelectedLogoFile(file);
+                    setBrandingNotice(null);
+                    if (logoPreviewUrl) {
+                      URL.revokeObjectURL(logoPreviewUrl);
+                    }
+                    setLogoPreviewUrl(file ? URL.createObjectURL(file) : null);
+                  }}
+                />
+              </div>
+            </div>
+
+            {brandingNotice ? (
+              <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                {brandingNotice}
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <PrimaryButton
+                onClick={() => brandingMutation.mutate({ remove: false })}
+                disabled={!selectedLogoFile || brandingMutation.isPending}
+              >
+                {t.saveCompanyLogo}
+              </PrimaryButton>
+              <SecondaryButton
+                onClick={() => {
+                  setSelectedLogoFile(null);
+                  setBrandingNotice(null);
+                  if (logoPreviewUrl) {
+                    URL.revokeObjectURL(logoPreviewUrl);
+                  }
+                  setLogoPreviewUrl(null);
+                }}
+                disabled={!selectedLogoFile || brandingMutation.isPending}
+              >
+                {t.reset}
+              </SecondaryButton>
+              <SecondaryButton
+                onClick={() => brandingMutation.mutate({ remove: true })}
+                disabled={!appSettings?.companyLogoPath || brandingMutation.isPending}
+              >
+                {t.removeCompanyLogo}
+              </SecondaryButton>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {!profiles?.length ? (
         <EmptyState title={t.noUsersFound} />
       ) : (
         <div className="space-y-3">
           {profiles.map((user) => {
             const allowedProjectIds = membershipMap.get(user.id) ?? [];
+            const draftName = draftNames[user.id] ?? user.fullName ?? "";
+            const normalizedDraftName = draftName.trim();
+            const canSaveName =
+              normalizedDraftName.length > 0 && normalizedDraftName !== (user.fullName ?? "").trim();
+            const isSavingName = nameMutation.isPending && nameMutation.variables?.userId === user.id;
+            const isUpdatingRole = roleMutation.isPending && roleMutation.variables?.userId === user.id;
 
             return (
               <Card key={user.id} className="p-5">
                 <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-foreground">
-                        {user.fullName ?? user.email ?? "User"}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">{user.email ?? "-"}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-foreground">
+                      {user.fullName ?? user.email ?? "User"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">{user.email ?? "-"}</p>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-foreground">
+                        {t.fullName}
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          value={draftName}
+                          onChange={(event) =>
+                            setDraftNames((current) => ({
+                              ...current,
+                              [user.id]: event.target.value,
+                            }))
+                          }
+                          className={`${selectClassName} flex-1`}
+                          placeholder={t.fullNamePlaceholder}
+                        />
+                        <PrimaryButton
+                          onClick={() =>
+                            nameMutation.mutate({
+                              userId: user.id,
+                              fullName: normalizedDraftName,
+                            })
+                          }
+                          disabled={!canSaveName || isSavingName}
+                        >
+                          {t.save}
+                        </PrimaryButton>
+                      </div>
                     </div>
 
                     <div className="w-full max-w-xs">
@@ -98,6 +292,7 @@ export default function Admin() {
                       <select
                         className={selectClassName}
                         value={user.role}
+                        disabled={isUpdatingRole}
                         onChange={(event) =>
                           roleMutation.mutate({
                             userId: user.id,

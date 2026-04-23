@@ -24,6 +24,17 @@ type TranslationShape = {
   emailPlaceholder: string;
   password: string;
   passwordPlaceholder: string;
+  brandingTitle: string;
+  brandingSubtitle: string;
+  companyLogo: string;
+  companyLogoHint: string;
+  uploadCompanyLogo: string;
+  changeCompanyLogo: string;
+  removeCompanyLogo: string;
+  saveCompanyLogo: string;
+  noCompanyLogo: string;
+  companyLogoUpdated: string;
+  companyLogoRemoved: string;
   forgotPassword: string;
   forgotPasswordIntro: string;
   sendResetLink: string;
@@ -237,6 +248,11 @@ type TranslationShape = {
   newIncomeEntry: string;
   noIncomeEntries: string;
   expenseDetails: string;
+  expenseLog: string;
+  changeType: string;
+  changeCreated: string;
+  changeUpdated: string;
+  noExpenseLog: string;
 };
 
 function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
@@ -261,6 +277,17 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     emailPlaceholder: "email@company.com",
     password: "Password",
     passwordPlaceholder: "Enter your password",
+    brandingTitle: "Branding",
+    brandingSubtitle: "Manage the company logo shown inside the application.",
+    companyLogo: "Company logo",
+    companyLogoHint: "This logo is shown in the admin area, sidebar, and sign-in screens.",
+    uploadCompanyLogo: "Upload logo",
+    changeCompanyLogo: "Change logo",
+    removeCompanyLogo: "Remove logo",
+    saveCompanyLogo: "Save logo",
+    noCompanyLogo: "No company logo uploaded yet.",
+    companyLogoUpdated: "The company logo has been updated.",
+    companyLogoRemoved: "The company logo has been removed.",
     forgotPassword: "Forgot password?",
     forgotPasswordIntro: "Enter your email and we will send a secure link to choose a new password.",
     sendResetLink: "Send reset link",
@@ -474,6 +501,11 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     newIncomeEntry: "New income entry",
     noIncomeEntries: "No income entries yet.",
     expenseDetails: "Expense details",
+    expenseLog: "Expense log",
+    changeType: "Action",
+    changeCreated: "Created",
+    changeUpdated: "Updated",
+    noExpenseLog: "No changes recorded for this expense yet.",
   };
 }
 

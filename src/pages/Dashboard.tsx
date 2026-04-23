@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { AlertTriangle, Banknote, FolderKanban, Truck, Users } from "lucide-react";
+import { AlertTriangle, FolderKanban, Truck, Users } from "lucide-react";
 import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui-kit";
 import { erpKeys, getDashboardOverview } from "@/lib/erp";
 import { formatCurrency, statusColors } from "@/lib/format";
@@ -248,23 +248,6 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
-
-      <Card className="p-5">
-        <div className="flex items-start gap-4">
-          <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-            <Banknote size={20} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              Vercel and Supabase are connected
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The data layer is centralized. Pages now use the same mappings and field conventions,
-              which reduces bugs caused by mismatched columns.
-            </p>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }

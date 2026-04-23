@@ -1,6 +1,7 @@
 import {
   createSignedInvoiceImageUrl,
   createSignedInvoiceImageUrls,
+  getPublicBrandingAssetUrl,
   resolveInvoiceImagePath,
   supabase,
 } from "@/lib/supabase";
@@ -17,6 +18,7 @@ type Row = Record<string, unknown>;
 
 export type ProjectStatus = "active" | "completed" | "paused";
 export type InvoiceStatus = "unpaid" | "partial" | "paid";
+export type InvoiceHistoryAction = "created" | "updated";
 export type TransactionType = "credit" | "debit";
 export type Currency = "USD" | "IQD";
 export type UserRole = "admin" | "user";
@@ -27,6 +29,13 @@ export interface AppUserProfile {
   fullName: string | null;
   role: UserRole;
   createdAt: string | null;
+}
+
+export interface AppSettings {
+  id: string;
+  companyLogoPath: string | null;
+  companyLogoUrl: string | null;
+  updatedAt: string | null;
 }
 
 export interface ProjectMembership {
@@ -115,6 +124,34 @@ export interface Invoice {
   createdBy: string | null;
   createdByName: string | null;
   createdAt: string | null;
+}
+
+export interface InvoiceHistoryEntry {
+  id: number;
+  invoiceId: number;
+  action: InvoiceHistoryAction;
+  number: string;
+  status: InvoiceStatus;
+  supplierId: number | null;
+  supplierName: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
+  productId: number | null;
+  productName: string | null;
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  currency: Currency;
+  invoiceDate: string | null;
+  dueDate: string | null;
+  notes: string | null;
+  imagePath: string | null;
+  imageUrl: string | null;
+  changedBy: string | null;
+  changedByName: string | null;
+  changedAt: string | null;
 }
 
 export interface WorkerTransaction {
@@ -320,6 +357,7 @@ const MAX_PAGE_SIZE = 50;
 
 export const erpKeys = {
   profile: ["profile"] as const,
+  appSettings: ["appSettings"] as const,
   users: ["users"] as const,
   projectMemberships: ["projectMemberships"] as const,
   dashboard: ["dashboard"] as const,
@@ -338,6 +376,7 @@ export const erpKeys = {
   invoices: ["invoices"] as const,
   invoicesPage: (filters: InvoicesPageFilters) => ["invoices", "page", filters] as const,
   invoice: (id: number) => ["invoice", id] as const,
+  invoiceHistory: (id: number) => ["invoice", id, "history"] as const,
   incomes: ["incomes"] as const,
   incomesPage: (filters: IncomePageFilters) => ["incomes", "page", filters] as const,
 };
@@ -404,6 +443,10 @@ function toInvoiceStatus(value: unknown, totalAmount = 0, paidAmount = 0): Invoi
   return deriveInvoiceStatus(totalAmount, paidAmount);
 }
 
+function toInvoiceHistoryAction(value: unknown): InvoiceHistoryAction {
+  return value === "updated" ? "updated" : "created";
+}
+
 function toTransactionType(value: unknown): TransactionType {
   return value === "debit" ? "debit" : "credit";
 }
@@ -423,6 +466,22 @@ function normalizeProfile(row: Row): AppUserProfile {
     fullName: readString(row, "full_name", "fullName"),
     role: toUserRole(readString(row, "role")),
     createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeAppSettings(row: Row): AppSettings {
+  const companyLogoPath = readString(row, "company_logo_path", "companyLogoPath");
+  const updatedAt = readDate(row, "updated_at", "updatedAt");
+  const companyLogoUrl = companyLogoPath ? getPublicBrandingAssetUrl(companyLogoPath) : null;
+
+  return {
+    id: readString(row, "id") ?? "default",
+    companyLogoPath,
+    companyLogoUrl:
+      companyLogoUrl && updatedAt
+        ? `${companyLogoUrl}${companyLogoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(updatedAt)}`
+        : companyLogoUrl,
+    updatedAt,
   };
 }
 
@@ -500,12 +559,20 @@ function normalizeProduct(row: Row): Product {
   };
 }
 
+function readInvoiceImage(row: Row) {
+  const rawImageValue = readString(row, "image_url", "imageUrl");
+  const imagePath = resolveInvoiceImagePath(rawImageValue);
+
+  return {
+    imagePath,
+    imageUrl: rawImageValue && !imagePath ? rawImageValue : null,
+  };
+}
+
 function normalizeInvoice(row: Row): Invoice {
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
-  const rawImageValue = readString(row, "image_url", "imageUrl");
-  const imagePath = resolveInvoiceImagePath(rawImageValue);
-  const hasExternalImageUrl = rawImageValue && !imagePath ? rawImageValue : null;
+  const { imagePath, imageUrl } = readInvoiceImage(row);
 
   return {
     id: readId(row, "id"),
@@ -528,10 +595,45 @@ function normalizeInvoice(row: Row): Invoice {
     dueDate: readDate(row, "due_date", "dueDate"),
     notes: readString(row, "notes"),
     imagePath,
-    imageUrl: hasExternalImageUrl,
+    imageUrl,
     createdBy: readString(row, "created_by", "createdBy"),
     createdByName: readString(row, "created_by_name", "createdByName"),
     createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeInvoiceHistoryEntry(row: Row): InvoiceHistoryEntry {
+  const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
+  const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
+  const { imagePath, imageUrl } = readInvoiceImage(row);
+
+  return {
+    id: readId(row, "id"),
+    invoiceId: readId(row, "invoice_id", "invoiceId"),
+    action: toInvoiceHistoryAction(readString(row, "change_type", "changeType", "action")),
+    number: readString(row, "number") ?? "INV",
+    status: toInvoiceStatus(readString(row, "status"), totalAmount, paidAmount),
+    supplierId: readNumber(row, "supplier_id", "supplierId"),
+    supplierName: readString(row, "supplier_name", "supplierName"),
+    projectId: readNumber(row, "project_id", "projectId"),
+    projectName: readString(row, "project_name", "projectName"),
+    buildingId: readNumber(row, "building_id", "buildingId"),
+    buildingName: readString(row, "building_name", "buildingName"),
+    productId: readNumber(row, "product_id", "productId"),
+    productName: readString(row, "product_name", "productName"),
+    totalAmount,
+    paidAmount,
+    remainingAmount:
+      readNumber(row, "remaining_amount", "remainingAmount") ?? Math.max(0, totalAmount - paidAmount),
+    currency: toCurrency(readString(row, "currency")),
+    invoiceDate: readDate(row, "invoice_date", "invoiceDate"),
+    dueDate: readDate(row, "due_date", "dueDate"),
+    notes: readString(row, "notes"),
+    imagePath,
+    imageUrl,
+    changedBy: readString(row, "changed_by", "changedBy"),
+    changedByName: readString(row, "changed_by_name", "changedByName"),
+    changedAt: readDate(row, "changed_at", "changedAt"),
   };
 }
 
@@ -710,6 +812,15 @@ async function hydrateInvoices(invoices: Invoice[]) {
   return invoices.map((invoice) => ({
     ...invoice,
     imageUrl: invoice.imageUrl ?? (invoice.imagePath ? urlsByPath.get(invoice.imagePath) ?? null : null),
+  }));
+}
+
+async function hydrateInvoiceHistory(entries: InvoiceHistoryEntry[]) {
+  const urlsByPath = await createSignedInvoiceImageUrls(entries.map((entry) => entry.imagePath));
+
+  return entries.map((entry) => ({
+    ...entry,
+    imageUrl: entry.imageUrl ?? (entry.imagePath ? urlsByPath.get(entry.imagePath) ?? null : null),
   }));
 }
 
@@ -906,6 +1017,39 @@ export async function getMyProfile() {
   return data ? normalizeProfile(asRow(data)) : null;
 }
 
+export async function getAppSettings() {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizeAppSettings(asRow(data ?? { id: "default" }));
+}
+
+export async function updateCompanyLogoPath(companyLogoPath: string | null) {
+  const currentUserId = await getCurrentUserId();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      id: "default",
+      company_logo_path: companyLogoPath,
+      updated_by: currentUserId,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "id",
+    },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function listProfiles() {
   return executeSelect(
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
@@ -915,6 +1059,18 @@ export async function listProfiles() {
 
 export async function updateProfileRole(id: string, role: UserRole) {
   const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateProfileName(id: string, fullName: string) {
+  const trimmedFullName = fullName.trim();
+  if (!trimmedFullName) {
+    throw new Error("Full name is required.");
+  }
+
+  const { error } = await supabase.from("profiles").update({ full_name: trimmedFullName }).eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
@@ -1298,6 +1454,20 @@ export async function getInvoice(id: number) {
   }
 
   return invoice;
+}
+
+export async function listInvoiceHistory(invoiceId: number) {
+  const rows = await executeSelect(
+    supabase
+      .from("app_invoice_history")
+      .select("*")
+      .eq("invoice_id", invoiceId)
+      .order("changed_at", { ascending: true })
+      .order("id", { ascending: true }),
+    normalizeInvoiceHistoryEntry,
+  );
+
+  return hydrateInvoiceHistory(rows);
 }
 
 export async function createInvoice(input: InvoiceInput) {

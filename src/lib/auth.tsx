@@ -7,6 +7,7 @@ type AuthContextValue = {
   session: Session | null;
   profile: AppUserProfile | null;
   loading: boolean;
+  refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextValue>({
   session: null,
   profile: null,
   loading: true,
+  refreshProfile: async () => {},
   signIn: async () => {},
   signUp: async () => {},
   requestPasswordReset: async () => {},
@@ -164,6 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile,
       loading,
+      refreshProfile: async () => {
+        setProfile(await loadProfileSafely(session));
+      },
       signIn: async (email: string, password: string) => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {

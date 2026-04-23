@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   BadgeDollarSign,
   FileText,
   FolderKanban,
-  HardHat,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -14,8 +14,10 @@ import {
   Users,
   X,
 } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import { SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 
 const languages: Array<{ value: Lang; label: string }> = [
@@ -59,6 +61,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { t, lang, setLang } = useLang();
   const { profile, signOut } = useAuth();
+  const { data: appSettings } = useQuery({
+    queryKey: erpKeys.appSettings,
+    queryFn: getAppSettings,
+  });
 
   const navItems = [
     { href: "/", label: t.dashboard, icon: LayoutDashboard },
@@ -89,9 +95,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         >
           <div className="flex items-center justify-between gap-3 border-b border-sidebar-border pb-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-amber-400/20">
-                <HardHat size={20} />
-              </div>
+              <BrandMark
+                companyLogoUrl={appSettings?.companyLogoUrl}
+                alt={t.siteTitle}
+                className="h-11 w-11 border border-sidebar-border bg-white shadow-lg shadow-amber-400/20"
+              />
               <div>
                 <p className="text-sm font-semibold text-sidebar-foreground">{t.siteTitle}</p>
                 <p className="text-xs text-sidebar-foreground/60">{t.siteSub}</p>
@@ -178,9 +186,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <Menu size={18} />
                 </button>
-                <div>
+                <div className="flex items-center gap-3">
+                  <BrandMark
+                    companyLogoUrl={appSettings?.companyLogoUrl}
+                    alt={t.siteTitle}
+                    className="h-10 w-10 border border-border bg-white"
+                  />
+                  <div>
                   <p className="text-sm font-semibold text-foreground">{t.siteTitle}</p>
                   <p className="text-xs text-muted-foreground">{t.siteSub}</p>
+                  </div>
                 </div>
               </div>
             </div>

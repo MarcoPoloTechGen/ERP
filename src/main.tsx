@@ -51,6 +51,13 @@ try {
   }
 
   createRoot(rootElement).render(<App />);
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      const registrationUrl = new URL("sw.js", new URL(import.meta.env.BASE_URL, window.location.origin));
+      void navigator.serviceWorker.register(registrationUrl);
+    });
+  }
 } catch (error) {
   renderFatalError(
     "The initial render failed before the application could display.",

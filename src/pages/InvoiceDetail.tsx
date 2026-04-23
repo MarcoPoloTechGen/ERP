@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Card, EmptyState, PrimaryButton } from "@/components/ui-kit";
-import { erpKeys, getInvoice, markInvoicePaid } from "@/lib/erp";
-import { formatCurrency, formatDate, statusColors } from "@/lib/format";
+import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid } from "@/lib/erp";
+import { formatCurrency, formatDate, formatDateTime, statusColors } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 export default function InvoiceDetail() {
@@ -21,6 +21,11 @@ export default function InvoiceDetail() {
     queryFn: () => getInvoice(invoiceId),
     enabled: Number.isFinite(invoiceId),
   });
+  const { data: history, isLoading: isHistoryLoading } = useQuery({
+    queryKey: erpKeys.invoiceHistory(invoiceId),
+    queryFn: () => listInvoiceHistory(invoiceId),
+    enabled: Number.isFinite(invoiceId),
+  });
 
   const markPaidMutation = useMutation({
     mutationFn: async () => {
@@ -32,6 +37,7 @@ export default function InvoiceDetail() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.invoice(invoiceId) }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.invoiceHistory(invoiceId) }),
         queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
@@ -166,6 +172,107 @@ export default function InvoiceDetail() {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="text-sm font-semibold text-foreground">{t.expenseLog}</h2>
+
+        {isHistoryLoading ? (
+          <div className="mt-4 h-32 animate-pulse rounded-2xl border border-card-border bg-card" />
+        ) : !history?.length ? (
+          <p className="mt-4 text-sm text-muted-foreground">{t.noExpenseLog}</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.date}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.user}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.changeType}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.reference}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.status}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.supplierOption}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.projectOption}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.invoiceAssignment}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.products}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.totalAmount}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.paidAmount}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.remaining_label}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.invoiceDate}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.dueDate}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.notes}</th>
+                  <th className="border-b border-border px-3 py-2 font-medium">{t.receiptImage}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((entry) => (
+                  <tr key={entry.id} className="align-top text-foreground">
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatDateTime(entry.changedAt)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.changedByName ?? "-"}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.action === "updated" ? t.changeUpdated : t.changeCreated}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">{entry.number}</td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(entry.status)}`}
+                      >
+                        {t[entry.status]}
+                      </span>
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.supplierName ?? "-"}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.projectName ?? "-"}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.buildingName ?? projectGlobalCost}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.productName ?? "-"}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatCurrency(entry.totalAmount, entry.currency)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatCurrency(entry.paidAmount, entry.currency)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatCurrency(entry.remainingAmount, entry.currency)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatDate(entry.invoiceDate)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {formatDate(entry.dueDate)}
+                    </td>
+                    <td className="border-b border-border px-3 py-3">
+                      <div className="max-w-xs whitespace-pre-wrap text-sm">{entry.notes ?? "-"}</div>
+                    </td>
+                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
+                      {entry.imageUrl ? (
+                        <a href={entry.imageUrl} target="_blank" rel="noreferrer">
+                          <img
+                            src={entry.imageUrl}
+                            alt={t.receiptImage}
+                            className="h-14 w-14 rounded-xl border border-border object-cover"
+                          />
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { HardHat } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import BrandMark from "@/components/BrandMark";
 import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 
 const inputClassName =
@@ -15,6 +17,10 @@ const languages: Array<{ value: Lang; label: string }> = [
 export default function AuthPage() {
   const { signIn, signUp, requestPasswordReset } = useAuth();
   const { t, lang, setLang } = useLang();
+  const { data: appSettings } = useQuery({
+    queryKey: erpKeys.appSettings,
+    queryFn: getAppSettings,
+  });
   const [mode, setMode] = useState<"signin" | "signup" | "recover">("signin");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -70,10 +76,12 @@ export default function AuthPage() {
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-[32px] border border-amber-100 bg-white shadow-2xl shadow-amber-950/10 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="bg-slate-900 p-10 text-slate-100">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-lg shadow-amber-500/30">
-              <HardHat size={24} />
-            </div>
-            <h1 className="mt-8 text-4xl font-semibold tracking-tight">BTP Manager</h1>
+            <BrandMark
+              companyLogoUrl={appSettings?.companyLogoUrl}
+              alt={t.siteTitle}
+              className="h-14 w-14 border border-white/10 bg-white shadow-lg shadow-amber-500/30"
+            />
+            <h1 className="mt-8 text-4xl font-semibold tracking-tight">{t.siteTitle}</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
               {t.authIntro}
             </p>

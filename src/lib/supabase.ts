@@ -4,6 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const invoiceImagesBucket = "invoice-images";
+export const brandingAssetsBucket = "branding-assets";
 
 export const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
@@ -59,7 +60,7 @@ function tryParseUrl(value: string) {
   }
 }
 
-export function extractStoragePathFromUrl(pathOrUrl: string | null | undefined) {
+function extractStoragePathFromBucketUrl(bucket: string, pathOrUrl: string | null | undefined) {
   if (!pathOrUrl) {
     return null;
   }
@@ -71,8 +72,8 @@ export function extractStoragePathFromUrl(pathOrUrl: string | null | undefined) 
 
   const decodedPath = decodeURIComponent(parsedUrl.pathname);
   const markers = [
-    `/storage/v1/object/public/${invoiceImagesBucket}/`,
-    `/storage/v1/object/sign/${invoiceImagesBucket}/`,
+    `/storage/v1/object/public/${bucket}/`,
+    `/storage/v1/object/sign/${bucket}/`,
   ];
 
   for (const marker of markers) {
@@ -85,8 +86,25 @@ export function extractStoragePathFromUrl(pathOrUrl: string | null | undefined) 
   return null;
 }
 
+export function extractStoragePathFromUrl(pathOrUrl: string | null | undefined) {
+  return extractStoragePathFromBucketUrl(invoiceImagesBucket, pathOrUrl);
+}
+
 export function resolveInvoiceImagePath(pathOrUrl: string | null | undefined) {
   return extractStoragePathFromUrl(pathOrUrl);
+}
+
+export function resolveBrandingAssetPath(pathOrUrl: string | null | undefined) {
+  return extractStoragePathFromBucketUrl(brandingAssetsBucket, pathOrUrl);
+}
+
+export function getPublicBrandingAssetUrl(pathOrUrl: string | null | undefined) {
+  const path = resolveBrandingAssetPath(pathOrUrl);
+  if (!path) {
+    return null;
+  }
+
+  return supabase.storage.from(brandingAssetsBucket).getPublicUrl(path).data.publicUrl;
 }
 
 export async function createSignedInvoiceImageUrls(pathsOrUrls: Array<string | null | undefined>, expiresIn = 3600) {
@@ -164,6 +182,40 @@ export async function deleteInvoiceImageByUrl(pathOrUrl: string | null | undefin
   }
 
   const { error } = await supabase.storage.from(invoiceImagesBucket).remove([path]);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function uploadCompanyLogo(file: File) {
+  const extension = getFileExtension(file);
+  const path = `company/logo-${Date.now()}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(brandingAssetsBucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    path,
+    publicUrl: getPublicBrandingAssetUrl(path),
+  };
+}
+
+export async function deleteCompanyLogo(pathOrUrl: string | null | undefined) {
+  const path = resolveBrandingAssetPath(pathOrUrl);
+  if (!path) {
+    return;
+  }
+
+  const { error } = await supabase.storage.from(brandingAssetsBucket).remove([path]);
   if (error) {
     throw error;
   }
