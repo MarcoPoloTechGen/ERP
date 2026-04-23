@@ -105,8 +105,8 @@ export default function Admin() {
                           })
                         }
                       >
-                        <option value="admin">Admin</option>
-                        <option value="user">User</option>
+                        <option value="admin">{t.adminTitle}</option>
+                        <option value="user">{t.user}</option>
                       </select>
                     </div>
                   </div>

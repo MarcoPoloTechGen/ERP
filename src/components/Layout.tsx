@@ -20,7 +20,7 @@ import { useLang, type Lang } from "@/lib/i18n";
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "en", label: "EN" },
-  { value: "ku", label: "KU" },
+  { value: "ku", label: "سۆرانی" },
 ];
 
 function NavLink({
@@ -129,10 +129,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="space-y-3 border-t border-sidebar-border pt-4">
             <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
               <p className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile?.fullName ?? profile?.email ?? "User"}
+                {profile?.fullName ?? profile?.email ?? t.user}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {profile?.role === "admin" ? "Admin" : "User"}
+                {profile?.role === "admin" ? t.adminTitle : t.user}
               </p>
             </div>
 

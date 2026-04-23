@@ -9,6 +9,8 @@ type AuthContextValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -18,10 +20,21 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signIn: async () => {},
   signUp: async () => {},
+  requestPasswordReset: async () => {},
+  updatePassword: async () => {},
   signOut: async () => {},
 });
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 8000;
+
+function buildAppUrl(pathname: string) {
+  if (typeof window === "undefined") {
+    return pathname;
+  }
+
+  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
+  return new URL(pathname.replace(/^\/+/, ""), baseUrl).toString();
+}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
   return new Promise<T>((resolve, reject) => {
@@ -166,6 +179,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               full_name: fullName,
             },
           },
+        });
+        if (error) {
+          throw error;
+        }
+      },
+      requestPasswordReset: async (email: string) => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: buildAppUrl("/reset-password"),
+        });
+        if (error) {
+          throw error;
+        }
+      },
+      updatePassword: async (password: string) => {
+        const { error } = await supabase.auth.updateUser({
+          password,
         });
         if (error) {
           throw error;

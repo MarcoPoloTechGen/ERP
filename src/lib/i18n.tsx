@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type Lang = "en" | "ku";
+const DEFAULT_LANG: Lang = "ku";
 
 type TranslationShape = {
   dir: "ltr" | "rtl";
@@ -23,6 +24,23 @@ type TranslationShape = {
   emailPlaceholder: string;
   password: string;
   passwordPlaceholder: string;
+  forgotPassword: string;
+  forgotPasswordIntro: string;
+  sendResetLink: string;
+  resetPasswordEmailSent: string;
+  backToSignIn: string;
+  resetPasswordPageTitle: string;
+  resetPasswordPageIntro: string;
+  newPassword: string;
+  newPasswordPlaceholder: string;
+  confirmPassword: string;
+  confirmPasswordPlaceholder: string;
+  updatePassword: string;
+  passwordUpdated: string;
+  passwordMismatch: string;
+  passwordTooShort: string;
+  invalidRecoveryLink: string;
+  requestNewResetLink: string;
   authIntro: string;
   reset: string;
   dashboardTitle: string;
@@ -243,6 +261,23 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     emailPlaceholder: "email@company.com",
     password: "Password",
     passwordPlaceholder: "Enter your password",
+    forgotPassword: "Forgot password?",
+    forgotPasswordIntro: "Enter your email and we will send a secure link to choose a new password.",
+    sendResetLink: "Send reset link",
+    resetPasswordEmailSent: "If that email exists, a password reset link has been sent.",
+    backToSignIn: "Back to sign in",
+    resetPasswordPageTitle: "Reset password",
+    resetPasswordPageIntro: "Choose a new password for your account.",
+    newPassword: "New password",
+    newPasswordPlaceholder: "Choose a new password",
+    confirmPassword: "Confirm password",
+    confirmPasswordPlaceholder: "Repeat your new password",
+    updatePassword: "Update password",
+    passwordUpdated: "Your password has been updated successfully.",
+    passwordMismatch: "The passwords do not match.",
+    passwordTooShort: "Password must be at least 8 characters.",
+    invalidRecoveryLink: "This reset link is invalid or has expired.",
+    requestNewResetLink: "Request a new reset link",
     authIntro: "Sign in to track projects, expenses, income, and team access.",
     reset: "Reset",
     dashboardTitle: "Dashboard",
@@ -442,9 +477,230 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
   };
 }
 
+function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
+  const base = createEnglishTranslations(dir);
+
+  return {
+    ...base,
+    dashboard: "داشبۆرد",
+    workers: "کرێکارەکان",
+    projects: "پڕۆژەکان",
+    suppliers: "دابینکەرەکان",
+    products: "بەرهەمەکان",
+    invoices: "پسوڵەکان",
+    income: "داهات",
+    expenses: "خەرجییەکان",
+    siteSub: "ERPێکی سادە و بەهێز بۆ بەڕێوەبردنی شوێنی کار",
+    signIn: "چوونەژوورەوە",
+    signOut: "چوونەدەرەوە",
+    createAccount: "هەژمار دروست بکە",
+    fullName: "ناوی تەواو",
+    fullNamePlaceholder: "ئەحمەد عەلی",
+    email: "ئیمەیڵ",
+    password: "وشەی نهێنی",
+    passwordPlaceholder: "وشەی نهێنی بنووسە",
+    authIntro: "بچۆ ژوورەوە بۆ بەدواداچوونی پڕۆژەکان، خەرجییەکان، داهات و دەسەڵاتی تیم.",
+    reset: "ڕیسێت",
+    dashboardTitle: "داشبۆرد",
+    dashboardSub: "بینینی گشتی تیمەکان، پڕۆژەکان و خەرجییەکان.",
+    totalWorkers: "ژمارەی کرێکار",
+    activeProjects: "پڕۆژە چالاکەکان",
+    totalSuppliers: "ژمارەی دابینکەر",
+    unpaidInvoices: "خەرجی نەدراوەکان",
+    financialSummary: "کورتەی دارایی",
+    totalInvoiced: "کۆی خەرجی",
+    amountPaid: "کۆی پارەدراو",
+    remaining: "ماوە",
+    paymentProgress: "پێشکەوتنی پارەدان",
+    projectsSummary: "پڕۆژەکان",
+    workersSummary: "کرێکارەکان",
+    invoicesSummary: "خەرجییەکان",
+    noneYet: "هێشتا هیچ داتایەک نییە.",
+    loading: "بارکردن",
+    retry: "هەوڵدانەوە",
+    search: "گەڕان",
+    clearFilters: "پاککردنەوەی فلتەرەکان",
+    remove: "لابردن",
+    filter: "فلتەر",
+    all: "هەموو",
+    allProjects: "هەموو پڕۆژەکان",
+    allSuppliers: "هەموو دابینکەرەکان",
+    allStatuses: "هەموو دۆخەکان",
+    allCurrencies: "هەموو دراوەکان",
+    allCategories: "هەموو پۆلەکان",
+    previous: "پێشوو",
+    next: "دواتر",
+    status: "دۆخ",
+    currency: "دراو",
+    category: "پۆل",
+    workersTitle: "کرێکارەکان",
+    worker_count: (count) => `${count} کرێکار`,
+    addWorker: "زیادکردن",
+    name: "ناو",
+    role: "ئەرک",
+    phone: "مۆبایل",
+    balance: "بالانس",
+    toReceive: "پارە وەرگرتن",
+    owes: "پێویستی بە هەڵسەنگاندن هەیە",
+    positiveBalance: "بالانسی ئەرێنی",
+    negativeBalance: "بالانسی نەرێنی",
+    noWorkers: "هێشتا هیچ کرێکارێک نییە. یەکەم پرۆفایل زیاد بکە.",
+    newWorker: "کرێکاری نوێ",
+    editWorker: "دەستکاریکردنی کرێکار",
+    namePlaceholder: "ئەحمەد عەلی",
+    rolePlaceholder: "بەنا، کارەباچی، سەرپەرشتیار...",
+    categoryPlaceholder: "بەنا، کارەباچی، شۆفێر...",
+    phonePlaceholder: "+964 750 000 0000",
+    nameRequired: "ناو پێویستە.",
+    roleRequired: "ئەرک پێویستە.",
+    requiredField: "ئەم خانەیە پێویستە.",
+    save: "پاشەکەوتکردن",
+    create: "دروستکردن",
+    cancel: "هەڵوەشاندنەوە",
+    deleteWorkerConfirm: "ئەم کرێکارە بسڕدرێتەوە؟",
+    transactions: "مامەڵەکان",
+    transactionsCount: (count) => `${count} مامەڵە`,
+    addTransaction: "زیادکردنی مامەڵە",
+    noTransactions: "هیچ مامەڵەیەک بۆ ئەم کرێکارە نییە.",
+    newTransaction: "مامەڵەی نوێ",
+    type: "جۆر",
+    amount: "بڕ",
+    description: "وەسف",
+    date: "بەروار",
+    dateFrom: "لە بەرواری",
+    dateTo: "بۆ بەرواری",
+    credit: "پارەدان",
+    debit: "پێشەکی",
+    amountRequired: "بڕ پێویستە.",
+    dateRequired: "بەروار پێویستە.",
+    creditLabel: "پارەدان",
+    debitLabel: "پێشەکی",
+    txProject: "پڕۆژەی پەیوەندیدار",
+    noProjectOption: "هیچ پڕۆژەیەک",
+    projectsTitle: "پڕۆژەکان",
+    project_count: (count) => `${count} پڕۆژە`,
+    buildingsTitle: "بیناکان",
+    building_count: (count) => `${count} بینا`,
+    buildingsHint: "ئەو بینایانە زیاد بکە کە پەیوەستن بەو پڕۆژەیە.",
+    addBuilding: "زیادکردنی بینا",
+    buildingLabel: "بینا",
+    buildingNamePlaceholder: "بینا A، بلۆک B، تاوەر C...",
+    noBuildings: "هیچ بینایەک بۆ ئەم پڕۆژەیە دانەمەزرێنراوە.",
+    addProject: "زیادکردن",
+    noProjects: "هێشتا هیچ پڕۆژەیەک نییە. یەکەمەکە دروست بکە.",
+    newProject: "پڕۆژەی نوێ",
+    editProject: "دەستکاریکردنی پڕۆژە",
+    projectName: "ناوی پڕۆژە",
+    projectNamePlaceholder: "نۆژەنکردنەوەی ویللا، ڕووکاری بینا...",
+    client: "کڕیار",
+    clientPlaceholder: "ناوی کڕیار",
+    location: "شوێن",
+    locationPlaceholder: "هەولێر، سلێمانی، دهۆک...",
+    active: "چالاک",
+    completed: "تەواوبوو",
+    paused: "وەستاو",
+    unpaid: "نەدراو",
+    partial: "بەشەکی",
+    paid: "دراو",
+    budget: "بودجە",
+    startDate: "بەرواری دەستپێک",
+    endDate: "بەرواری کۆتایی",
+    deleteProjectConfirm: "ئەم پڕۆژەیە بسڕدرێتەوە؟",
+    noClient: "هیچ کڕیارێک نییە",
+    noDetail: "هیچ وردەکارییەک نییە",
+    from: "لە",
+    to: "بۆ",
+    relatedInvoices_count: (count) => `${count} خەرجی پەیوەندیدار`,
+    noInvoicesForProject: "هیچ خەرجییەک بۆ ئەم پڕۆژەیە نییە.",
+    noSupplier: "هیچ دابینکەرێک نییە",
+    projectInfo: "زانیاری پڕۆژە",
+    suppliersTitle: "دابینکەرەکان",
+    supplier_count: (count) => `${count} دابینکەر`,
+    addSupplier: "زیادکردن",
+    noSuppliers: "هێشتا هیچ دابینکەرێک نییە.",
+    newSupplier: "دابینکەری نوێ",
+    editSupplier: "دەستکاریکردنی دابینکەر",
+    contact: "پەیوەندی",
+    contactPlaceholder: "ناوی کەسی پەیوەندی",
+    phoneSup: "مۆبایل",
+    address: "ناونیشان",
+    addressPlaceholder: "شەقامی بیناسازی 12",
+    deleteSupplierConfirm: "ئەم دابینکەرە بسڕدرێتەوە؟",
+    productsTitle: "بەرهەم و کەرەستەکان",
+    product_count: (count) => `${count} بەرهەم`,
+    addProduct: "زیادکردن",
+    noProducts: "هێشتا هیچ بەرهەمێک نییە.",
+    newProduct: "بەرهەمی نوێ",
+    editProduct: "دەستکاریکردنی بەرهەم",
+    unit: "یەکە",
+    unitPlaceholder: "کیسە، m2، پەلێت، دانە...",
+    unitPrice: "نرخی یەکە",
+    supplierLabel: "دابینکەر",
+    noneOption: "هیچ",
+    deleteProductConfirm: "ئەم بەرهەمە بسڕدرێتەوە؟",
+    invoicesTitle: "خەرجییەکان",
+    invoice_count: (count) => `${count} پسوڵە`,
+    expense_count: (count) => `${count} خەرجی`,
+    addInvoice: "زیادکردن",
+    noInvoices: "هێشتا هیچ پسوڵەیەک نییە.",
+    noExpenses: "هێشتا هیچ خەرجییەک نییە.",
+    newInvoice: "خەرجیی نوێ",
+    editInvoice: "دەستکاریکردنی خەرجی",
+    invoiceNumber: "ژمارەی مرجع",
+    invoiceNumberPlaceholder: "EXP-2026-001",
+    invoiceStatus_label: "دۆخ",
+    supplierOption: "دابینکەر",
+    projectOption: "پڕۆژە",
+    invoiceAssignment: "پەیوەستکردن",
+    projectGlobalCost: "خەرجیی گشتی پڕۆژە",
+    projectBuildingCost: "خەرجیی بینای دیاریکراو",
+    totalAmount: "کۆی بڕ",
+    paidAmount: "بڕی دراو",
+    invoiceDate: "بەرواری پسوڵە",
+    dueDate: "بەرواری قەرز",
+    notes: "تێبینی",
+    notesPlaceholder: "زانیاری یارمەتیدەر، مرجع، سەرنج...",
+    remaining_label: "ماوە",
+    deleteInvoiceConfirm: "ئەم خەرجییە بسڕدرێتەوە؟",
+    unpaidFilter: "نەدراو",
+    partialFilter: "بەشەکی",
+    paidFilter: "دراو",
+    markPaid: "وەک دراو نیشان بکە",
+    invoiceDetails: "وردەکاری خەرجی",
+    financialSummaryInv: "کورتەی دارایی",
+    alreadyPaid: "پێشتر دراوە",
+    progress: "پێشکەوتن",
+    uploadImage: "زیادکردنی وێنە",
+    changeImage: "گۆڕینی وێنە",
+    viewImage: "بینینی وێنە",
+    invoiceImage: "وێنەی خەرجی",
+    receiptImage: "وێنەی پسوڵە",
+    reference: "مرجع",
+    user: "بەکارهێنەر",
+    createdBy: "دروستکراو لەلایەن",
+    notFound: "دانەکە نەدۆزرایەوە.",
+    pageNotFound: "پەڕەکە نەدۆزرایەوە",
+    pageNotFoundSub: "ئەو پەڕەیەی داوات کردووە چیتر بوونی نییە.",
+    version: "وەشانی 2.1",
+    adminTitle: "بەڕێوەبەر",
+    adminSubtitle: "بەڕێوەبردنی ڕۆڵ و دەستگەیشتن بە پڕۆژەکان",
+    adminRestricted: "ئەم پەڕەیە تەنها بۆ بەڕێوەبەرانە.",
+    allowedProjects: "پڕۆژە ڕێگەپێدراوەکان",
+    noUsersFound: "هیچ بەکارهێنەرێک نەدۆزرایەوە.",
+    roleLabel: "ڕۆڵ",
+    incomeTitle: "داهات",
+    income_count: (count) => `${count} تۆماری داهات`,
+    entries: "تۆمارەکان",
+    addIncome: "زیادکردن",
+    newIncomeEntry: "تۆماری نوێی داهات",
+    noIncomeEntries: "هێشتا هیچ تۆمارێکی داهات نییە.",
+    expenseDetails: "وردەکاری خەرجی",
+  };
+}
+
 const translations: Record<Lang, TranslationShape> = {
   en: createEnglishTranslations("ltr"),
-  ku: createEnglishTranslations("rtl"),
+  ku: createSoraniTranslations("rtl"),
 };
 
 const LangContext = createContext<{
@@ -452,19 +708,19 @@ const LangContext = createContext<{
   setLang: (lang: Lang) => void;
   t: TranslationShape;
 }>({
-  lang: "en",
+  lang: DEFAULT_LANG,
   setLang: () => {},
-  t: translations.en,
+  t: translations[DEFAULT_LANG],
 });
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("btp-lang") : null;
-    return stored === "en" || stored === "ku" ? stored : "en";
+    return stored === "en" || stored === "ku" ? stored : DEFAULT_LANG;
   });
 
   useEffect(() => {
-    document.documentElement.lang = lang;
+    document.documentElement.lang = lang === "ku" ? "ckb" : "en";
     document.documentElement.dir = translations[lang].dir;
     window.localStorage.setItem("btp-lang", lang);
   }, [lang]);

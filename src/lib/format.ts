@@ -1,12 +1,15 @@
 import type { Currency } from "@/lib/erp";
 
 function getActiveLocale() {
-  if (typeof document !== "undefined" && document.documentElement.lang === "ku") {
-    return "ar-IQ";
+  if (
+    typeof document !== "undefined" &&
+    (document.documentElement.lang === "ku" || document.documentElement.lang === "ckb")
+  ) {
+    return "ckb-IQ";
   }
 
   if (typeof window !== "undefined" && window.localStorage.getItem("btp-lang") === "ku") {
-    return "ar-IQ";
+    return "ckb-IQ";
   }
 
   return "en-GB";

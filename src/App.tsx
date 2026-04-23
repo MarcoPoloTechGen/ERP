@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
-import { Route, Router as WouterRouter, Switch } from "wouter";
+import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import Layout from "@/components/Layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/Auth";
@@ -29,6 +29,7 @@ const Invoices = lazy(() => import("@/pages/Invoices"));
 const Products = lazy(() => import("@/pages/Products"));
 const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
 const Projects = lazy(() => import("@/pages/Projects"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Suppliers = lazy(() => import("@/pages/Suppliers"));
 const WorkerDetail = lazy(() => import("@/pages/WorkerDetail"));
 const Workers = lazy(() => import("@/pages/Workers"));
@@ -109,7 +110,9 @@ function RouteLoading() {
 
 function AppRouter() {
   const { loading, session } = useAuth();
+  const [location] = useLocation();
   const [showDelayedMessage, setShowDelayedMessage] = useState(false);
+  const isResetPasswordRoute = location === "/reset-password" || location === "/reset-password/";
 
   useEffect(() => {
     if (!loading) {
@@ -143,6 +146,14 @@ function AppRouter() {
           ) : null}
         </div>
       </div>
+    );
+  }
+
+  if (isResetPasswordRoute) {
+    return (
+      <Suspense fallback={<RouteLoading />}>
+        <ResetPassword />
+      </Suspense>
     );
   }
 
