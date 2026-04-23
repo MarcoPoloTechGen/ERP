@@ -149,6 +149,7 @@ export default function AuthPage() {
               {mode === "signup" ? (
                 <input
                   autoComplete="name"
+                  required
                   value={fullName}
                   onChange={(event) => {
                     setFullName(event.target.value);
@@ -162,6 +163,7 @@ export default function AuthPage() {
               <input
                 autoCapitalize="none"
                 autoComplete="email"
+                required
                 spellCheck={false}
                 value={email}
                 onChange={(event) => {
@@ -177,6 +179,8 @@ export default function AuthPage() {
                 <>
                   <input
                     autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                    minLength={mode === "signup" ? 8 : undefined}
+                    required
                     value={password}
                     onChange={(event) => {
                       setPassword(event.target.value);

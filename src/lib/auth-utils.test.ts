@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  isPasswordRecoveryCallback,
   isDuplicateSignUpErrorMessage,
   isEmailConfirmationRequiredErrorMessage,
   isObfuscatedDuplicateSignUpUser,
+  readAuthCallbackParams,
 } from "./auth-utils";
 
 describe("auth helpers", () => {
@@ -22,5 +24,24 @@ describe("auth helpers", () => {
     expect(isObfuscatedDuplicateSignUpUser({ identities: [] } as never)).toBe(true);
     expect(isObfuscatedDuplicateSignUpUser({ identities: [{ id: "1" }] } as never)).toBe(false);
     expect(isObfuscatedDuplicateSignUpUser(null)).toBe(false);
+  });
+
+  it("reads auth callback params from the URL hash", () => {
+    const params = readAuthCallbackParams(
+      "https://example.com/reset-password#type=recovery&access_token=abc&error_description=Link+expired",
+    );
+
+    expect(params.type).toBe("recovery");
+    expect(params.errorDescription).toBe("Link expired");
+    expect(isPasswordRecoveryCallback(params)).toBe(true);
+  });
+
+  it("reads auth callback params from the query string", () => {
+    const params = readAuthCallbackParams(
+      "https://example.com/reset-password?type=recovery&token_hash=hashed-token",
+    );
+
+    expect(params.type).toBe("recovery");
+    expect(params.tokenHash).toBe("hashed-token");
   });
 });

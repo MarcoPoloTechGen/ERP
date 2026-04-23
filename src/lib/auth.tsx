@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
+  isPasswordRecoveryCallback,
   isDuplicateSignUpErrorMessage,
   isEmailConfirmationRequiredErrorMessage,
   isObfuscatedDuplicateSignUpUser,
+  readAuthCallbackParams,
 } from "@/lib/auth-utils";
 import { getMyProfile, type AppUserProfile } from "@/lib/erp";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +18,8 @@ type AuthContextValue = {
   session: Session | null;
   profile: AppUserProfile | null;
   loading: boolean;
+  isPasswordRecovery: boolean;
+  authCallbackError: string | null;
   refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<SignUpResult>;
@@ -28,6 +32,8 @@ const AuthContext = createContext<AuthContextValue>({
   session: null,
   profile: null,
   loading: true,
+  isPasswordRecovery: false,
+  authCallbackError: null,
   refreshProfile: async () => {},
   signIn: async () => {},
   signUp: async (): Promise<SignUpResult> => ({ status: "signed-in" }),
@@ -84,9 +90,16 @@ async function loadProfileSafely(nextSession: Session | null) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const initialAuthCallback = readAuthCallbackParams();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() =>
+    isPasswordRecoveryCallback(initialAuthCallback),
+  );
+  const [authCallbackError, setAuthCallbackError] = useState<string | null>(
+    initialAuthCallback.errorDescription,
+  );
 
   useEffect(() => {
     let active = true;
@@ -119,6 +132,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(nextSession);
         setProfile(nextProfile);
+        setAuthCallbackError(readAuthCallbackParams().errorDescription);
+        if (nextSession && isPasswordRecoveryCallback(readAuthCallbackParams())) {
+          setIsPasswordRecovery(true);
+        }
       } catch (error) {
         console.error("Failed to restore auth session", error);
         if (!active) {
@@ -141,6 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSession(nextSession);
+      setAuthCallbackError(readAuthCallbackParams().errorDescription);
+
+      if (event === "PASSWORD_RECOVERY") {
+        setIsPasswordRecovery(true);
+      } else if (event === "SIGNED_OUT") {
+        setIsPasswordRecovery(false);
+      }
+
       finishBootstrap();
 
       void loadProfileSafely(nextSession).then((nextProfile) => {
@@ -175,6 +200,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       profile,
       loading,
+      isPasswordRecovery,
+      authCallbackError,
       refreshProfile: async () => {
         setProfile(await loadProfileSafely(session));
       },
@@ -236,15 +263,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
+        setIsPasswordRecovery(false);
+        setAuthCallbackError(null);
       },
       signOut: async () => {
         const { error } = await supabase.auth.signOut();
         if (error) {
           throw error;
         }
+        setIsPasswordRecovery(false);
       },
     }),
-    [loading, profile, session],
+    [authCallbackError, isPasswordRecovery, loading, profile, session],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

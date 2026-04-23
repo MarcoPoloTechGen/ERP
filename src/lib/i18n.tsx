@@ -45,6 +45,7 @@ type TranslationShape = {
   backToSignIn: string;
   resetPasswordPageTitle: string;
   resetPasswordPageIntro: string;
+  preparingRecoveryLink: string;
   newPassword: string;
   newPasswordPlaceholder: string;
   confirmPassword: string;
@@ -301,6 +302,7 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     backToSignIn: "Back to sign in",
     resetPasswordPageTitle: "Reset password",
     resetPasswordPageIntro: "Choose a new password for your account.",
+    preparingRecoveryLink: "We are verifying your reset link...",
     newPassword: "New password",
     newPasswordPlaceholder: "Choose a new password",
     confirmPassword: "Confirm password",

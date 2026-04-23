@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import BrandMark from "@/components/BrandMark";
@@ -16,7 +16,7 @@ const languages: Array<{ value: Lang; label: string }> = [
 ];
 
 export default function ResetPasswordPage() {
-  const { session, updatePassword } = useAuth();
+  const { session, isPasswordRecovery, authCallbackError, updatePassword } = useAuth();
   const { t, lang, setLang } = useLang();
   const [, navigate] = useLocation();
   const { data: appSettings } = useQuery({
@@ -28,6 +28,22 @@ export default function ResetPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showRecoveryFallback, setShowRecoveryFallback] = useState(false);
+
+  useEffect(() => {
+    if (!isPasswordRecovery || session || authCallbackError) {
+      setShowRecoveryFallback(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowRecoveryFallback(true);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [authCallbackError, isPasswordRecovery, session]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,10 +125,18 @@ export default function ResetPasswordPage() {
                     {t.dashboard}
                   </PrimaryButton>
                 </div>
+              ) : isPasswordRecovery && !session && !authCallbackError && !showRecoveryFallback ? (
+                <div className="space-y-4">
+                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {t.preparingRecoveryLink}
+                  </p>
+                </div>
               ) : session ? (
                 <form className="space-y-4" onSubmit={handleSubmit}>
                   <input
                     autoComplete="new-password"
+                    minLength={8}
+                    required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className={inputClassName}
@@ -122,6 +146,8 @@ export default function ResetPasswordPage() {
                   />
                   <input
                     autoComplete="new-password"
+                    minLength={8}
+                    required
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     className={inputClassName}
@@ -142,7 +168,7 @@ export default function ResetPasswordPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {t.invalidRecoveryLink}
+                    {authCallbackError ?? t.invalidRecoveryLink}
                   </p>
                   <PrimaryButton type="button" onClick={() => navigate("/")}>
                     {t.requestNewResetLink}
