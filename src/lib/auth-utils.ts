@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { getStoredLang } from "@/lib/i18n";
 
 const DUPLICATE_SIGN_UP_MARKERS = [
   "user already registered",
@@ -9,6 +10,16 @@ const DUPLICATE_SIGN_UP_MARKERS = [
 const EMAIL_CONFIRMATION_MARKERS = [
   "email not confirmed",
   "email is not confirmed",
+];
+
+const EMAIL_RATE_LIMIT_MARKERS = [
+  "email rate limit exceeded",
+  "rate limit exceeded",
+];
+
+const INVALID_LOGIN_MARKERS = [
+  "invalid login credentials",
+  "invalid email or password",
 ];
 
 function normalizeAuthMessage(message: string | null | undefined) {
@@ -79,6 +90,55 @@ export function isEmailConfirmationRequiredErrorMessage(message: string | null |
   return EMAIL_CONFIRMATION_MARKERS.some((marker) => normalizedMessage.includes(marker));
 }
 
+export function isEmailRateLimitErrorMessage(message: string | null | undefined) {
+  const normalizedMessage = normalizeAuthMessage(message);
+  return EMAIL_RATE_LIMIT_MARKERS.some((marker) => normalizedMessage.includes(marker));
+}
+
 export function isObfuscatedDuplicateSignUpUser(user: Pick<User, "identities"> | null | undefined) {
   return Array.isArray(user?.identities) && user.identities.length === 0;
+}
+
+export function localizeAuthErrorMessage(message: string | null | undefined) {
+  if (!message) {
+    return null;
+  }
+
+  const normalizedMessage = normalizeAuthMessage(message);
+  const isKurdish = getStoredLang() === "ku";
+
+  if (INVALID_LOGIN_MARKERS.some((marker) => normalizedMessage.includes(marker))) {
+    return isKurdish ? "ئیمەیڵ یان وشەی نهێنی هەڵەیە." : "Invalid email or password.";
+  }
+
+  if (EMAIL_CONFIRMATION_MARKERS.some((marker) => normalizedMessage.includes(marker))) {
+    return isKurdish
+      ? "هێشتا ئیمەیڵەکەت پشتڕاست نەکراوەتەوە."
+      : "Email is not confirmed.";
+  }
+
+  if (EMAIL_RATE_LIMIT_MARKERS.some((marker) => normalizedMessage.includes(marker))) {
+    return isKurdish
+      ? "ئاستی ناردنی ئیمەیڵ زۆر بووە. تکایە دوای ماوەیەک هەوڵبدەوە."
+      : "Email rate limit exceeded. Please try again later.";
+  }
+
+  if (DUPLICATE_SIGN_UP_MARKERS.some((marker) => normalizedMessage.includes(marker))) {
+    return isKurdish
+      ? "هەژمارێک پێشتر بۆ ئەم ئیمەیڵە هەیە."
+      : "An account already exists for this email.";
+  }
+
+  if (
+    (normalizedMessage.includes("expired") || normalizedMessage.includes("invalid")) &&
+    (normalizedMessage.includes("link") ||
+      normalizedMessage.includes("token") ||
+      normalizedMessage.includes("otp"))
+  ) {
+    return isKurdish
+      ? "ئەم بەستەرە یان تۆکنە ناڕەوا یان بەسەرچووە."
+      : "This link or token is invalid or has expired.";
+  }
+
+  return message;
 }

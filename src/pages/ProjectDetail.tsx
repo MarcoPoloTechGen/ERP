@@ -10,10 +10,6 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const { t } = useLang();
-  const buildingsTitle = t.buildingsTitle ?? "Buildings";
-  const noBuildings = t.noBuildings ?? "No buildings configured for this project.";
-  const buildingCountLabel = t.building_count ?? ((count: number) => `${count} building${count > 1 ? "s" : ""}`);
-  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
 
   const { data: project, isLoading } = useQuery({
     queryKey: erpKeys.project(projectId),
@@ -84,20 +80,20 @@ export default function ProjectDetail() {
             <p className="mt-1 text-sm font-medium text-foreground">{formatDate(project.endDate)}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">{buildingsTitle}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{buildingCountLabel(buildings?.length ?? 0)}</p>
+            <p className="text-xs text-muted-foreground">{t.buildingsTitle}</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{t.building_count(buildings?.length ?? 0)}</p>
           </div>
         </div>
       </Card>
 
       <Card className="overflow-hidden">
         <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">{buildingsTitle}</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t.buildingsTitle}</h2>
         </div>
 
         {!buildings?.length ? (
           <div className="p-5">
-            <EmptyState title={noBuildings} />
+            <EmptyState title={t.noBuildings} />
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -135,7 +131,7 @@ export default function ProjectDetail() {
           <div className="divide-y divide-border">
             {globalInvoices.length ? (
               <div className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {projectGlobalCost}
+                {t.projectGlobalCost}
               </div>
             ) : null}
             {relatedInvoices.map((invoice) => (
@@ -145,7 +141,7 @@ export default function ProjectDetail() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{invoice.number}</p>
                       <p className="text-xs text-muted-foreground">
-                        {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? projectGlobalCost, formatDate(invoice.invoiceDate)]
+                        {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? t.projectGlobalCost, formatDate(invoice.invoiceDate)]
                           .filter(Boolean)
                           .join(" | ")}
                       </p>

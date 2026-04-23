@@ -172,22 +172,23 @@ export default function Income() {
   });
 
   function exportIncome(format: "csv" | "xlsx") {
+    const fileBase = t.incomeTitle;
     const rows =
       data?.items.map((income) => ({
-        Project: income.projectName ?? "",
-        Amount: income.amount,
-        Currency: income.currency,
-        User: income.createdByName ?? "",
-        Description: income.description ?? "",
-        Date: income.date ?? "",
+        [t.projectOption]: income.projectName ?? "",
+        [t.amount]: income.amount,
+        [t.currency]: income.currency,
+        [t.user]: income.createdByName ?? "",
+        [t.description]: income.description ?? "",
+        [t.date]: income.date ?? "",
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("income.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("income.xlsx", "Income", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   return (
@@ -203,7 +204,7 @@ export default function Income() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportIncome("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             <PrimaryButton onClick={() => setOpen(true)}>
               <Plus size={16} />

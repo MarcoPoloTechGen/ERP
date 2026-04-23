@@ -233,24 +233,25 @@ export default function Projects() {
   });
 
   function exportProjects(format: "csv" | "xlsx") {
+    const fileBase = t.projectsTitle;
     const rows =
       data?.items.map((project) => ({
-        Name: project.name,
-        Client: project.client ?? "",
-        Location: project.location ?? "",
-        Status: t[project.status],
-        Buildings: project.buildingCount,
-        Budget: project.budget ?? "",
-        StartDate: formatDateInput(project.startDate),
-        EndDate: formatDateInput(project.endDate),
+        [t.projectName]: project.name,
+        [t.client]: project.client ?? "",
+        [t.location]: project.location ?? "",
+        [t.status]: t[project.status],
+        [t.buildingsTitle]: project.buildingCount,
+        [t.budget]: project.budget ?? "",
+        [t.startDate]: formatDateInput(project.startDate),
+        [t.endDate]: formatDateInput(project.endDate),
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("projects.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("projects.xlsx", "Projects", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   const deleteMutation = useMutation({
@@ -276,7 +277,7 @@ export default function Projects() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportProjects("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             {profile?.role === "admin" ? (
               <PrimaryButton

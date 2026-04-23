@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   deriveInvoiceStatus,
   normalizeOptionalText,
@@ -8,6 +8,31 @@ import {
 } from "./validation";
 
 describe("validation helpers", () => {
+  let storage = new Map<string, string>();
+
+  beforeEach(() => {
+    storage = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+          removeItem: (key: string) => {
+            storage.delete(key);
+          },
+        },
+      },
+    });
+    window.localStorage.removeItem("btp-lang");
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "window");
+  });
+
   it("normalizes optional text", () => {
     expect(normalizeOptionalText("  Hello  ")).toBe("Hello");
     expect(normalizeOptionalText("   ")).toBeNull();
@@ -33,7 +58,7 @@ describe("validation helpers", () => {
         invoiceDate: "2026-04-01",
         dueDate: "2026-04-10",
       }),
-    ).toThrow("Paid amount cannot be greater than total amount.");
+    ).toThrow("بڕی دراو نابێت لە کۆی بڕ زیاتر بێت.");
 
     expect(() =>
       validateInvoiceInput({
@@ -42,7 +67,7 @@ describe("validation helpers", () => {
         invoiceDate: "2026-04-10",
         dueDate: "2026-04-01",
       }),
-    ).toThrow("due date cannot be earlier than invoice date.");
+    ).toThrow("بەرواری قەرز نابێت لە بەرواری پسوڵە زووتر بێت.");
   });
 
   it("rejects invalid project values", () => {
@@ -52,7 +77,7 @@ describe("validation helpers", () => {
         startDate: "2026-04-01",
         endDate: "2026-04-10",
       }),
-    ).toThrow("Budget must be zero or greater.");
+    ).toThrow("بودجە دەبێت سفر یان زیاتر بێت.");
 
     expect(() =>
       validateProjectInput({
@@ -60,6 +85,27 @@ describe("validation helpers", () => {
         startDate: "2026-04-10",
         endDate: "2026-04-01",
       }),
-    ).toThrow("end date cannot be earlier than start date.");
+    ).toThrow("بەرواری کۆتایی نابێت لە بەرواری دەستپێک زووتر بێت.");
+  });
+
+  it("returns English validation messages when English is selected", () => {
+    window.localStorage.setItem("btp-lang", "en");
+
+    expect(() =>
+      validateInvoiceInput({
+        totalAmount: 100,
+        paidAmount: 120,
+        invoiceDate: "2026-04-01",
+        dueDate: "2026-04-10",
+      }),
+    ).toThrow("Paid amount cannot be greater than total amount.");
+
+    expect(() =>
+      validateProjectInput({
+        budget: -10,
+        startDate: "2026-04-01",
+        endDate: "2026-04-10",
+      }),
+    ).toThrow("Budget must be zero or greater.");
   });
 });

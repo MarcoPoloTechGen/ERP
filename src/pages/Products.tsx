@@ -225,23 +225,24 @@ export default function Products() {
   });
 
   function exportProducts(format: "csv" | "xlsx") {
+    const fileBase = t.productsTitle;
     const rows =
       data?.items.map((product) => ({
-        Name: product.name,
-        Supplier: product.supplierName ?? "",
-        Project: product.projectName ?? "",
-        Building: product.buildingName ?? "",
-        Unit: product.unit ?? "",
-        UnitPrice: product.unitPrice ?? "",
-        Currency: product.currency,
+        [t.name]: product.name,
+        [t.supplierLabel]: product.supplierName ?? "",
+        [t.projectOption]: product.projectName ?? "",
+        [t.buildingLabel]: product.buildingName ?? "",
+        [t.unit]: product.unit ?? "",
+        [t.unitPrice]: product.unitPrice ?? "",
+        [t.currency]: product.currency,
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("products.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("products.xlsx", "Products", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   const deleteMutation = useMutation({
@@ -267,7 +268,7 @@ export default function Products() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportProducts("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             <PrimaryButton
               onClick={() => {

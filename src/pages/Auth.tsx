@@ -1,18 +1,75 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import BrandMark from "@/components/BrandMark";
 import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { isEmailRateLimitErrorMessage, localizeAuthErrorMessage } from "@/lib/auth-utils";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 
 const inputClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25";
 
+const PASSWORD_RESET_COOLDOWN_SECONDS = 60;
+const PASSWORD_RESET_COOLDOWN_STORAGE_PREFIX = "btp-password-reset-cooldown:";
+
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "ku", label: "سۆرانی" },
   { value: "en", label: "EN" },
 ];
+
+function normalizeEmailForCooldown(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function getPasswordResetCooldownKey(email: string) {
+  return `${PASSWORD_RESET_COOLDOWN_STORAGE_PREFIX}${normalizeEmailForCooldown(email)}`;
+}
+
+function readPasswordResetCooldownSeconds(email: string) {
+  if (typeof window === "undefined") {
+    return 0;
+  }
+
+  const normalizedEmail = normalizeEmailForCooldown(email);
+  if (!normalizedEmail) {
+    return 0;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(getPasswordResetCooldownKey(normalizedEmail));
+    const expiresAt = Number(storedValue);
+
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      window.localStorage.removeItem(getPasswordResetCooldownKey(normalizedEmail));
+      return 0;
+    }
+
+    return Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+  } catch {
+    return 0;
+  }
+}
+
+function storePasswordResetCooldown(email: string, seconds = PASSWORD_RESET_COOLDOWN_SECONDS) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const normalizedEmail = normalizeEmailForCooldown(email);
+  if (!normalizedEmail) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getPasswordResetCooldownKey(normalizedEmail),
+      String(Date.now() + seconds * 1000),
+    );
+  } catch {
+    // Ignore storage errors and keep the reset flow working.
+  }
+}
 
 export default function AuthPage() {
   const { signIn, signUp, requestPasswordReset } = useAuth();
@@ -29,6 +86,29 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showResetSuggestion, setShowResetSuggestion] = useState(false);
+  const [recoverCooldownSeconds, setRecoverCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (mode !== "recover") {
+      setRecoverCooldownSeconds(0);
+      return;
+    }
+
+    const syncCooldown = () => {
+      setRecoverCooldownSeconds(readPasswordResetCooldownSeconds(email));
+    };
+
+    syncCooldown();
+
+    if (!email.trim()) {
+      return;
+    }
+
+    const intervalId = window.setInterval(syncCooldown, 1000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [email, mode]);
 
   function switchMode(nextMode: "signin" | "signup" | "recover") {
     setMode(nextMode);
@@ -47,6 +127,7 @@ export default function AuthPage() {
 
   async function handleSubmit(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+    const normalizedEmail = email.trim();
 
     try {
       setSubmitting(true);
@@ -54,7 +135,6 @@ export default function AuthPage() {
       setNotice(null);
       setShowResetSuggestion(false);
 
-      const normalizedEmail = email.trim();
       if (!normalizedEmail) {
         throw new Error(t.requiredField);
       }
@@ -76,15 +156,36 @@ export default function AuthPage() {
           return;
         }
       } else {
+        const cooldownSeconds = readPasswordResetCooldownSeconds(normalizedEmail);
+        if (cooldownSeconds > 0) {
+          setRecoverCooldownSeconds(cooldownSeconds);
+          setError(t.resetPasswordRateLimit(cooldownSeconds));
+          return;
+        }
+
         await requestPasswordReset(normalizedEmail);
+        storePasswordResetCooldown(normalizedEmail);
+        setRecoverCooldownSeconds(readPasswordResetCooldownSeconds(normalizedEmail));
         setNotice(t.resetPasswordEmailSent);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      if (mode === "recover" && err instanceof Error && isEmailRateLimitErrorMessage(err.message)) {
+        storePasswordResetCooldown(normalizedEmail);
+        const cooldownSeconds =
+          readPasswordResetCooldownSeconds(normalizedEmail) || PASSWORD_RESET_COOLDOWN_SECONDS;
+        setRecoverCooldownSeconds(cooldownSeconds);
+        setError(t.resetPasswordRateLimit(cooldownSeconds));
+      } else {
+        setError(
+          err instanceof Error ? localizeAuthErrorMessage(err.message) ?? t.authenticationFailed : t.authenticationFailed,
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   }
+
+  const isRecoverCoolingDown = mode === "recover" && recoverCooldownSeconds > 0;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.18),_transparent_28%),linear-gradient(180deg,_#fffaf0_0%,_#f5efe3_100%)] px-6 py-10">
@@ -229,8 +330,14 @@ export default function AuthPage() {
                 </div>
               ) : null}
               <div className="flex gap-3">
-                <PrimaryButton type="submit" disabled={submitting}>
-                  {mode === "signin" ? t.signIn : mode === "signup" ? t.createAccount : t.sendResetLink}
+                <PrimaryButton type="submit" disabled={submitting || isRecoverCoolingDown}>
+                  {mode === "signin"
+                    ? t.signIn
+                    : mode === "signup"
+                      ? t.createAccount
+                      : isRecoverCoolingDown
+                        ? t.sendResetLinkCooldown(recoverCooldownSeconds)
+                        : t.sendResetLink}
                 </PrimaryButton>
                 <SecondaryButton
                   type="button"

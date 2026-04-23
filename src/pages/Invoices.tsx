@@ -467,31 +467,32 @@ export default function Invoices() {
   });
 
   function exportInvoices(format: "csv" | "xlsx") {
+    const fileBase = t.invoicesTitle;
     const rows =
       data?.items.map((invoice) => ({
-        Reference: invoice.number,
-        Status: t[invoice.status],
-        Scope: invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost,
-        Building: invoice.buildingName ?? "",
-        Supplier: invoice.supplierName ?? "",
-        Product: invoice.productName ?? "",
-        Project: invoice.projectName ?? "",
-        CreatedBy: invoice.createdByName ?? "",
-        Total: invoice.totalAmount,
-        Paid: invoice.paidAmount,
-        Currency: invoice.currency,
-        Remaining: invoice.remainingAmount,
-        Date: formatDateInput(invoice.invoiceDate),
-        DueDate: formatDateInput(invoice.dueDate),
-        Notes: invoice.notes ?? "",
+        [t.reference]: invoice.number,
+        [t.status]: t[invoice.status],
+        [t.invoiceAssignment]: invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost,
+        [t.buildingLabel]: invoice.buildingName ?? "",
+        [t.supplierOption]: invoice.supplierName ?? "",
+        [t.products]: invoice.productName ?? "",
+        [t.projectOption]: invoice.projectName ?? "",
+        [t.createdBy]: invoice.createdByName ?? "",
+        [t.totalAmount]: invoice.totalAmount,
+        [t.paidAmount]: invoice.paidAmount,
+        [t.currency]: invoice.currency,
+        [t.remaining_label]: invoice.remainingAmount,
+        [t.invoiceDate]: formatDateInput(invoice.invoiceDate),
+        [t.dueDate]: formatDateInput(invoice.dueDate),
+        [t.notes]: invoice.notes ?? "",
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("expenses.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("expenses.xlsx", "Expenses", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   return (
@@ -507,7 +508,7 @@ export default function Invoices() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportInvoices("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             <PrimaryButton
               onClick={() => {

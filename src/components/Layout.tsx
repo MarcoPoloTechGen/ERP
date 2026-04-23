@@ -83,7 +83,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           type="button"
           className="fixed inset-0 z-30 bg-slate-950/40 md:hidden"
           onClick={() => setMobileOpen(false)}
-          aria-label="Close navigation"
+          aria-label={t.closeNavigation}
         />
       ) : null}
 
@@ -109,6 +109,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               className="rounded-lg p-2 text-sidebar-foreground md:hidden"
               onClick={() => setMobileOpen(false)}
+              aria-label={t.close}
             >
               <X size={18} />
             </button>

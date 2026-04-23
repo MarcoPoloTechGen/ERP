@@ -11,8 +11,6 @@ export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
   const { t } = useLang();
-  const invoiceAssignment = t.invoiceAssignment ?? "Assignment";
-  const projectGlobalCost = t.projectGlobalCost ?? "Project global cost";
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
 
@@ -111,8 +109,8 @@ export default function InvoiceDetail() {
             <p className="mt-1 text-sm font-medium text-foreground">{invoice.projectName ?? "-"}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">{invoiceAssignment}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? projectGlobalCost}</p>
+            <p className="text-xs text-muted-foreground">{t.invoiceAssignment}</p>
+            <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? t.projectGlobalCost}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t.products}</p>
@@ -231,7 +229,7 @@ export default function InvoiceDetail() {
                       {entry.projectName ?? "-"}
                     </td>
                     <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.buildingName ?? projectGlobalCost}
+                      {entry.buildingName ?? t.projectGlobalCost}
                     </td>
                     <td className="border-b border-border px-3 py-3 whitespace-nowrap">
                       {entry.productName ?? "-"}

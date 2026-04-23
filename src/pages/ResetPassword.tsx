@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import BrandMark from "@/components/BrandMark";
 import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
+import { localizeAuthErrorMessage } from "@/lib/auth-utils";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 
@@ -11,7 +12,7 @@ const inputClassName =
   "w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25";
 
 const languages: Array<{ value: Lang; label: string }> = [
-  { value: "ku", label: "Ø³Û†Ø±Ø§Ù†ÛŒ" },
+  { value: "ku", label: "سۆرانی" },
   { value: "en", label: "EN" },
 ];
 
@@ -66,7 +67,7 @@ export default function ResetPasswordPage() {
       setPassword("");
       setConfirmPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to update password.");
+      setError(err instanceof Error ? err.message : t.updatePasswordFailed);
     } finally {
       setSubmitting(false);
     }
@@ -168,7 +169,7 @@ export default function ResetPasswordPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {authCallbackError ?? t.invalidRecoveryLink}
+                    {localizeAuthErrorMessage(authCallbackError) ?? t.invalidRecoveryLink}
                   </p>
                   <PrimaryButton type="button" onClick={() => navigate("/")}>
                     {t.requestNewResetLink}

@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { useLang } from "@/lib/i18n";
 
 export const controlClassName =
   "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -160,8 +161,8 @@ export function PaginationControls({
   total,
   itemLabel,
   onPageChange,
-  previousLabel = "Previous",
-  nextLabel = "Next",
+  previousLabel,
+  nextLabel,
 }: {
   page: number;
   pageCount: number;
@@ -171,6 +172,8 @@ export function PaginationControls({
   previousLabel?: string;
   nextLabel?: string;
 }) {
+  const { t } = useLang();
+
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
@@ -178,13 +181,13 @@ export function PaginationControls({
       </p>
       <div className="flex items-center gap-2">
         <SecondaryButton onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
-          {previousLabel}
+          {previousLabel ?? t.previous}
         </SecondaryButton>
         <span className="min-w-[90px] text-center text-sm text-foreground">
           {page} / {pageCount}
         </span>
         <SecondaryButton onClick={() => onPageChange(page + 1)} disabled={page >= pageCount}>
-          {nextLabel}
+          {nextLabel ?? t.next}
         </SecondaryButton>
       </div>
     </div>
@@ -196,12 +199,14 @@ export function Modal({
   children,
   onClose,
 }: PropsWithChildren<{ title: string; onClose: () => void }>) {
+  const { t } = useLang();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
       <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-card-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <IconButton onClick={onClose} aria-label="Close">
+          <IconButton onClick={onClose} aria-label={t.close}>
             x
           </IconButton>
         </div>

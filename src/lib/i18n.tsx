@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type Lang = "en" | "ku";
-const DEFAULT_LANG: Lang = "ku";
+export const DEFAULT_LANG: Lang = "ku";
 
 type TranslationShape = {
   dir: "ltr" | "rtl";
@@ -38,7 +38,9 @@ type TranslationShape = {
   forgotPassword: string;
   forgotPasswordIntro: string;
   sendResetLink: string;
+  sendResetLinkCooldown: (seconds: number) => string;
   resetPasswordEmailSent: string;
+  resetPasswordRateLimit: (seconds: number) => string;
   accountCreatedCheckEmail: string;
   accountAlreadyExists: string;
   resetPasswordAction: string;
@@ -257,6 +259,30 @@ type TranslationShape = {
   changeCreated: string;
   changeUpdated: string;
   noExpenseLog: string;
+  close: string;
+  closeNavigation: string;
+  excel: string;
+  unexpectedError: string;
+  renderErrorBadge: string;
+  renderErrorTitle: string;
+  renderErrorDescription: string;
+  appLoadingDescription: string;
+  appLoadingSlowDescription: string;
+  configRequiredBadge: string;
+  configRequiredTitle: string;
+  configRequiredDescription: string;
+  variableLabel: string;
+  whereToCheckInVercel: string;
+  vercelEnvHint: string;
+  criticalError: string;
+  appCouldNotStart: string;
+  jsRenderBlocked: string;
+  unhandledPromiseRejection: string;
+  asyncStartupBlocked: string;
+  missingRootElement: string;
+  initialRenderFailed: string;
+  authenticationFailed: string;
+  updatePasswordFailed: string;
 };
 
 function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
@@ -295,7 +321,10 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     forgotPassword: "Forgot password?",
     forgotPasswordIntro: "Enter your email and we will send a secure link to choose a new password.",
     sendResetLink: "Send reset link",
+    sendResetLinkCooldown: (seconds) => `Wait ${seconds}s`,
     resetPasswordEmailSent: "If that email exists, a password reset link has been sent.",
+    resetPasswordRateLimit: (seconds) =>
+      `Please wait ${seconds}s before requesting another reset email.`,
     accountCreatedCheckEmail: "Your account was created. Check your email to confirm it, then sign in.",
     accountAlreadyExists: "An account already exists for this email. Reset the password if you forgot it.",
     resetPasswordAction: "Reset password",
@@ -514,6 +543,35 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     changeCreated: "Created",
     changeUpdated: "Updated",
     noExpenseLog: "No changes recorded for this expense yet.",
+    close: "Close",
+    closeNavigation: "Close navigation",
+    excel: "Excel",
+    unexpectedError: "An unexpected error occurred.",
+    renderErrorBadge: "Render error",
+    renderErrorTitle: "The application hit an error.",
+    renderErrorDescription:
+      "A problem is preventing the interface from rendering correctly. Please try again in a moment. If the issue continues, review the browser console and Supabase configuration.",
+    appLoadingDescription: "The application is preparing your session and database connection.",
+    appLoadingSlowDescription:
+      "Loading is taking longer than expected. We are still waiting for Supabase to respond. If this keeps happening, verify the project configuration and network access.",
+    configRequiredBadge: "Vercel configuration required",
+    configRequiredTitle: "The application cannot connect to Supabase.",
+    configRequiredDescription:
+      "Add the following environment variables in the Vercel project and redeploy.",
+    variableLabel: "Variable",
+    whereToCheckInVercel: "Where to check in Vercel",
+    vercelEnvHint:
+      "Project Settings > Environment Variables. Use the same values as the local .env file for production and preview environments.",
+    criticalError: "Critical error",
+    appCouldNotStart: "The application could not start.",
+    jsRenderBlocked:
+      "A JavaScript error blocked rendering. If the problem continues, verify the Supabase configuration and open the browser console.",
+    unhandledPromiseRejection: "Unhandled promise rejection.",
+    asyncStartupBlocked: "An async error blocked the full application startup.",
+    missingRootElement: "Missing #root element.",
+    initialRenderFailed: "The initial render failed before the application could display.",
+    authenticationFailed: "Authentication failed.",
+    updatePasswordFailed: "Unable to update password.",
   };
 }
 
@@ -537,8 +595,47 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     fullName: "ناوی تەواو",
     fullNamePlaceholder: "ئەحمەد عەلی",
     email: "ئیمەیڵ",
+    emailPlaceholder: "name@company.com",
     password: "وشەی نهێنی",
     passwordPlaceholder: "وشەی نهێنی بنووسە",
+    brandingTitle: "براندینگ",
+    brandingSubtitle: "لۆگۆی کۆمپانیا بەڕێوەببە کە لە ناو ئەپلیکەیشنەکە نیشان دەدرێت.",
+    companyLogo: "لۆگۆی کۆمپانیا",
+    companyLogoHint: "ئەم لۆگۆیە لە بەشی بەڕێوەبەر، لاتەنیشت و شاشەکانی چوونەژوورەوە نیشان دەدرێت.",
+    uploadCompanyLogo: "بارکردنی لۆگۆ",
+    changeCompanyLogo: "گۆڕینی لۆگۆ",
+    removeCompanyLogo: "لابردنی لۆگۆ",
+    saveCompanyLogo: "پاشەکەوتکردنی لۆگۆ",
+    noCompanyLogo: "هێشتا هیچ لۆگۆیەکی کۆمپانیا بارنەکراوە.",
+    companyLogoUpdated: "لۆگۆی کۆمپانیا نوێکرایەوە.",
+    companyLogoRemoved: "لۆگۆی کۆمپانیا لابرا.",
+    forgotPassword: "وشەی نهێنیت لەبیرکردووە؟",
+    forgotPasswordIntro:
+      "ئیمەیڵەکەت بنووسە و بەستەرێکی پارێزراو دەنێرین بۆ هەڵبژاردنی وشەی نهێنیی نوێ.",
+    sendResetLink: "ناردنی بەستەری ڕیسێت",
+    sendResetLinkCooldown: (seconds) => `چاوەڕێی ${seconds}s بکە`,
+    resetPasswordEmailSent: "ئەگەر ئەم ئیمەیڵە هەبوو، بەستەری نوێکردنەوەی وشەی نهێنی بۆی نێردرا.",
+    resetPasswordRateLimit: (seconds) =>
+      `تکایە ${seconds}s چاوەڕێ بکە پێش داواکاریی ئیمەیڵێکی ڕیسێتی تر.`,
+    accountCreatedCheckEmail:
+      "هەژمارەکەت دروستکرا. ئیمەیڵەکەت بپشکنە بۆ پشتڕاستکردنەوە و پاشان بچۆ ژوورەوە.",
+    accountAlreadyExists:
+      "هەژمارێک پێشتر بۆ ئەم ئیمەیڵە هەیە. ئەگەر لەبیرت کردووە، وشەی نهێنی ڕیسێت بکە.",
+    resetPasswordAction: "ڕیسێتکردنی وشەی نهێنی",
+    backToSignIn: "گەڕانەوە بۆ چوونەژوورەوە",
+    resetPasswordPageTitle: "ڕیسێتکردنی وشەی نهێنی",
+    resetPasswordPageIntro: "وشەی نهێنییەکی نوێ بۆ هەژمارەکەت هەڵبژێرە.",
+    preparingRecoveryLink: "بەستەری گەڕاندنەوەکەت دڵنیا دەکەینەوە...",
+    newPassword: "وشەی نهێنیی نوێ",
+    newPasswordPlaceholder: "وشەی نهێنیی نوێ هەڵبژێرە",
+    confirmPassword: "دووبارەکردنەوەی وشەی نهێنی",
+    confirmPasswordPlaceholder: "وشەی نهێنیی نوێ دووبارە بنووسە",
+    updatePassword: "نوێکردنەوەی وشەی نهێنی",
+    passwordUpdated: "وشەی نهێنیەکەت بە سەرکەوتوویی نوێکرایەوە.",
+    passwordMismatch: "وشە نهێنییەکان هاوتا نین.",
+    passwordTooShort: "وشەی نهێنی دەبێت لانیکەم 8 پیت بێت.",
+    invalidRecoveryLink: "ئەم بەستەری ڕیسێتە ناڕەوا یان بەسەرچووە.",
+    requestNewResetLink: "داواکردنی بەستەری ڕیسێتی نوێ",
     authIntro: "بچۆ ژوورەوە بۆ بەدواداچوونی پڕۆژەکان، خەرجییەکان، داهات و دەسەڵاتی تیم.",
     reset: "ڕیسێت",
     dashboardTitle: "داشبۆرد",
@@ -735,6 +832,40 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     newIncomeEntry: "تۆماری نوێی داهات",
     noIncomeEntries: "هێشتا هیچ تۆمارێکی داهات نییە.",
     expenseDetails: "وردەکاری خەرجی",
+    expenseLog: "تۆماری خەرجی",
+    changeType: "جۆری گۆڕانکاری",
+    changeCreated: "دروستکرا",
+    changeUpdated: "نوێکرایەوە",
+    noExpenseLog: "هێشتا هیچ گۆڕانکارییەک بۆ ئەم خەرجییە تۆمارنەکراوە.",
+    close: "داخستن",
+    closeNavigation: "داخستنی ناوبەری",
+    excel: "ئێکسێل",
+    unexpectedError: "هەڵەیەکی چاوەڕواننەکراو ڕوویدا.",
+    renderErrorBadge: "هەڵەی ڕەندەرکردن",
+    renderErrorTitle: "ئەپلیکەیشنەکە تووشی هەڵە بوو.",
+    renderErrorDescription:
+      "کێشەیەک ڕێگری لە ڕەندەرکردنی دروستی ڕووکار دەکات. تکایە دوای کەمێک هەوڵبدەوە. ئەگەر کێشەکە بەردەوام بوو، کۆنسۆڵی وێبگەڕ و ڕێکخستنی Supabase بپشکنە.",
+    appLoadingDescription: "ئەپلیکەیشنەکە دانیشتن و پەیوەندی داتابەیستەکەت ئامادە دەکات.",
+    appLoadingSlowDescription:
+      "بارکردن زیاتر لە چاوەڕوانی کات دەخایەنێت. هێشتا چاوەڕوانی وەڵامی Supabase دەکەین. ئەگەر ئەمە بەردەوام بوو، ڕێکخستنی پڕۆژە و دەستگەیشتنی تۆڕ بپشکنە.",
+    configRequiredBadge: "پێویستی بە ڕێکخستنی Vercel هەیە",
+    configRequiredTitle: "ئەپلیکەیشنەکە ناتوانێت پەیوەندی بە Supabase بکات.",
+    configRequiredDescription:
+      "ئەم گۆڕاوە ژینگەییانە لە پڕۆژەی Vercel زیاد بکە و دووبارە بڵاو بکەرەوە.",
+    variableLabel: "گۆڕاو",
+    whereToCheckInVercel: "شوێنی پشکنین لە Vercel",
+    vercelEnvHint:
+      "لە Project Settings > Environment Variables هەمان بەهاکانی پەڕگەی .env ی ناوخۆیی بۆ ژینگەکانی production و preview بەکاربهێنە.",
+    criticalError: "هەڵەی گرنگ",
+    appCouldNotStart: "ئەپلیکەیشنەکە نەتوانی دەستپێبکات.",
+    jsRenderBlocked:
+      "هەڵەیەکی JavaScript ڕێگری لە ڕەندەرکردن کرد. ئەگەر کێشەکە بەردەوام بوو، ڕێکخستنی Supabase بپشکنە و کۆنسۆڵی وێبگەڕ بکەرەوە.",
+    unhandledPromiseRejection: "ڕەتکردنەوەی promise بەبێ چارەسەر.",
+    asyncStartupBlocked: "هەڵەیەکی async ڕێگری لە دەستپێکی تەواوی ئەپلیکەیشنەکە کرد.",
+    missingRootElement: "ئەڵەمێنتی #root بوونی نییە.",
+    initialRenderFailed: "ڕەندەرکردنی سەرەتایی پێش نیشاندانی ئەپلیکەیشنەکە سەرکەوتوو نەبوو.",
+    authenticationFailed: "پشتڕاستکردنەوەی ناسنامە سەرکەوتوو نەبوو.",
+    updatePasswordFailed: "نوێکردنەوەی وشەی نهێنی سەرکەوتوو نەبوو.",
   };
 }
 
@@ -742,6 +873,15 @@ const translations: Record<Lang, TranslationShape> = {
   en: createEnglishTranslations("ltr"),
   ku: createSoraniTranslations("rtl"),
 };
+
+export function getStoredLang(): Lang {
+  const stored = typeof window !== "undefined" ? window.localStorage.getItem("btp-lang") : null;
+  return stored === "en" || stored === "ku" ? stored : DEFAULT_LANG;
+}
+
+export function getTranslationsForLang(lang: Lang) {
+  return translations[lang];
+}
 
 const LangContext = createContext<{
   lang: Lang;
@@ -754,10 +894,7 @@ const LangContext = createContext<{
 });
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => {
-    const stored = typeof window !== "undefined" ? window.localStorage.getItem("btp-lang") : null;
-    return stored === "en" || stored === "ku" ? stored : DEFAULT_LANG;
-  });
+  const [lang, setLangState] = useState<Lang>(() => getStoredLang());
 
   useEffect(() => {
     document.documentElement.lang = lang === "ku" ? "ckb" : "en";

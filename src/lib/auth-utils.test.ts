@@ -3,6 +3,7 @@ import {
   isPasswordRecoveryCallback,
   isDuplicateSignUpErrorMessage,
   isEmailConfirmationRequiredErrorMessage,
+  isEmailRateLimitErrorMessage,
   isObfuscatedDuplicateSignUpUser,
   readAuthCallbackParams,
 } from "./auth-utils";
@@ -18,6 +19,12 @@ describe("auth helpers", () => {
     expect(isEmailConfirmationRequiredErrorMessage("Email not confirmed")).toBe(true);
     expect(isEmailConfirmationRequiredErrorMessage("Email is not confirmed")).toBe(true);
     expect(isEmailConfirmationRequiredErrorMessage("User already registered")).toBe(false);
+  });
+
+  it("detects auth email rate limits", () => {
+    expect(isEmailRateLimitErrorMessage("Email rate limit exceeded")).toBe(true);
+    expect(isEmailRateLimitErrorMessage("Rate limit exceeded")).toBe(true);
+    expect(isEmailRateLimitErrorMessage("Invalid login credentials")).toBe(false);
   });
 
   it("detects obfuscated duplicate users returned by sign-up", () => {

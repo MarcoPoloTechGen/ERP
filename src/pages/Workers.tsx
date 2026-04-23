@@ -170,22 +170,23 @@ export default function Workers() {
   }, [allWorkers]);
 
   function exportWorkers(format: "csv" | "xlsx") {
+    const fileBase = t.workersTitle;
     const rows =
       workersPage?.items.map((worker) => ({
-        Name: worker.name,
-        Role: worker.role,
-        Category: worker.category ?? "",
-        Phone: worker.phone ?? "",
-        Balance: worker.balance,
-        Status: worker.balance >= 0 ? t.toReceive : t.owes,
+        [t.name]: worker.name,
+        [t.role]: worker.role,
+        [t.category]: worker.category ?? "",
+        [t.phone]: worker.phone ?? "",
+        [t.balance]: worker.balance,
+        [t.status]: worker.balance >= 0 ? t.toReceive : t.owes,
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("workers.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("workers.xlsx", "Workers", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   const deleteMutation = useMutation({
@@ -211,7 +212,7 @@ export default function Workers() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportWorkers("xlsx")} disabled={!workersPage?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             <PrimaryButton
               onClick={() => {

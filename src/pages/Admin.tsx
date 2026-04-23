@@ -249,7 +249,7 @@ export default function Admin() {
                 <div className="flex flex-col gap-5">
                   <div className="min-w-0">
                     <p className="truncate text-base font-semibold text-foreground">
-                      {user.fullName ?? user.email ?? "User"}
+                      {user.fullName ?? user.email ?? t.user}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">{user.email ?? "-"}</p>
                   </div>

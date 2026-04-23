@@ -148,21 +148,22 @@ export default function Suppliers() {
   });
 
   function exportSuppliers(format: "csv" | "xlsx") {
+    const fileBase = t.suppliersTitle;
     const rows =
       data?.items.map((supplier) => ({
-        Name: supplier.name,
-        Contact: supplier.contact ?? "",
-        Phone: supplier.phone ?? "",
-        Email: supplier.email ?? "",
-        Address: supplier.address ?? "",
+        [t.name]: supplier.name,
+        [t.contact]: supplier.contact ?? "",
+        [t.phoneSup]: supplier.phone ?? "",
+        [t.email]: supplier.email ?? "",
+        [t.address]: supplier.address ?? "",
       })) ?? [];
 
     if (format === "csv") {
-      exportRowsToCsv("suppliers.csv", rows);
+      exportRowsToCsv(`${fileBase}.csv`, rows);
       return;
     }
 
-    exportRowsToExcel("suppliers.xlsx", "Suppliers", rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
   }
 
   const deleteMutation = useMutation({
@@ -188,7 +189,7 @@ export default function Suppliers() {
             </SecondaryButton>
             <SecondaryButton onClick={() => exportSuppliers("xlsx")} disabled={!data?.items.length}>
               <FileSpreadsheet size={16} />
-              Excel
+              {t.excel}
             </SecondaryButton>
             <PrimaryButton
               onClick={() => {
