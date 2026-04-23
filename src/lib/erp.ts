@@ -49,6 +49,36 @@ type ProductWritePayload = Pick<
   TableInsertPayload<"products">,
   "name" | "supplier_id" | "project_id" | "building_id" | "unit" | "unit_price" | "currency"
 >;
+type InvoiceWritePayload = Required<
+  Pick<
+    TableUpdatePayload<"invoices">,
+    | "number"
+    | "supplier_id"
+    | "project_id"
+    | "building_id"
+    | "product_id"
+    | "total_amount"
+    | "paid_amount"
+    | "currency"
+    | "status"
+    | "invoice_date"
+    | "due_date"
+    | "notes"
+    | "image_path"
+  >
+>;
+type InvoiceCreatePayload = InvoiceWritePayload & Pick<TableInsertPayload<"invoices">, "created_by">;
+type WorkerTransactionWritePayload = Required<
+  Pick<
+    TableInsertPayload<"worker_transactions">,
+    "worker_id" | "type" | "amount" | "currency" | "description" | "date" | "project_id"
+  >
+>;
+type IncomeTransactionWritePayload = Required<
+  Pick<TableInsertPayload<"income_transactions">, "project_id" | "amount" | "currency" | "description" | "date">
+>;
+type IncomeTransactionCreatePayload = IncomeTransactionWritePayload &
+  Pick<TableInsertPayload<"income_transactions">, "created_by">;
 type AppSettingsUpsertPayload = Pick<
   TableInsertPayload<"app_settings">,
   "id" | "company_logo_path" | "updated_by" | "updated_at"
@@ -603,7 +633,7 @@ function normalizeProduct(row: AppProductRow): Product {
 }
 
 function readInvoiceImage(row: Row) {
-  const rawImageValue = readString(row, "image_url", "imageUrl");
+  const rawImageValue = readString(row, "image_path", "imagePath", "image_url", "imageUrl");
   const imagePath = resolveInvoiceImagePath(rawImageValue);
 
   return {
@@ -1001,54 +1031,62 @@ function normalizeProductInput(input: ProductInput): ProductWritePayload {
 }
 
 function normalizeInvoiceInput(input: InvoiceInput) {
+  const invoiceDate = input.invoiceDate ?? new Date().toISOString().slice(0, 10);
+
   validateInvoiceInput({
     totalAmount: input.totalAmount,
     paidAmount: input.paidAmount,
-    invoiceDate: input.invoiceDate,
+    invoiceDate,
     dueDate: input.dueDate,
   });
 
-  return {
+  const payload: InvoiceWritePayload = {
     number: input.number.trim(),
-    supplierId: input.supplierId,
-    projectId: input.projectId,
-    buildingId: input.buildingId,
-    productId: input.productId,
-    totalAmount: input.totalAmount,
-    paidAmount: input.paidAmount,
+    supplier_id: input.supplierId,
+    project_id: input.projectId,
+    building_id: input.buildingId,
+    product_id: input.productId,
+    total_amount: input.totalAmount,
+    paid_amount: input.paidAmount,
     currency: input.currency,
     status: deriveInvoiceStatus(input.totalAmount, input.paidAmount, input.status),
-    invoiceDate: input.invoiceDate,
-    dueDate: input.dueDate,
+    invoice_date: invoiceDate,
+    due_date: input.dueDate,
     notes: normalizeOptionalText(input.notes),
-    imagePath: normalizeOptionalText(input.imagePath),
+    image_path: normalizeOptionalText(input.imagePath),
   };
+
+  return payload;
 }
 
 function normalizeWorkerTransactionInput(input: WorkerTransactionInput) {
   assertPositiveAmount(input.amount, "Transaction amount");
 
-  return {
-    workerId: input.workerId,
+  const payload: WorkerTransactionWritePayload = {
+    worker_id: input.workerId,
     type: input.type,
     amount: input.amount,
     currency: input.currency,
     description: normalizeOptionalText(input.description),
     date: input.date,
-    projectId: input.projectId,
+    project_id: input.projectId,
   };
+
+  return payload;
 }
 
 function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
   assertPositiveAmount(input.amount, "Income amount");
 
-  return {
-    projectId: input.projectId,
+  const payload: IncomeTransactionWritePayload = {
+    project_id: input.projectId,
     amount: input.amount,
     currency: input.currency,
     description: normalizeOptionalText(input.description),
     date: input.date,
   };
+
+  return payload;
 }
 
 export async function getMyProfile() {
@@ -1339,15 +1377,7 @@ export async function listWorkerTransactions(workerId?: number) {
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
   const payload = normalizeWorkerTransactionInput(input);
-  const { error } = await supabase.from("worker_transactions").insert({
-    worker_id: payload.workerId,
-    type: payload.type,
-    amount: payload.amount,
-    currency: payload.currency,
-    description: payload.description,
-    date: payload.date,
-    project_id: payload.projectId,
-  });
+  const { error } = await supabase.from("worker_transactions").insert(payload);
 
   if (error) {
     throw new Error(error.message);
@@ -1508,23 +1538,11 @@ export async function listInvoiceHistory(invoiceId: number) {
 
 export async function createInvoice(input: InvoiceInput) {
   const currentUserId = await getCurrentUserId();
-  const payload = normalizeInvoiceInput(input);
-  const { error } = await supabase.from("invoices").insert({
-    number: payload.number,
-    supplier_id: payload.supplierId,
-    project_id: payload.projectId,
-    building_id: payload.buildingId,
-    product_id: payload.productId,
-    total_amount: payload.totalAmount,
-    paid_amount: payload.paidAmount,
-    currency: payload.currency,
-    status: payload.status,
-    invoice_date: payload.invoiceDate,
-    due_date: payload.dueDate,
-    notes: payload.notes,
-    image_url: payload.imagePath,
+  const payload: InvoiceCreatePayload = {
+    ...normalizeInvoiceInput(input),
     created_by: currentUserId,
-  });
+  };
+  const { error } = await supabase.from("invoices").insert(payload);
 
   if (error) {
     throw new Error(error.message);
@@ -1532,24 +1550,10 @@ export async function createInvoice(input: InvoiceInput) {
 }
 
 export async function updateInvoice(id: number, input: InvoiceInput) {
-  const payload = normalizeInvoiceInput(input);
+  const payload: InvoiceWritePayload = normalizeInvoiceInput(input);
   const { error } = await supabase
     .from("invoices")
-    .update({
-      number: payload.number,
-      supplier_id: payload.supplierId,
-      project_id: payload.projectId,
-      building_id: payload.buildingId,
-      product_id: payload.productId,
-      total_amount: payload.totalAmount,
-      paid_amount: payload.paidAmount,
-      currency: payload.currency,
-      status: payload.status,
-      invoice_date: payload.invoiceDate,
-      due_date: payload.dueDate,
-      notes: payload.notes,
-      image_url: payload.imagePath,
-    })
+    .update(payload)
     .eq("id", id);
 
   if (error) {
@@ -1617,15 +1621,11 @@ export async function listIncomeTransactionsPage(filters: IncomePageFilters = {}
 
 export async function createIncomeTransaction(input: IncomeTransactionInput) {
   const currentUserId = await getCurrentUserId();
-  const payload = normalizeIncomeTransactionInput(input);
-  const { error } = await supabase.from("income_transactions").insert({
-    project_id: payload.projectId,
-    amount: payload.amount,
-    currency: payload.currency,
-    description: payload.description,
-    date: payload.date,
+  const payload: IncomeTransactionCreatePayload = {
+    ...normalizeIncomeTransactionInput(input),
     created_by: currentUserId,
-  });
+  };
+  const { error } = await supabase.from("income_transactions").insert(payload);
 
   if (error) {
     throw new Error(error.message);

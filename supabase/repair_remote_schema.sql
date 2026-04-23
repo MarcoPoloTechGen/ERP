@@ -70,10 +70,10 @@ create table if not exists public.invoices (
   paid_amount numeric(12,2) not null default 0,
   currency text not null default 'USD',
   status text not null default 'unpaid',
-  invoice_date date,
+  invoice_date date not null default current_date,
   due_date date,
   notes text,
-  image_url text,
+  image_path text,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now()
 );
@@ -120,7 +120,8 @@ alter table public.products
 
 alter table public.invoices
   alter column currency set default 'USD',
-  alter column status set default 'unpaid';
+  alter column status set default 'unpaid',
+  alter column invoice_date set default current_date;
 
 alter table public.worker_transactions
   alter column currency set default 'USD';
@@ -141,11 +142,38 @@ alter table public.invoices add column if not exists building_id bigint referenc
 alter table public.invoices add column if not exists product_id bigint references public.products(id) on delete set null;
 alter table public.invoices add column if not exists currency text not null default 'USD';
 alter table public.invoices add column if not exists created_by uuid references public.profiles(id) on delete set null;
-alter table public.invoices add column if not exists image_url text;
+alter table public.invoices add column if not exists image_path text;
 alter table public.worker_transactions add column if not exists project_id bigint references public.projects(id) on delete set null;
 alter table public.worker_transactions add column if not exists currency text not null default 'USD';
 alter table public.income_transactions add column if not exists currency text not null default 'USD';
 alter table public.income_transactions add column if not exists created_by uuid references public.profiles(id) on delete set null;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'invoices'
+      and column_name = 'image_url'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'invoices'
+      and column_name = 'image_path'
+  ) then
+    alter table public.invoices rename column image_url to image_path;
+  end if;
+end
+$$;
+
+update public.invoices
+set invoice_date = coalesce(invoice_date, created_at::date, current_date)
+where invoice_date is null;
+
+alter table public.invoices
+  alter column invoice_date set not null;
 
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check check (role in ('admin', 'user'));
@@ -606,7 +634,7 @@ select
   i.invoice_date,
   i.due_date,
   i.notes,
-  i.image_url,
+  i.image_path,
   i.created_by,
   coalesce(created_profile.full_name, created_profile.email) as created_by_name,
   i.created_at
@@ -1025,7 +1053,7 @@ create table if not exists public.invoice_history (
   invoice_date date,
   due_date date,
   notes text,
-  image_url text,
+  image_path text,
   changed_by uuid references public.profiles(id) on delete set null,
   changed_by_name text,
   changed_at timestamptz not null default now()
@@ -1033,6 +1061,26 @@ create table if not exists public.invoice_history (
 
 create index if not exists idx_invoice_history_invoice_id on public.invoice_history(invoice_id);
 create index if not exists idx_invoice_history_changed_at on public.invoice_history(changed_at);
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'invoice_history'
+      and column_name = 'image_url'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'invoice_history'
+      and column_name = 'image_path'
+  ) then
+    alter table public.invoice_history rename column image_url to image_path;
+  end if;
+end
+$$;
 
 create or replace function public.log_invoice_history()
 returns trigger
@@ -1111,7 +1159,7 @@ begin
     invoice_date,
     due_date,
     notes,
-    image_url,
+    image_path,
     changed_by,
     changed_by_name,
     changed_at
@@ -1135,7 +1183,7 @@ begin
     new.invoice_date,
     new.due_date,
     new.notes,
-    new.image_url,
+    new.image_path,
     actor_id,
     actor_name,
     case when tg_op = 'INSERT' then coalesce(new.created_at, now()) else now() end
@@ -1169,7 +1217,7 @@ insert into public.invoice_history (
   invoice_date,
   due_date,
   notes,
-  image_url,
+  image_path,
   changed_by,
   changed_by_name,
   changed_at
@@ -1193,7 +1241,7 @@ select
   i.invoice_date,
   i.due_date,
   i.notes,
-  i.image_url,
+  i.image_path,
   i.created_by,
   coalesce(created_profile.full_name, created_profile.email),
   coalesce(i.created_at, now())
@@ -1238,7 +1286,7 @@ select
   ih.invoice_date,
   ih.due_date,
   ih.notes,
-  ih.image_url,
+  ih.image_path,
   ih.changed_by,
   ih.changed_by_name,
   ih.changed_at

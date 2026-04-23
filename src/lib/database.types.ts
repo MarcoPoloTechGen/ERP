@@ -109,7 +109,7 @@ export type Database = {
           currency: string
           due_date: string | null
           id: number
-          image_url: string | null
+          image_path: string | null
           invoice_date: string | null
           invoice_id: number
           notes: string | null
@@ -134,7 +134,7 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: number
-          image_url?: string | null
+          image_path?: string | null
           invoice_date?: string | null
           invoice_id: number
           notes?: string | null
@@ -159,7 +159,7 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: number
-          image_url?: string | null
+          image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number
           notes?: string | null
@@ -248,7 +248,7 @@ export type Database = {
           currency: string
           due_date: string | null
           id: number
-          image_url: string | null
+          image_path: string | null
           invoice_date: string
           notes: string | null
           number: string
@@ -266,8 +266,8 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: number
-          image_url?: string | null
-          invoice_date: string
+          image_path?: string | null
+          invoice_date?: string
           notes?: string | null
           number: string
           paid_amount?: number
@@ -284,7 +284,7 @@ export type Database = {
           currency?: string
           due_date?: string | null
           id?: number
-          image_url?: string | null
+          image_path?: string | null
           invoice_date?: string
           notes?: string | null
           number?: string
@@ -670,7 +670,7 @@ export type Database = {
           currency: string | null
           due_date: string | null
           id: number | null
-          image_url: string | null
+          image_path: string | null
           invoice_date: string | null
           invoice_id: number | null
           notes: string | null
@@ -696,7 +696,7 @@ export type Database = {
           currency?: string | null
           due_date?: string | null
           id?: number | null
-          image_url?: string | null
+          image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number | null
           notes?: string | null
@@ -722,7 +722,7 @@ export type Database = {
           currency?: string | null
           due_date?: string | null
           id?: number | null
-          image_url?: string | null
+          image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number | null
           notes?: string | null
@@ -814,7 +814,7 @@ export type Database = {
           currency: string | null
           due_date: string | null
           id: number | null
-          image_url: string | null
+          image_path: string | null
           invoice_date: string | null
           notes: string | null
           number: string | null

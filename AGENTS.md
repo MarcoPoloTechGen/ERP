@@ -5,7 +5,6 @@
 - This application is already in production.
 - Prefer small, targeted, low-risk changes over broad refactors.
 - Preserve current behavior unless the user explicitly asks for a behavior change.
-- Read the relevant files before editing them.
 
 ## Code And Naming
 
@@ -40,6 +39,5 @@
 
 ## Working Style
 
-- Explain planned edits briefly before making substantial changes.
-- After making changes, run the relevant checks or tests when possible.
+- Explain planned edits briefly before making changes.
 - Call out assumptions, risks, and any unverified areas in the final handoff.

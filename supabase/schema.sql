@@ -78,10 +78,10 @@ create table if not exists public.invoices (
   paid_amount numeric(12,2) not null default 0 check (paid_amount >= 0 and paid_amount <= total_amount),
   currency text not null default 'USD' check (currency in ('USD', 'IQD')),
   status text not null default 'unpaid' check (status in ('unpaid', 'partial', 'paid')),
-  invoice_date date,
+  invoice_date date not null default current_date,
   due_date date,
   notes text,
-  image_url text,
+  image_path text,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   constraint invoices_dates_check check (due_date is null or invoice_date is null or due_date >= invoice_date)
@@ -539,7 +539,7 @@ select
   i.invoice_date,
   i.due_date,
   i.notes,
-  i.image_url,
+  i.image_path,
   i.created_by,
   coalesce(created_profile.full_name, created_profile.email) as created_by_name,
   i.created_at
@@ -1020,7 +1020,7 @@ create table if not exists public.invoice_history (
   invoice_date date,
   due_date date,
   notes text,
-  image_url text,
+  image_path text,
   changed_by uuid references public.profiles(id) on delete set null,
   changed_by_name text,
   changed_at timestamptz not null default now()
@@ -1106,7 +1106,7 @@ begin
     invoice_date,
     due_date,
     notes,
-    image_url,
+    image_path,
     changed_by,
     changed_by_name,
     changed_at
@@ -1130,7 +1130,7 @@ begin
     new.invoice_date,
     new.due_date,
     new.notes,
-    new.image_url,
+    new.image_path,
     actor_id,
     actor_name,
     case when tg_op = 'INSERT' then coalesce(new.created_at, now()) else now() end
@@ -1164,7 +1164,7 @@ insert into public.invoice_history (
   invoice_date,
   due_date,
   notes,
-  image_url,
+  image_path,
   changed_by,
   changed_by_name,
   changed_at
@@ -1188,7 +1188,7 @@ select
   i.invoice_date,
   i.due_date,
   i.notes,
-  i.image_url,
+  i.image_path,
   i.created_by,
   coalesce(created_profile.full_name, created_profile.email),
   coalesce(i.created_at, now())
@@ -1233,7 +1233,7 @@ select
   ih.invoice_date,
   ih.due_date,
   ih.notes,
-  ih.image_url,
+  ih.image_path,
   ih.changed_by,
   ih.changed_by_name,
   ih.changed_at
