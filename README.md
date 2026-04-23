@@ -7,6 +7,7 @@ Application ERP simple pour chantier, construite avec `React`, `Vite`, `Supabase
 ```bash
 pnpm install
 pnpm dev
+pnpm supabase:types
 pnpm typecheck
 pnpm build
 ```
@@ -32,3 +33,9 @@ VITE_SUPABASE_ANON_KEY=...
 - Framework preset : `Vite`
 - Root directory : `/`
 - Variables a definir : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Modules standards Vercel actifs : `@vercel/analytics`, `@vercel/speed-insights`
+
+## Standardisation Supabase
+
+- Les types Supabase sont generes dans `src/lib/database.types.ts`
+- Pour les regenerer depuis le projet lie : `pnpm supabase:types`

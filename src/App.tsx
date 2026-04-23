@@ -1,4 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import Layout from "@/components/Layout";
@@ -232,13 +234,17 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <LangProvider>
-            {supabaseConfigError ? (
-              <MissingConfigScreen />
-            ) : (
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AppRouter />
-              </WouterRouter>
-            )}
+            <>
+              {supabaseConfigError ? (
+                <MissingConfigScreen />
+              ) : (
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AppRouter />
+                </WouterRouter>
+              )}
+              <Analytics />
+              <SpeedInsights />
+            </>
           </LangProvider>
         </AuthProvider>
       </QueryClientProvider>

@@ -5,6 +5,7 @@ import {
   resolveInvoiceImagePath,
   supabase,
 } from "@/lib/supabase";
+import type { Database, Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 import {
   assertNonNegativeAmount,
   assertPositiveAmount,
@@ -15,6 +16,48 @@ import {
 } from "@/lib/validation";
 
 type Row = Record<string, unknown>;
+type TableName = keyof Database["public"]["Tables"];
+type ViewName = keyof Database["public"]["Views"];
+type RpcName = keyof Database["public"]["Functions"];
+
+type TableRow<Name extends TableName> = Tables<Name>;
+type ViewRow<Name extends ViewName> = Tables<Name>;
+type TableInsertPayload<Name extends TableName> = TablesInsert<Name>;
+type TableUpdatePayload<Name extends TableName> = TablesUpdate<Name>;
+type RpcArgs<Name extends RpcName> = Database["public"]["Functions"][Name]["Args"];
+type RpcReturns<Name extends RpcName> = Database["public"]["Functions"][Name]["Returns"];
+
+type ProfileRow = TableRow<"profiles">;
+type AppSettingsRow = TableRow<"app_settings">;
+type ProjectMembershipRow = TableRow<"project_memberships">;
+type WorkerRow = TableRow<"workers">;
+type SupplierRow = TableRow<"suppliers">;
+type ProjectBuildingRow = TableRow<"project_buildings">;
+type AppProjectRow = ViewRow<"app_projects">;
+type AppProductRow = ViewRow<"app_products">;
+type AppInvoiceRow = ViewRow<"app_invoices">;
+type AppInvoiceHistoryRow = ViewRow<"app_invoice_history">;
+type AppWorkerTransactionRow = ViewRow<"app_worker_transactions">;
+type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
+
+type WorkerWritePayload = Pick<TableInsertPayload<"workers">, "name" | "role" | "category" | "phone">;
+type SupplierWritePayload = Pick<
+  TableInsertPayload<"suppliers">,
+  "name" | "contact" | "phone" | "email" | "address"
+>;
+type ProductWritePayload = Pick<
+  TableInsertPayload<"products">,
+  "name" | "supplier_id" | "project_id" | "building_id" | "unit" | "unit_price" | "currency"
+>;
+type AppSettingsUpsertPayload = Pick<
+  TableInsertPayload<"app_settings">,
+  "id" | "company_logo_path" | "updated_by" | "updated_at"
+>;
+type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
+type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
+type InvoicePaidUpdatePayload = Pick<TableUpdatePayload<"invoices">, "paid_amount" | "status">;
+type ReplaceUserProjectMembershipsArgs = RpcArgs<"replace_user_project_memberships">;
+type DashboardOverviewRpcResult = RpcReturns<"get_dashboard_overview">;
 
 export type ProjectStatus = "active" | "completed" | "paused";
 export type InvoiceStatus = "unpaid" | "partial" | "paid";
@@ -459,7 +502,7 @@ function toUserRole(value: unknown): UserRole {
   return value === "admin" ? "admin" : "user";
 }
 
-function normalizeProfile(row: Row): AppUserProfile {
+function normalizeProfile(row: ProfileRow): AppUserProfile {
   return {
     id: readString(row, "id") ?? "",
     email: readString(row, "email"),
@@ -469,7 +512,7 @@ function normalizeProfile(row: Row): AppUserProfile {
   };
 }
 
-function normalizeAppSettings(row: Row): AppSettings {
+function normalizeAppSettings(row: AppSettingsRow): AppSettings {
   const companyLogoPath = readString(row, "company_logo_path", "companyLogoPath");
   const updatedAt = readDate(row, "updated_at", "updatedAt");
   const companyLogoUrl = companyLogoPath ? getPublicBrandingAssetUrl(companyLogoPath) : null;
@@ -485,7 +528,7 @@ function normalizeAppSettings(row: Row): AppSettings {
   };
 }
 
-function normalizeProjectMembership(row: Row): ProjectMembership {
+function normalizeProjectMembership(row: ProjectMembershipRow): ProjectMembership {
   return {
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
@@ -494,7 +537,7 @@ function normalizeProjectMembership(row: Row): ProjectMembership {
   };
 }
 
-function normalizeWorker(row: Row): Worker {
+function normalizeWorker(row: WorkerRow): Worker {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed worker",
@@ -506,7 +549,7 @@ function normalizeWorker(row: Row): Worker {
   };
 }
 
-function normalizeSupplier(row: Row): Supplier {
+function normalizeSupplier(row: SupplierRow): Supplier {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed supplier",
@@ -518,7 +561,7 @@ function normalizeSupplier(row: Row): Supplier {
   };
 }
 
-function normalizeProject(row: Row): Project {
+function normalizeProject(row: AppProjectRow): Project {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed project",
@@ -533,7 +576,7 @@ function normalizeProject(row: Row): Project {
   };
 }
 
-function normalizeProjectBuilding(row: Row): ProjectBuilding {
+function normalizeProjectBuilding(row: ProjectBuildingRow): ProjectBuilding {
   return {
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
@@ -542,7 +585,7 @@ function normalizeProjectBuilding(row: Row): ProjectBuilding {
   };
 }
 
-function normalizeProduct(row: Row): Product {
+function normalizeProduct(row: AppProductRow): Product {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed product",
@@ -569,7 +612,7 @@ function readInvoiceImage(row: Row) {
   };
 }
 
-function normalizeInvoice(row: Row): Invoice {
+function normalizeInvoice(row: AppInvoiceRow): Invoice {
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
   const { imagePath, imageUrl } = readInvoiceImage(row);
@@ -602,7 +645,7 @@ function normalizeInvoice(row: Row): Invoice {
   };
 }
 
-function normalizeInvoiceHistoryEntry(row: Row): InvoiceHistoryEntry {
+function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistoryEntry {
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
   const { imagePath, imageUrl } = readInvoiceImage(row);
@@ -637,7 +680,7 @@ function normalizeInvoiceHistoryEntry(row: Row): InvoiceHistoryEntry {
   };
 }
 
-function normalizeWorkerTransaction(row: Row): WorkerTransaction {
+function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransaction {
   return {
     id: readId(row, "id"),
     workerId: readId(row, "worker_id", "workerId"),
@@ -652,7 +695,7 @@ function normalizeWorkerTransaction(row: Row): WorkerTransaction {
   };
 }
 
-function normalizeIncomeTransaction(row: Row): IncomeTransaction {
+function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransaction {
   return {
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
@@ -757,33 +800,38 @@ function applySearch(query: any, search: string | undefined, columns: string[]) 
   return query.or(columns.map((column) => `${column}.ilike.%${safeSearch}%`).join(","));
 }
 
-async function executeSelect<T>(
-  query: PromiseLike<{ data: unknown; error: { message: string } | null }>,
-  normalize: (row: Row) => T,
+async function executeSelect<TRow extends Row, T>(
+  query: PromiseLike<{ data: TRow[] | null; error: { message: string } | null }>,
+  normalize: (row: TRow) => T,
 ) {
   const { data, error } = await query;
   if (error) {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as Row[]).map((row) => normalize(asRow(row)));
+  return (data ?? []).map((row) => normalize(row));
 }
 
-async function executeSingle<T>(
-  query: PromiseLike<{ data: unknown; error: { message: string } | null }>,
-  normalize: (row: Row) => T,
+async function executeSingle<TRow extends Row, T>(
+  query: PromiseLike<{ data: TRow | null; error: { message: string } | null }>,
+  normalize: (row: TRow) => T,
 ) {
   const { data, error } = await query;
   if (error) {
     throw new Error(error.message);
   }
 
-  return normalize(asRow(data));
+  return normalize(data as TRow);
 }
 
-async function executePaged<T>(
-  query: any,
-  normalize: (row: Row) => T,
+async function executePaged<TRow extends Row, T>(
+  query: {
+    range: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: TRow[] | null; error: { message: string } | null; count: number | null }>;
+  },
+  normalize: (row: TRow) => T,
   page?: number,
   pageSize?: number,
 ) {
@@ -793,7 +841,7 @@ async function executePaged<T>(
     throw new Error(error.message);
   }
 
-  const items = ((data ?? []) as Row[]).map((row) => normalize(asRow(row)));
+  const items = (data ?? []).map((row) => normalize(row));
   return buildPaginatedResult(items, count ?? items.length, pagination.page, pagination.pageSize);
 }
 
@@ -900,7 +948,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
   };
 }
 
-function normalizeWorkerInput(input: WorkerInput) {
+function normalizeWorkerInput(input: WorkerInput): WorkerWritePayload {
   return {
     name: input.name.trim(),
     role: input.role.trim(),
@@ -909,7 +957,7 @@ function normalizeWorkerInput(input: WorkerInput) {
   };
 }
 
-function normalizeSupplierInput(input: SupplierInput) {
+function normalizeSupplierInput(input: SupplierInput): SupplierWritePayload {
   return {
     name: input.name.trim(),
     contact: normalizeOptionalText(input.contact),
@@ -938,16 +986,16 @@ function normalizeProjectInput(input: ProjectInput) {
   };
 }
 
-function normalizeProductInput(input: ProductInput) {
+function normalizeProductInput(input: ProductInput): ProductWritePayload {
   assertNonNegativeAmount(input.unitPrice, "Unit price");
 
   return {
     name: input.name.trim(),
-    supplierId: input.supplierId,
-    projectId: input.projectId,
-    buildingId: input.buildingId,
+    supplier_id: input.supplierId,
+    project_id: input.projectId,
+    building_id: input.buildingId,
     unit: normalizeOptionalText(input.unit),
-    unitPrice: input.unitPrice,
+    unit_price: input.unitPrice,
     currency: input.currency,
   };
 }
@@ -1014,7 +1062,7 @@ export async function getMyProfile() {
     throw new Error(error.message);
   }
 
-  return data ? normalizeProfile(asRow(data)) : null;
+  return data ? normalizeProfile(data) : null;
 }
 
 export async function getAppSettings() {
@@ -1028,22 +1076,27 @@ export async function getAppSettings() {
     throw new Error(error.message);
   }
 
-  return normalizeAppSettings(asRow(data ?? { id: "default" }));
+  const fallbackSettingsRow: AppSettingsRow = {
+    id: "default",
+    company_logo_path: null,
+    updated_at: "",
+    updated_by: null,
+  };
+
+  return normalizeAppSettings(data ?? fallbackSettingsRow);
 }
 
 export async function updateCompanyLogoPath(companyLogoPath: string | null) {
   const currentUserId = await getCurrentUserId();
-  const { error } = await supabase.from("app_settings").upsert(
-    {
-      id: "default",
-      company_logo_path: companyLogoPath,
-      updated_by: currentUserId,
-      updated_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "id",
-    },
-  );
+  const payload: AppSettingsUpsertPayload = {
+    id: "default",
+    company_logo_path: companyLogoPath,
+    updated_by: currentUserId,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("app_settings").upsert(payload, {
+    onConflict: "id",
+  });
 
   if (error) {
     throw new Error(error.message);
@@ -1058,7 +1111,8 @@ export async function listProfiles() {
 }
 
 export async function updateProfileRole(id: string, role: UserRole) {
-  const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+  const payload: ProfileRoleUpdatePayload = { role };
+  const { error } = await supabase.from("profiles").update(payload).eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
@@ -1070,7 +1124,8 @@ export async function updateProfileName(id: string, fullName: string) {
     throw new Error("Full name is required.");
   }
 
-  const { error } = await supabase.from("profiles").update({ full_name: trimmedFullName }).eq("id", id);
+  const payload: ProfileNameUpdatePayload = { full_name: trimmedFullName };
+  const { error } = await supabase.from("profiles").update(payload).eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
@@ -1084,11 +1139,11 @@ export async function listProjectMemberships() {
 }
 
 export async function replaceUserProjectMemberships(userId: string, projectIds: number[]) {
-  const { error } = await supabase.rpc("replace_user_project_memberships", {
+  const args: ReplaceUserProjectMembershipsArgs = {
     p_user_id: userId,
     p_project_ids: projectIds,
-  });
-
+  };
+  const { error } = await supabase.rpc("replace_user_project_memberships", args);
   if (error) {
     throw new Error(error.message);
   }
@@ -1337,15 +1392,7 @@ export async function listProductsPage(filters: ProductsPageFilters = {}) {
 
 export async function createProduct(input: ProductInput) {
   const payload = normalizeProductInput(input);
-  const { error } = await supabase.from("products").insert({
-    name: payload.name,
-    supplier_id: payload.supplierId,
-    project_id: payload.projectId,
-    building_id: payload.buildingId,
-    unit: payload.unit,
-    unit_price: payload.unitPrice,
-    currency: payload.currency,
-  });
+  const { error } = await supabase.from("products").insert(payload);
 
   if (error) {
     throw new Error(error.message);
@@ -1354,18 +1401,7 @@ export async function createProduct(input: ProductInput) {
 
 export async function updateProduct(id: number, input: ProductInput) {
   const payload = normalizeProductInput(input);
-  const { error } = await supabase
-    .from("products")
-    .update({
-      name: payload.name,
-      supplier_id: payload.supplierId,
-      project_id: payload.projectId,
-      building_id: payload.buildingId,
-      unit: payload.unit,
-      unit_price: payload.unitPrice,
-      currency: payload.currency,
-    })
-    .eq("id", id);
+  const { error } = await supabase.from("products").update(payload).eq("id", id);
 
   if (error) {
     throw new Error(error.message);
@@ -1522,9 +1558,10 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
 }
 
 export async function markInvoicePaid(id: number, totalAmount: number) {
+  const payload: InvoicePaidUpdatePayload = { paid_amount: totalAmount, status: "paid" };
   const { error } = await supabase
     .from("invoices")
-    .update({ paid_amount: totalAmount, status: "paid" })
+    .update(payload)
     .eq("id", id);
 
   if (error) {
@@ -1602,5 +1639,6 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     return getDashboardOverviewFallback();
   }
 
-  return normalizeDashboardOverview(asRow(data));
+  const overview = data as DashboardOverviewRpcResult;
+  return normalizeDashboardOverview(asRow(overview));
 }

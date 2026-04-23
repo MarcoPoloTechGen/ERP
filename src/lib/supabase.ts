@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -21,8 +22,8 @@ const missingConfigClient = new Proxy(
 );
 
 export const supabase = supabaseConfigError
-  ? (missingConfigClient as ReturnType<typeof createClient>)
-  : createClient(supabaseUrl, supabaseAnonKey, {
+  ? (missingConfigClient as ReturnType<typeof createClient<Database>>)
+  : createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
