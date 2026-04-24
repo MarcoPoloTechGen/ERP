@@ -262,13 +262,18 @@ type TranslationShape = {
   entries: string;
   addIncome: string;
   newIncomeEntry: string;
+  editIncomeEntry: string;
   noIncomeEntries: string;
   deleteIncomeConfirm: string;
+  incomeLog: string;
+  noIncomeLog: string;
   expenseDetails: string;
   expenseLog: string;
+  changeDate: string;
   changeType: string;
   changeCreated: string;
   changeUpdated: string;
+  changeDeleted: string;
   noExpenseLog: string;
   close: string;
   closeNavigation: string;
@@ -557,13 +562,18 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     entries: "Entries",
     addIncome: "Add",
     newIncomeEntry: "New income entry",
+    editIncomeEntry: "Edit income entry",
     noIncomeEntries: "No income entries yet.",
     deleteIncomeConfirm: "Delete this income entry?",
+    incomeLog: "Income log",
+    noIncomeLog: "No income changes recorded yet.",
     expenseDetails: "Expense details",
     expenseLog: "Expense log",
+    changeDate: "Changed at",
     changeType: "Action",
     changeCreated: "Created",
     changeUpdated: "Updated",
+    changeDeleted: "Deleted",
     noExpenseLog: "No changes recorded for this expense yet.",
     close: "Close",
     closeNavigation: "Close navigation",

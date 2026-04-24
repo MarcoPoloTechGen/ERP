@@ -43,6 +43,90 @@ export type Database = {
           },
         ]
       }
+      income_transaction_history: {
+        Row: {
+          amount: number
+          change_type: string
+          changed_at: string
+          changed_by: string | null
+          changed_by_name: string | null
+          currency: string
+          date: string | null
+          description: string | null
+          id: number
+          income_transaction_id: number
+          project_id: number | null
+          project_name: string | null
+          record_status: string
+        }
+        Insert: {
+          amount?: number
+          change_type: string
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          currency?: string
+          date?: string | null
+          description?: string | null
+          id?: number
+          income_transaction_id: number
+          project_id?: number | null
+          project_name?: string | null
+          record_status?: string
+        }
+        Update: {
+          amount?: number
+          change_type?: string
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          currency?: string
+          date?: string | null
+          description?: string | null
+          id?: number
+          income_transaction_id?: number
+          project_id?: number | null
+          project_name?: string | null
+          record_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "income_transaction_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_income_transaction_id_fkey"
+            columns: ["income_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "app_income_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_income_transaction_id_fkey"
+            columns: ["income_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "income_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "app_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       income_transactions: {
         Row: {
           amount: number
@@ -90,6 +174,13 @@ export type Database = {
           {
             foreignKeyName: "income_transactions_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transactions_deleted_by_fkey"
+            columns: ["deleted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -320,6 +411,13 @@ export type Database = {
           total_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_project_id_fkey"
             columns: ["project_id"]
@@ -646,6 +744,90 @@ export type Database = {
       }
     }
     Views: {
+      app_income_transaction_history: {
+        Row: {
+          amount: number | null
+          change_type: string | null
+          changed_at: string | null
+          changed_by: string | null
+          changed_by_name: string | null
+          currency: string | null
+          date: string | null
+          description: string | null
+          id: number | null
+          income_transaction_id: number | null
+          project_id: number | null
+          project_name: string | null
+          record_status: string | null
+        }
+        Insert: {
+          amount?: number | null
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          changed_by_name?: string | null
+          currency?: string | null
+          date?: string | null
+          description?: string | null
+          id?: number | null
+          income_transaction_id?: number | null
+          project_id?: number | null
+          project_name?: string | null
+          record_status?: string | null
+        }
+        Update: {
+          amount?: number | null
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          changed_by_name?: string | null
+          currency?: string | null
+          date?: string | null
+          description?: string | null
+          id?: number | null
+          income_transaction_id?: number | null
+          project_id?: number | null
+          project_name?: string | null
+          record_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "income_transaction_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_income_transaction_id_fkey"
+            columns: ["income_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "app_income_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_income_transaction_id_fkey"
+            columns: ["income_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "income_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "app_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transaction_history_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_income_transactions: {
         Row: {
           amount: number | null
@@ -666,6 +848,13 @@ export type Database = {
           {
             foreignKeyName: "income_transactions_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_transactions_deleted_by_fkey"
+            columns: ["deleted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -860,6 +1049,13 @@ export type Database = {
           total_amount: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "invoices_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invoices_project_id_fkey"
             columns: ["project_id"]

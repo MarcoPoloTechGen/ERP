@@ -38,6 +38,7 @@ type AppProductRow = ViewRow<"app_products">;
 type AppInvoiceRow = ViewRow<"app_invoices">;
 type AppInvoiceHistoryRow = ViewRow<"app_invoice_history">;
 type AppWorkerTransactionRow = ViewRow<"app_worker_transactions">;
+type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
 
 type WorkerWritePayload = Pick<TableInsertPayload<"workers">, "name" | "role" | "category" | "phone">;
@@ -83,7 +84,7 @@ type IncomeTransactionWritePayload = Required<
 >;
 type IncomeTransactionCreatePayload = IncomeTransactionWritePayload &
   Pick<TableInsertPayload<"income_transactions">, "created_by">;
-type IncomeTransactionUpdatePayload = Pick<
+type IncomeTransactionRecordStatusUpdatePayload = Pick<
   TableUpdatePayload<"income_transactions">,
   "record_status" | "deleted_at" | "deleted_by"
 >;
@@ -100,6 +101,7 @@ type DashboardOverviewRpcResult = RpcReturns<"get_dashboard_overview">;
 export type ProjectStatus = "active" | "completed" | "paused";
 export type InvoiceStatus = "unpaid" | "partial" | "paid";
 export type InvoiceHistoryAction = "created" | "updated";
+export type IncomeTransactionHistoryAction = "created" | "updated" | "deleted";
 export type TransactionType = "credit" | "debit";
 export type Currency = "USD" | "IQD";
 export type UserRole = "admin" | "user";
@@ -268,6 +270,22 @@ export interface IncomeTransaction {
   createdAt: string | null;
 }
 
+export interface IncomeTransactionHistoryEntry {
+  id: number;
+  incomeTransactionId: number;
+  action: IncomeTransactionHistoryAction;
+  projectId: number | null;
+  projectName: string | null;
+  amount: number;
+  currency: Currency;
+  description: string | null;
+  date: string | null;
+  recordStatus: RecordStatus;
+  changedBy: string | null;
+  changedByName: string | null;
+  changedAt: string | null;
+}
+
 export interface DashboardProjectSummary {
   id: number;
   name: string;
@@ -399,6 +417,7 @@ export const erpKeys = {
   invoice: (id: number) => ["invoice", id] as const,
   invoiceHistory: (id: number) => ["invoice", id, "history"] as const,
   incomes: ["incomes"] as const,
+  incomeHistory: ["incomeHistory"] as const,
 };
 
 function asRow(value: unknown): Row {
@@ -465,6 +484,14 @@ function toInvoiceStatus(value: unknown, totalAmount = 0, paidAmount = 0): Invoi
 
 function toInvoiceHistoryAction(value: unknown): InvoiceHistoryAction {
   return value === "updated" ? "updated" : "created";
+}
+
+function toIncomeTransactionHistoryAction(value: unknown): IncomeTransactionHistoryAction {
+  if (value === "updated" || value === "deleted") {
+    return value;
+  }
+
+  return "created";
 }
 
 function toRecordStatus(value: unknown): RecordStatus {
@@ -694,6 +721,26 @@ function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransac
     deletedBy: readString(row, "deleted_by", "deletedBy"),
     deletedAt: readDate(row, "deleted_at", "deletedAt"),
     createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeIncomeTransactionHistoryEntry(
+  row: AppIncomeTransactionHistoryRow,
+): IncomeTransactionHistoryEntry {
+  return {
+    id: readId(row, "id"),
+    incomeTransactionId: readId(row, "income_transaction_id", "incomeTransactionId"),
+    action: toIncomeTransactionHistoryAction(readString(row, "change_type", "changeType", "action")),
+    projectId: readNumber(row, "project_id", "projectId"),
+    projectName: readString(row, "project_name", "projectName"),
+    amount: readNumber(row, "amount") ?? 0,
+    currency: toCurrency(readString(row, "currency")),
+    description: readString(row, "description"),
+    date: readDate(row, "date"),
+    recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
+    changedBy: readString(row, "changed_by", "changedBy"),
+    changedByName: readString(row, "changed_by_name", "changedByName"),
+    changedAt: readDate(row, "changed_at", "changedAt"),
   };
 }
 
@@ -988,7 +1035,7 @@ function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
     amount: input.amount,
     currency: input.currency,
     description: normalizeOptionalText(input.description),
-    date: input.date,
+    date: input.date ?? new Date().toISOString().slice(0, 10),
   };
 
   return payload;
@@ -1390,6 +1437,17 @@ export async function listIncomeTransactions() {
   );
 }
 
+export async function listIncomeTransactionHistory() {
+  return executeSelect(
+    supabase
+      .from("app_income_transaction_history")
+      .select("*")
+      .order("changed_at", { ascending: false })
+      .order("id", { ascending: false }),
+    normalizeIncomeTransactionHistoryEntry,
+  );
+}
+
 export async function createIncomeTransaction(input: IncomeTransactionInput) {
   const currentUserId = await getCurrentUserId();
   const payload: IncomeTransactionCreatePayload = {
@@ -1403,9 +1461,22 @@ export async function createIncomeTransaction(input: IncomeTransactionInput) {
   }
 }
 
+export async function updateIncomeTransaction(id: number, input: IncomeTransactionInput) {
+  const payload = normalizeIncomeTransactionInput(input);
+  const { error } = await supabase
+    .from("income_transactions")
+    .update(payload)
+    .eq("id", id)
+    .eq("record_status", "active");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function deleteIncomeTransaction(id: number) {
   const currentUserId = await getCurrentUserId();
-  const payload: IncomeTransactionUpdatePayload = {
+  const payload: IncomeTransactionRecordStatusUpdatePayload = {
     record_status: "deleted",
     deleted_at: new Date().toISOString(),
     deleted_by: currentUserId,

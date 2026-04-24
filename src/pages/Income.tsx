@@ -21,17 +21,21 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { Download, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createIncomeTransaction,
   deleteIncomeTransaction,
   erpKeys,
+  listIncomeTransactionHistory,
   listProjects,
+  updateIncomeTransaction,
   type Currency,
+  type IncomeTransactionHistoryAction,
+  type IncomeTransactionHistoryEntry,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addDateRangeFilter,
@@ -86,10 +90,12 @@ function buildFilters({
 }
 
 function IncomeModal({
+  income,
   open,
   onClose,
   onSaved,
 }: {
+  income: IncomeRow | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -100,15 +106,26 @@ function IncomeModal({
   const [form] = Form.useForm<IncomeFormValues>();
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
 
-  const createMutation = useMutation({
-    mutationFn: (values: IncomeFormValues) =>
-      createIncomeTransaction({
+  const saveMutation = useMutation({
+    mutationFn: (values: IncomeFormValues) => {
+      const payload = {
         projectId: values.projectId,
         amount: values.amount,
         currency: values.currency,
         description: values.description?.trim() || null,
         date: values.date || null,
-      }),
+      };
+
+      if (income) {
+        if (income.id == null) {
+          throw new Error(t.notFound);
+        }
+
+        return updateIncomeTransaction(income.id, payload);
+      }
+
+      return createIncomeTransaction(payload);
+    },
     onSuccess: () => {
       form.resetFields();
       onSaved();
@@ -117,13 +134,28 @@ function IncomeModal({
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 
+  useEffect(() => {
+    if (!open) {
+      form.resetFields();
+      return;
+    }
+
+    form.setFieldsValue({
+      projectId: income?.project_id ?? undefined,
+      amount: income?.amount ?? undefined,
+      currency: asCurrency(income?.currency),
+      description: income?.description ?? "",
+      date: formatDateInput(income?.date) || new Date().toISOString().slice(0, 10),
+    });
+  }, [form, income, open]);
+
   return (
     <Modal
       open={open}
-      title={t.newIncomeEntry}
-      okText={t.create}
+      title={income ? t.editIncomeEntry : t.newIncomeEntry}
+      okText={income ? t.save : t.create}
       cancelText={t.cancel}
-      confirmLoading={createMutation.isPending}
+      confirmLoading={saveMutation.isPending}
       onCancel={onClose}
       onOk={() => form.submit()}
     >
@@ -131,7 +163,7 @@ function IncomeModal({
         form={form}
         layout="vertical"
         initialValues={{ currency: "USD", date: new Date().toISOString().slice(0, 10) }}
-        onFinish={(values) => createMutation.mutate(values)}
+        onFinish={(values) => saveMutation.mutate(values)}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -174,7 +206,8 @@ function IncomeModal({
 export default function Income() {
   const { t } = useLang();
   const { message } = App.useApp();
-  const [open, setOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedIncome, setSelectedIncome] = useState<IncomeRow | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
@@ -200,6 +233,16 @@ export default function Income() {
     setFilters(buildFilters({ search, projectId: projectFilter, currency: currencyFilter, dateFrom, dateTo }), "replace");
   }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters]);
 
+  const historyQuery = useQuery({
+    queryKey: erpKeys.incomeHistory,
+    queryFn: listIncomeTransactionHistory,
+  });
+
+  function refetchIncomeData() {
+    void tableQuery.refetch();
+    void historyQuery.refetch();
+  }
+
   const deleteMutation = useMutation({
     mutationFn: (income: IncomeRow) => {
       if (income.id == null) {
@@ -208,7 +251,7 @@ export default function Income() {
 
       return deleteIncomeTransaction(income.id);
     },
-    onSuccess: () => void tableQuery.refetch(),
+    onSuccess: refetchIncomeData,
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 
@@ -245,21 +288,59 @@ export default function Income() {
         title: "",
         key: "actions",
         align: "right",
-        width: 80,
+        width: 120,
         render: (_, row) =>
           row.id != null && asRecordStatus(row.record_status) === "active" ? (
-            <Popconfirm
-              title={t.deleteIncomeConfirm}
-              okText={t.remove}
-              cancelText={t.cancel}
-              onConfirm={() => deleteMutation.mutate(row)}
-            >
-              <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-            </Popconfirm>
+            <Space size="small">
+              <Button
+                type="text"
+                icon={<Pencil size={16} />}
+                onClick={() => {
+                  setSelectedIncome(row);
+                  setModalOpen(true);
+                }}
+              />
+              <Popconfirm
+                title={t.deleteIncomeConfirm}
+                okText={t.remove}
+                cancelText={t.cancel}
+                onConfirm={() => deleteMutation.mutate(row)}
+              >
+                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+              </Popconfirm>
+            </Space>
           ) : null,
       },
     ],
     [deleteMutation, t],
+  );
+
+  const historyColumns = useMemo<TableProps<IncomeTransactionHistoryEntry>["columns"]>(
+    () => [
+      { title: t.changeDate, dataIndex: "changedAt", render: (value: string | null) => formatDateTime(value) },
+      { title: t.user, dataIndex: "changedByName", render: (value: string | null) => value ?? "-" },
+      {
+        title: t.changeType,
+        dataIndex: "action",
+        render: (value: IncomeTransactionHistoryAction) => {
+          const color = value === "deleted" ? "red" : value === "updated" ? "orange" : "green";
+          const label =
+            value === "deleted" ? t.changeDeleted : value === "updated" ? t.changeUpdated : t.changeCreated;
+          return <Tag color={color}>{label}</Tag>;
+        },
+      },
+      { title: t.projectOption, dataIndex: "projectName", render: (value: string | null) => value ?? "-" },
+      {
+        title: t.amount,
+        dataIndex: "amount",
+        align: "right",
+        render: (value: number, row) => formatCurrency(value, row.currency),
+      },
+      { title: t.currency, dataIndex: "currency" },
+      { title: t.date, dataIndex: "date", render: (value: string | null) => formatDate(value) },
+      { title: t.description, dataIndex: "description", render: (value: string | null) => value ?? "-" },
+    ],
+    [t],
   );
 
   function exportIncome(format: "csv" | "xlsx") {
@@ -294,7 +375,16 @@ export default function Income() {
             <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportIncome("xlsx")}>
               {t.excel}
             </Button>
-            <Button type="primary" icon={<Plus size={16} />} onClick={() => setOpen(true)}>{t.addIncome}</Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
+              onClick={() => {
+                setSelectedIncome(null);
+                setModalOpen(true);
+              }}
+            >
+              {t.addIncome}
+            </Button>
           </Space>
         </Col>
       </Row>
@@ -357,7 +447,38 @@ export default function Income() {
         pagination={tableProps.pagination ? { ...tableProps.pagination, itemRender: undefined, showSizeChanger: false, showTotal: (total) => `${total} ${t.entries.toLowerCase()}` } : false}
       />
 
-      <IncomeModal open={open} onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
+      <Card title={t.incomeLog}>
+        {historyQuery.isError ? (
+          <Alert
+            showIcon
+            type="error"
+            message={t.incomeLog}
+            description={toErrorMessage(historyQuery.error)}
+            action={<Button onClick={() => void historyQuery.refetch()}>{t.retry}</Button>}
+          />
+        ) : (
+          <Table<IncomeTransactionHistoryEntry>
+            rowKey="id"
+            size="small"
+            loading={historyQuery.isLoading}
+            dataSource={historyQuery.data ?? []}
+            columns={historyColumns}
+            scroll={{ x: 1000 }}
+            locale={{ emptyText: t.noIncomeLog }}
+            pagination={{ pageSize: STANDARD_PAGE_SIZE, showSizeChanger: false }}
+          />
+        )}
+      </Card>
+
+      <IncomeModal
+        income={selectedIncome}
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedIncome(null);
+        }}
+        onSaved={refetchIncomeData}
+      />
     </Space>
   );
 }

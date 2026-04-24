@@ -95,12 +95,12 @@ select
   it.currency,
   it.description,
   it.date,
-  it.record_status,
-  it.deleted_at,
-  it.deleted_by,
   it.created_by,
   coalesce(created_profile.full_name, created_profile.email) as created_by_name,
-  it.created_at
+  it.created_at,
+  it.record_status,
+  it.deleted_at,
+  it.deleted_by
 from public.income_transactions as it
 left join public.projects as p
   on p.id = it.project_id
@@ -114,9 +114,6 @@ select
   i.id,
   i.number,
   i.status,
-  i.record_status,
-  i.deleted_at,
-  i.deleted_by,
   i.supplier_id,
   s.name as supplier_name,
   i.project_id,
@@ -135,7 +132,10 @@ select
   i.image_path,
   i.created_by,
   coalesce(created_profile.full_name, created_profile.email) as created_by_name,
-  i.created_at
+  i.created_at,
+  i.record_status,
+  i.deleted_at,
+  i.deleted_by
 from public.invoices as i
 left join public.suppliers as s
   on s.id = i.supplier_id
