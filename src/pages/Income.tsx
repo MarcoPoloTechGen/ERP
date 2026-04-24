@@ -12,7 +12,6 @@ import {
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -21,7 +20,10 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import FinanceFilters from "@/components/finance/FinanceFilters";
+import FinancePageHeader from "@/components/finance/FinancePageHeader";
+import FinanceRowActions from "@/components/finance/FinanceRowActions";
+import { standardPagination } from "@/components/finance/table";
 import {
   createIncomeTransaction,
   deleteIncomeTransaction,
@@ -290,25 +292,19 @@ export default function Income() {
         align: "right",
         width: 120,
         render: (_, row) =>
-          row.id != null && asRecordStatus(row.record_status) === "active" ? (
-            <Space size="small">
-              <Button
-                type="text"
-                icon={<Pencil size={16} />}
-                onClick={() => {
-                  setSelectedIncome(row);
-                  setModalOpen(true);
-                }}
-              />
-              <Popconfirm
-                title={t.deleteIncomeConfirm}
-                okText={t.remove}
-                cancelText={t.cancel}
-                onConfirm={() => deleteMutation.mutate(row)}
-              >
-                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-              </Popconfirm>
-            </Space>
+          row.id != null ? (
+            <FinanceRowActions
+              active={asRecordStatus(row.record_status) === "active"}
+              cancelLabel={t.cancel}
+              deleteLoading={deleteMutation.isPending}
+              deleteTitle={t.deleteIncomeConfirm}
+              removeLabel={t.remove}
+              onDelete={() => deleteMutation.mutate(row)}
+              onEdit={() => {
+                setSelectedIncome(row);
+                setModalOpen(true);
+              }}
+            />
           ) : null,
       },
     ],
@@ -364,71 +360,45 @@ export default function Income() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Row align="bottom" gutter={[16, 16]} justify="space-between">
-        <Col>
-          <Typography.Title level={2} style={{ marginBottom: 4 }}>{t.incomeTitle}</Typography.Title>
-          <Typography.Text type="secondary">{t.income_count(tableQuery.data?.total ?? 0)}</Typography.Text>
-        </Col>
-        <Col>
-          <Space wrap>
-            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportIncome("csv")}>CSV</Button>
-            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportIncome("xlsx")}>
-              {t.excel}
-            </Button>
-            <Button
-              type="primary"
-              icon={<Plus size={16} />}
-              onClick={() => {
-                setSelectedIncome(null);
-                setModalOpen(true);
-              }}
-            >
-              {t.addIncome}
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+      <FinancePageHeader
+        addLabel={t.addIncome}
+        countText={t.income_count(tableQuery.data?.total ?? 0)}
+        excelLabel={t.excel}
+        rowsLength={rows.length}
+        title={t.incomeTitle}
+        onAdd={() => {
+          setSelectedIncome(null);
+          setModalOpen(true);
+        }}
+        onExportCsv={() => exportIncome("csv")}
+        onExportExcel={() => exportIncome("xlsx")}
+      />
 
-      <Card size="small">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={8}>
-            <Input allowClear value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={`${t.search} ${t.income.toLowerCase()}`} />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select
-              value={projectFilter}
-              style={{ width: "100%" }}
-              onChange={setProjectFilter}
-              options={[{ label: t.allProjects, value: "all" }, ...(projects?.map((p) => ({ label: p.name, value: String(p.id) })) ?? [])]}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select<Currency | "all">
-              value={currencyFilter}
-              style={{ width: "100%" }}
-              onChange={setCurrencyFilter}
-              options={[{ label: t.allCurrencies, value: "all" }, { label: "USD", value: "USD" }, { label: "IQD", value: "IQD" }]}
-            />
-          </Col>
-          <Col xs={24} md={8} lg={3}>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </Col>
-          <Col xs={24} md={8} lg={3}>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </Col>
-          <Col xs={24} md={8} lg={2}>
-            <Button block disabled={!hasFilters} onClick={() => {
-              setSearchInput("");
-              setProjectFilter("all");
-              setCurrencyFilter("all");
-              setDateFrom("");
-              setDateTo("");
-            }}>
-              {t.clearFilters}
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+      <FinanceFilters
+        allCurrenciesLabel={t.allCurrencies}
+        allProjectsLabel={t.allProjects}
+        clearLabel={t.clearFilters}
+        currencyValue={currencyFilter}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        hasFilters={hasFilters}
+        projectValue={projectFilter}
+        projects={projects}
+        searchPlaceholder={`${t.search} ${t.income.toLowerCase()}`}
+        searchValue={searchInput}
+        onClear={() => {
+          setSearchInput("");
+          setProjectFilter("all");
+          setCurrencyFilter("all");
+          setDateFrom("");
+          setDateTo("");
+        }}
+        onCurrencyChange={setCurrencyFilter}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        onProjectChange={setProjectFilter}
+        onSearchChange={setSearchInput}
+      />
 
       {tableQuery.isError ? (
         <Alert
@@ -444,7 +414,7 @@ export default function Income() {
         {...tableProps}
         rowKey="id"
         columns={columns}
-        pagination={tableProps.pagination ? { ...tableProps.pagination, itemRender: undefined, showSizeChanger: false, showTotal: (total) => `${total} ${t.entries.toLowerCase()}` } : false}
+        pagination={standardPagination(tableProps.pagination, (total) => `${total} ${t.entries.toLowerCase()}`)}
       />
 
       <Card title={t.incomeLog}>
@@ -470,15 +440,17 @@ export default function Income() {
         )}
       </Card>
 
-      <IncomeModal
-        income={selectedIncome}
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedIncome(null);
-        }}
-        onSaved={refetchIncomeData}
-      />
+      {modalOpen ? (
+        <IncomeModal
+          income={selectedIncome}
+          open
+          onClose={() => {
+            setModalOpen(false);
+            setSelectedIncome(null);
+          }}
+          onSaved={refetchIncomeData}
+        />
+      ) : null}
     </Space>
   );
 }

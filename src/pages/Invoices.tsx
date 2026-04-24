@@ -2,19 +2,16 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
 import {
   App,
   Alert,
   Button,
-  Card,
   Col,
   Form,
   Image as AntImage,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -24,7 +21,11 @@ import {
   Upload,
   type TableProps,
 } from "antd";
-import { ChevronRight, Download, FileSpreadsheet, Image as ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
+import { Image as ImageIcon } from "lucide-react";
+import FinanceFilters from "@/components/finance/FinanceFilters";
+import FinancePageHeader from "@/components/finance/FinancePageHeader";
+import FinanceRowActions from "@/components/finance/FinanceRowActions";
+import { standardPagination } from "@/components/finance/table";
 import {
   createInvoice,
   deleteInvoice,
@@ -664,33 +665,19 @@ export default function Invoices() {
       align: "right",
       width: 144,
       render: (_, invoice) => (
-        <Space size="small">
-          {invoice.id != null && asRecordStatus(invoice.record_status) === "active" ? (
-            <>
-              <Button
-                type="text"
-                icon={<Pencil size={16} />}
-                onClick={() => {
-                  setSelectedInvoice(invoice);
-                  setOpen(true);
-                }}
-              />
-              <Popconfirm
-                title={t.deleteInvoiceConfirm}
-                okText={t.remove}
-                cancelText={t.cancel}
-                onConfirm={() => deleteMutation.mutate(invoice)}
-              >
-                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-              </Popconfirm>
-            </>
-          ) : null}
-          {invoice.id != null ? (
-            <Link href={`/expenses/${invoice.id}`}>
-              <Button type="text" icon={<ChevronRight size={16} />} />
-            </Link>
-          ) : null}
-        </Space>
+        <FinanceRowActions
+          active={invoice.id != null && asRecordStatus(invoice.record_status) === "active"}
+          cancelLabel={t.cancel}
+          deleteLoading={deleteMutation.isPending}
+          deleteTitle={t.deleteInvoiceConfirm}
+          detailHref={invoice.id != null ? `/expenses/${invoice.id}` : undefined}
+          removeLabel={t.remove}
+          onDelete={() => deleteMutation.mutate(invoice)}
+          onEdit={() => {
+            setSelectedInvoice(invoice);
+            setOpen(true);
+          }}
+        />
       ),
     },
   ];
@@ -725,117 +712,59 @@ export default function Invoices() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Row align="bottom" gutter={[16, 16]} justify="space-between">
-        <Col>
-          <Typography.Title level={2} style={{ marginBottom: 4 }}>
-            {t.invoicesTitle}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t.expense_count(tableQuery.data?.total ?? 0)}</Typography.Text>
-        </Col>
-        <Col>
-          <Space wrap>
-            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportInvoices("csv")}>
-              CSV
-            </Button>
-            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportInvoices("xlsx")}>
-              {t.excel}
-            </Button>
-            <Button
-              type="primary"
-              icon={<Plus size={16} />}
-              onClick={() => {
-                setSelectedInvoice(undefined);
-                setOpen(true);
-              }}
-            >
-              {t.addInvoice}
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+      <FinancePageHeader
+        addLabel={t.addInvoice}
+        countText={t.expense_count(tableQuery.data?.total ?? 0)}
+        excelLabel={t.excel}
+        rowsLength={rows.length}
+        title={t.invoicesTitle}
+        onAdd={() => {
+          setSelectedInvoice(undefined);
+          setOpen(true);
+        }}
+        onExportCsv={() => exportInvoices("csv")}
+        onExportExcel={() => exportInvoices("xlsx")}
+      />
 
-      <Card size="small">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} lg={8}>
-            <Input
-              allowClear
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={`${t.search} ${t.expenses.toLowerCase()}`}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select<InvoiceStatus | "all">
-              value={statusFilter}
-              style={{ width: "100%" }}
-              onChange={setStatusFilter}
-              options={[
-                { label: t.allStatuses, value: "all" },
-                { label: t.unpaidFilter, value: "unpaid" },
-                { label: t.partialFilter, value: "partial" },
-                { label: t.paidFilter, value: "paid" },
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select
-              value={projectFilter}
-              style={{ width: "100%" }}
-              onChange={setProjectFilter}
-              options={[
-                { label: t.allProjects, value: "all" },
-                ...(projects?.map((project) => ({ label: project.name, value: String(project.id) })) ?? []),
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select
-              value={supplierFilter}
-              style={{ width: "100%" }}
-              onChange={setSupplierFilter}
-              options={[
-                { label: t.allSuppliers, value: "all" },
-                ...(suppliers?.map((supplier) => ({ label: supplier.name, value: String(supplier.id) })) ?? []),
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
-            <Select<Currency | "all">
-              value={currencyFilter}
-              style={{ width: "100%" }}
-              onChange={setCurrencyFilter}
-              options={[
-                { label: t.allCurrencies, value: "all" },
-                { label: "USD", value: "USD" },
-                { label: "IQD", value: "IQD" },
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={8} lg={4}>
-            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </Col>
-          <Col xs={24} md={8} lg={4}>
-            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </Col>
-          <Col xs={24} md={8} lg={4}>
-            <Button
-              block
-              disabled={!hasFilters}
-              onClick={() => {
-                setSearchInput("");
-                setStatusFilter("all");
-                setProjectFilter("all");
-                setSupplierFilter("all");
-                setCurrencyFilter("all");
-                setDateFrom("");
-                setDateTo("");
-              }}
-            >
-              {t.clearFilters}
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+      <FinanceFilters<InvoiceStatus>
+        allCurrenciesLabel={t.allCurrencies}
+        allProjectsLabel={t.allProjects}
+        allStatusesLabel={t.allStatuses}
+        allSuppliersLabel={t.allSuppliers}
+        clearLabel={t.clearFilters}
+        currencyValue={currencyFilter}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        hasFilters={hasFilters}
+        projectValue={projectFilter}
+        projects={projects}
+        searchPlaceholder={`${t.search} ${t.expenses.toLowerCase()}`}
+        searchValue={searchInput}
+        statusOptions={[
+          { label: t.unpaidFilter, value: "unpaid" },
+          { label: t.partialFilter, value: "partial" },
+          { label: t.paidFilter, value: "paid" },
+        ]}
+        statusValue={statusFilter}
+        suppliers={suppliers}
+        supplierValue={supplierFilter}
+        onClear={() => {
+          setSearchInput("");
+          setStatusFilter("all");
+          setProjectFilter("all");
+          setSupplierFilter("all");
+          setCurrencyFilter("all");
+          setDateFrom("");
+          setDateTo("");
+        }}
+        onCurrencyChange={setCurrencyFilter}
+        onDateFromChange={setDateFrom}
+        onDateToChange={setDateTo}
+        onProjectChange={setProjectFilter}
+        onSearchChange={setSearchInput}
+        onStatusChange={setStatusFilter}
+        onSupplierChange={setSupplierFilter}
+      />
 
       {tableQuery.isError ? (
         <Alert
@@ -852,16 +781,7 @@ export default function Invoices() {
         rowKey="id"
         columns={columns}
         scroll={{ x: 1200 }}
-        pagination={
-          tableProps.pagination
-            ? {
-                ...tableProps.pagination,
-                itemRender: undefined,
-                showSizeChanger: false,
-                showTotal: (total) => `${total} ${t.expenses.toLowerCase()}`,
-              }
-            : false
-        }
+        pagination={standardPagination(tableProps.pagination, (total) => `${total} ${t.expenses.toLowerCase()}`)}
       />
 
       {open ? (
