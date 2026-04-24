@@ -13,6 +13,7 @@ type TranslationShape = {
   invoices: string;
   income: string;
   expenses: string;
+  calendar: string;
   siteTitle: string;
   siteSub: string;
   signIn: string;
@@ -62,6 +63,14 @@ type TranslationShape = {
   reset: string;
   dashboardTitle: string;
   dashboardSub: string;
+  calendarTitle: string;
+  calendarSub: string;
+  calendarEventType: string;
+  calendarAllEvents: string;
+  calendarImportantEvents: string;
+  calendarEventDetails: string;
+  calendarOpenRecord: string;
+  calendarSource: string;
   totalWorkers: string;
   activeProjects: string;
   totalSuppliers: string;
@@ -298,6 +307,7 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     invoices: "Invoices",
     income: "Income",
     expenses: "Expenses",
+    calendar: "Calendar",
     siteTitle: "BTP Manager",
     siteSub: "Simple and robust jobsite ERP",
     signIn: "Sign in",
@@ -348,6 +358,14 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     reset: "Reset",
     dashboardTitle: "Dashboard",
     dashboardSub: "Overview of teams, projects and invoices.",
+    calendarTitle: "Calendar",
+    calendarSub: "Important income, expenses, due dates and worker transactions.",
+    calendarEventType: "Event type",
+    calendarAllEvents: "All events",
+    calendarImportantEvents: "Important events",
+    calendarEventDetails: "Event details",
+    calendarOpenRecord: "Open record",
+    calendarSource: "Source",
     totalWorkers: "Workers",
     activeProjects: "Active projects",
     totalSuppliers: "Suppliers",
@@ -592,6 +610,7 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     invoices: "پسوڵەکان",
     income: "داهات",
     expenses: "خەرجییەکان",
+    calendar: "Calendar",
     siteSub: "ERPێکی سادە و بەهێز بۆ بەڕێوەبردنی شوێنی کار",
     signIn: "چوونەژوورەوە",
     signOut: "چوونەدەرەوە",

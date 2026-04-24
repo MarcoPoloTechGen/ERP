@@ -1,13 +1,18 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
+import { App as AntdApp, ConfigProvider } from "antd";
+import { Refine } from "@refinedev/core";
+import { useNotificationProvider } from "@refinedev/antd";
+import { dataProvider, liveProvider } from "@refinedev/supabase";
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import Layout from "@/components/Layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/Auth";
+import { refineResources } from "@/lib/refine";
 import { LangProvider, getStoredLang, getTranslationsForLang, useLang } from "@/lib/i18n";
-import { supabaseConfigError } from "@/lib/supabase";
+import { supabase, supabaseConfigError } from "@/lib/supabase";
 
 // AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
 const queryClient = new QueryClient({
@@ -25,6 +30,7 @@ const queryClient = new QueryClient({
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Admin = lazy(() => import("@/pages/Admin"));
+const CalendarPage = lazy(() => import("@/pages/Calendar"));
 const Income = lazy(() => import("@/pages/Income"));
 const InvoiceDetail = lazy(() => import("@/pages/InvoiceDetail"));
 const Invoices = lazy(() => import("@/pages/Invoices"));
@@ -109,6 +115,45 @@ function RouteLoading() {
   );
 }
 
+function StandardProviders({ children }: { children: ReactNode }) {
+  const { t } = useLang();
+  const content = supabaseConfigError ? (
+    children
+  ) : (
+    <Refine
+      dataProvider={dataProvider(supabase)}
+      liveProvider={liveProvider(supabase)}
+      notificationProvider={useNotificationProvider}
+      resources={refineResources}
+      options={{
+        disableRouteChangeHandler: true,
+        disableTelemetry: true,
+        syncWithLocation: false,
+        reactQuery: {
+          clientConfig: queryClient,
+        },
+      }}
+    >
+      {children}
+    </Refine>
+  );
+
+  return (
+    <ConfigProvider
+      direction={t.dir}
+      theme={{
+        token: {
+          borderRadius: 6,
+          colorPrimary: "#f59e0b",
+          fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+        },
+      }}
+    >
+      <AntdApp>{content}</AntdApp>
+    </ConfigProvider>
+  );
+}
+
 function AppRouter() {
   const { loading, session } = useAuth();
   const { t } = useLang();
@@ -173,6 +218,7 @@ function AppRouter() {
           <Route path="/projects/:id" component={ProjectDetail} />
           <Route path="/suppliers" component={Suppliers} />
           <Route path="/products" component={Products} />
+          <Route path="/calendar" component={CalendarPage} />
           <Route path="/income" component={Income} />
           <Route path="/expenses" component={Invoices} />
           <Route path="/expenses/:id" component={InvoiceDetail} />
@@ -229,7 +275,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <LangProvider>
-            <>
+            <StandardProviders>
               {supabaseConfigError ? (
                 <MissingConfigScreen />
               ) : (
@@ -239,7 +285,7 @@ export default function App() {
               )}
               <Analytics />
               <SpeedInsights />
-            </>
+            </StandardProviders>
           </LangProvider>
         </AuthProvider>
       </QueryClientProvider>

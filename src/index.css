@@ -268,4 +268,41 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after {
     inset: -1px;
   }
+
+  .erp-calendar .fc {
+    --fc-border-color: hsl(var(--border));
+    --fc-page-bg-color: transparent;
+    --fc-neutral-bg-color: hsl(var(--muted));
+    --fc-today-bg-color: rgba(245, 158, 11, 0.12);
+    color: hsl(var(--foreground));
+    font-family: var(--app-font-sans);
+  }
+
+  .erp-calendar .fc .fc-toolbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .erp-calendar .fc .fc-toolbar-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .erp-calendar .fc .fc-button-primary {
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .erp-calendar .fc .fc-button-primary:disabled {
+    background: hsl(var(--muted));
+    border-color: hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+  }
+
+  .erp-calendar .fc .fc-daygrid-event,
+  .erp-calendar .fc .fc-timegrid-event,
+  .erp-calendar .fc .fc-list-event {
+    cursor: pointer;
+  }
 }

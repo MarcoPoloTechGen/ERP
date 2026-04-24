@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   BadgeDollarSign,
+  CalendarDays,
   FileText,
   FolderKanban,
   LayoutDashboard,
@@ -72,6 +73,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: t.projects, icon: FolderKanban },
     { href: "/suppliers", label: t.suppliers, icon: Truck },
     { href: "/products", label: t.products, icon: Package2 },
+    { href: "/calendar", label: t.calendar, icon: CalendarDays },
     { href: "/income", label: t.income, icon: BadgeDollarSign },
     { href: "/expenses", label: t.expenses, icon: FileText },
   ];

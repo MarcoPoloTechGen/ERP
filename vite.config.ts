@@ -17,6 +17,33 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+
+          if (id.includes("@fullcalendar")) {
+            return "fullcalendar";
+          }
+
+          if (id.includes("antd") || id.includes("@ant-design") || id.includes("rc-")) {
+            return "antd";
+          }
+
+          if (id.includes("@refinedev")) {
+            return "refine";
+          }
+
+          if (id.includes("@supabase")) {
+            return "supabase";
+          }
+
+          return "vendor";
+        },
+      },
+    },
   },
   server: {
     port: Number(process.env.PORT ?? 5173),
