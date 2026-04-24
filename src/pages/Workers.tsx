@@ -1,159 +1,164 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
-  createWorker,
-  deleteWorker,
-  erpKeys,
-  listWorkers,
-  listWorkersPage,
-  type Worker,
-  updateWorker,
-} from "@/lib/erp";
-import { formatCurrency } from "@/lib/format";
-import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { useLang } from "@/lib/i18n";
-import {
+  App,
+  Alert,
+  Button,
   Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
+  Col,
+  Form,
+  Input,
   Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  type TableProps,
+} from "antd";
+import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { createWorker, deleteWorker, erpKeys, listWorkers, updateWorker } from "@/lib/erp";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import { formatCurrency } from "@/lib/format";
+import {
+  addContainsSearchFilter,
+  addEqualFilter,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
+import { useLang } from "@/lib/i18n";
+
+type WorkerRow = {
+  id: number;
+  name: string;
+  role: string | null;
+  category: string | null;
+  phone: string | null;
+  balance: number | null;
+  created_at: string | null;
+};
 
 type WorkerFormValues = {
   name: string;
   role: string;
-  category: string;
-  phone: string;
+  category?: string;
+  phone?: string;
 };
+
+function buildFilters(search: string, category: string) {
+  const filters: CrudFilters = [];
+  addContainsSearchFilter(filters, ["name", "role", "category", "phone"], search);
+  addEqualFilter(filters, "category", category);
+  return filters;
+}
 
 function WorkerModal({
   worker,
   onClose,
+  onSaved,
 }: {
-  worker?: Worker;
+  worker?: WorkerRow;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const { register, handleSubmit, formState } = useForm<WorkerFormValues>({
-    defaultValues: {
-      name: worker?.name ?? "",
-      role: worker?.role ?? "",
-      category: worker?.category ?? "",
-      phone: worker?.phone ?? "",
-    },
-  });
+  const [form] = Form.useForm<WorkerFormValues>();
 
   const saveMutation = useMutation({
     mutationFn: async (values: WorkerFormValues) => {
       const payload = {
         name: values.name.trim(),
         role: values.role.trim(),
-        category: values.category.trim() || null,
-        phone: values.phone.trim() || null,
+        category: values.category?.trim() || null,
+        phone: values.phone?.trim() || null,
       };
 
       if (worker) {
         await updateWorker(worker.id, payload);
-      } else {
-        await createWorker(payload);
+        return;
       }
+
+      await createWorker(payload);
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   return (
-    <Modal title={worker ? t.editWorker : t.newWorker} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
-          <input
-            {...register("name", { required: true })}
-            className={controlClassName}
-            placeholder={t.namePlaceholder}
-          />
-        </Field>
+    <Modal
+      open
+      title={worker ? t.editWorker : t.newWorker}
+      okText={worker ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<WorkerFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: worker?.name ?? "",
+          role: worker?.role ?? "",
+          category: worker?.category ?? "",
+          phone: worker?.phone ?? "",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.namePlaceholder} />
+        </Form.Item>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.role} required error={formState.errors.role ? t.roleRequired : null}>
-            <input
-              {...register("role", { required: true })}
-              className={controlClassName}
-              placeholder={t.rolePlaceholder}
-            />
-          </Field>
-
-          <Field label={t.category}>
-            <input
-              {...register("category")}
-              className={controlClassName}
-              placeholder={t.categoryPlaceholder}
-            />
-          </Field>
-
-          <Field label={t.phone}>
-            <input
-              {...register("phone")}
-              className={controlClassName}
-              placeholder={t.phonePlaceholder}
-            />
-          </Field>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={saveMutation.isPending}>
-            {worker ? t.save : t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="role" label={t.role} rules={[{ required: true, message: t.roleRequired }]}>
+              <Input placeholder={t.rolePlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="category" label={t.category}>
+              <Input placeholder={t.categoryPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="phone" label={t.phone}>
+              <Input placeholder={t.phonePlaceholder} />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
     </Modal>
   );
 }
 
 export default function Workers() {
   const { t } = useLang();
-  const queryClient = useQueryClient();
-  const [selectedWorker, setSelectedWorker] = useState<Worker | undefined>(undefined);
+  const { message } = App.useApp();
+  const [selectedWorker, setSelectedWorker] = useState<WorkerRow | undefined>();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const search = useDeferredValue(searchInput.trim());
 
-  useEffect(() => {
-    setPage(1);
-  }, [categoryFilter, deferredSearch]);
-
-  const { data: workersPage, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.workersPage({
-      page,
-      pageSize: 10,
-      search: deferredSearch,
-      category: categoryFilter,
-    }),
-    queryFn: () =>
-      listWorkersPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-        category: categoryFilter,
-      }),
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<WorkerRow>({
+    resource: "workers",
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
+    syncWithLocation: false,
   });
 
   const { data: allWorkers } = useQuery({
@@ -165,210 +170,198 @@ export default function Workers() {
     const values = Array.from(
       new Set((allWorkers ?? []).map((worker) => worker.category).filter(Boolean) as string[]),
     );
-    values.sort((left, right) => left.localeCompare(right));
-    return values;
+    return values.sort((left, right) => left.localeCompare(right));
   }, [allWorkers]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setFilters(buildFilters(search, categoryFilter), "replace");
+  }, [categoryFilter, search, setCurrentPage, setFilters]);
+
+  const deleteMutation = useMutation({
+    mutationFn: (worker: WorkerRow) => deleteWorker(worker.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const balanceValue = (worker: WorkerRow) => worker.balance ?? 0;
+  const hasFilters = Boolean(searchInput || categoryFilter !== "all");
+  const columns: TableProps<WorkerRow>["columns"] = [
+    {
+      title: t.name,
+      dataIndex: "name",
+      render: (value: string, worker) => (
+        <Space size="small" wrap>
+          <Typography.Text strong>{value}</Typography.Text>
+          {worker.category ? <Tag color="blue">{worker.category}</Tag> : null}
+        </Space>
+      ),
+    },
+    { title: t.role, dataIndex: "role", render: (value: string | null) => value ?? "-" },
+    { title: t.phone, dataIndex: "phone", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.balance,
+      dataIndex: "balance",
+      align: "right",
+      render: (_value: number | null, worker) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong type={balanceValue(worker) >= 0 ? "success" : "danger"}>
+            {formatCurrency(balanceValue(worker))}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {balanceValue(worker) >= 0 ? t.toReceive : t.owes}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "",
+      key: "actions",
+      align: "right",
+      width: 144,
+      render: (_, worker) => (
+        <Space size="small">
+          <Button
+            type="text"
+            icon={<Pencil size={16} />}
+            onClick={() => {
+              setSelectedWorker(worker);
+              setOpen(true);
+            }}
+          />
+          <Popconfirm
+            title={t.deleteWorkerConfirm}
+            okText={t.remove}
+            cancelText={t.cancel}
+            onConfirm={() => deleteMutation.mutate(worker)}
+          >
+            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+          </Popconfirm>
+          <Link href={`/workers/${worker.id}`}>
+            <Button type="text" icon={<ChevronRight size={16} />} />
+          </Link>
+        </Space>
+      ),
+    },
+  ];
 
   function exportWorkers(format: "csv" | "xlsx") {
     const fileBase = t.workersTitle;
-    const rows =
-      workersPage?.items.map((worker) => ({
-        [t.name]: worker.name,
-        [t.role]: worker.role,
-        [t.category]: worker.category ?? "",
-        [t.phone]: worker.phone ?? "",
-        [t.balance]: worker.balance,
-        [t.status]: worker.balance >= 0 ? t.toReceive : t.owes,
-      })) ?? [];
+    const exportRows = rows.map((worker) => ({
+      [t.name]: worker.name,
+      [t.role]: worker.role ?? "",
+      [t.category]: worker.category ?? "",
+      [t.phone]: worker.phone ?? "",
+      [t.balance]: balanceValue(worker),
+      [t.status]: balanceValue(worker) >= 0 ? t.toReceive : t.owes,
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteWorker,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-    },
-  });
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.workersTitle}
-        subtitle={t.worker_count(workersPage?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportWorkers("csv")} disabled={!workersPage?.items.length}>
-              <Download size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>
+            {t.workersTitle}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t.worker_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportWorkers("csv")}>
               CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportWorkers("xlsx")} disabled={!workersPage?.items.length}>
-              <FileSpreadsheet size={16} />
+            </Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportWorkers("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            <PrimaryButton
+            </Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
               onClick={() => {
                 setSelectedWorker(undefined);
                 setOpen(true);
               }}
             >
-              <Plus size={16} />
               {t.addWorker}
-            </PrimaryButton>
-          </div>
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={14}>
+            <Input
+              allowClear
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={`${t.search} ${t.workers.toLowerCase()}`}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={6}>
+            <Select
+              value={categoryFilter}
+              style={{ width: "100%" }}
+              onChange={setCategoryFilter}
+              options={[
+                { label: t.allCategories, value: "all" },
+                ...categories.map((category) => ({ label: category, value: category })),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Button
+              block
+              disabled={!hasFilters}
+              onClick={() => {
+                setSearchInput("");
+                setCategoryFilter("all");
+              }}
+            >
+              {t.clearFilters}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.notFound}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
+        />
+      ) : null}
+
+      <Table<WorkerRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        scroll={{ x: 900 }}
+        pagination={
+          tableProps.pagination
+            ? {
+                ...tableProps.pagination,
+                itemRender: undefined,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} ${t.workers.toLowerCase()}`,
+              }
+            : false
         }
       />
 
-      <Card className="p-4">
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
-              placeholder={`${t.search} ${t.workers.toLowerCase()}`}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.category}</label>
-            <select
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allCategories}</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <SecondaryButton
-            onClick={() => {
-              setSearchInput("");
-              setCategoryFilter("all");
-            }}
-            disabled={!searchInput && categoryFilter === "all"}
-          >
-            {t.clearFilters}
-          </SecondaryButton>
-        </div>
-      </Card>
-
-      {isError ? (
-        <ErrorState
-          title={t.notFound}
-          description={error instanceof Error ? error.message : undefined}
-          action={
-            <PrimaryButton onClick={() => void refetch()}>
-              {t.retry}
-            </PrimaryButton>
-          }
-        />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !workersPage?.items.length ? (
-        <EmptyState title={t.noWorkers} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {workersPage.items.map((worker) => (
-              <Card key={worker.id} className="p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{worker.name}</p>
-                      {worker.category ? (
-                        <span className="inline-flex rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
-                          {worker.category}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[worker.role, worker.phone].filter(Boolean).join(" | ")}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-[140px] text-right">
-                      <p
-                        className={`text-base font-semibold ${
-                          worker.balance >= 0 ? "text-emerald-700" : "text-rose-700"
-                        }`}
-                      >
-                        {formatCurrency(worker.balance)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {worker.balance >= 0 ? t.toReceive : t.owes}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <IconButton
-                        onClick={() => {
-                          setSelectedWorker(worker);
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil size={16} />
-                      </IconButton>
-                      <IconButton
-                        className="hover:text-rose-700"
-                        onClick={() => {
-                          if (window.confirm(t.deleteWorkerConfirm)) {
-                            deleteMutation.mutate(worker.id);
-                          }
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                      <Link href={`/workers/${worker.id}`}>
-                        <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                          <ChevronRight size={16} />
-                        </div>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <PaginationControls
-            page={workersPage.page}
-            pageCount={workersPage.pageCount}
-            total={workersPage.total}
-            itemLabel={t.workers.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
-
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <WorkerModal worker={selectedWorker} onClose={() => setOpen(false)} /> : null}
-    </div>
+      {open ? (
+        <WorkerModal worker={selectedWorker} onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
+      ) : null}
+    </Space>
   );
 }

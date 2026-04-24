@@ -1,78 +1,109 @@
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  App,
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  type TableProps,
+} from "antd";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createProduct,
   deleteProduct,
   erpKeys,
-  listProductsPage,
   listProjectBuildings,
   listProjects,
   listSuppliers,
   type Currency,
-  type Product,
   updateProduct,
 } from "@/lib/erp";
-import { formatCurrency } from "@/lib/format";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { useLang } from "@/lib/i18n";
+import { formatCurrency } from "@/lib/format";
 import {
-  Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
-  Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
+  addContainsSearchFilter,
+  addEqualFilter,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
+import { useLang } from "@/lib/i18n";
+
+type ProductRow = {
+  id: number;
+  name: string;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  building_id: number | null;
+  building_name: string | null;
+  unit: string | null;
+  unit_price: number | null;
+  currency: Currency;
+  created_at: string | null;
+};
 
 type ProductFormValues = {
   name: string;
-  supplierId: string;
-  projectId: string;
-  buildingId: string;
-  unit: string;
-  unitPrice: string;
+  supplierId?: number;
+  projectId?: number;
+  buildingId?: number;
+  unit?: string;
+  unitPrice?: number;
   currency: Currency;
 };
+
+function buildFilters({
+  search,
+  projectId,
+  supplierId,
+  currency,
+}: {
+  search: string;
+  projectId: string;
+  supplierId: string;
+  currency: Currency | "all";
+}) {
+  const filters: CrudFilters = [];
+  addContainsSearchFilter(filters, ["name", "supplier_name", "project_name", "building_name", "unit"], search);
+  addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
+  addEqualFilter(filters, "supplier_id", supplierId === "all" ? "all" : Number(supplierId));
+  addEqualFilter(filters, "currency", currency);
+  return filters;
+}
 
 function ProductModal({
   product,
   onClose,
+  onSaved,
 }: {
-  product?: Product;
+  product?: ProductRow;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const { data: suppliers } = useQuery({
-    queryKey: erpKeys.suppliers,
-    queryFn: listSuppliers,
-  });
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
+  const [form] = Form.useForm<ProductFormValues>();
+  const projectId = Form.useWatch("projectId", form);
+  const selectedProjectId = typeof projectId === "number" ? projectId : undefined;
 
-  const { register, control, handleSubmit, formState, setValue } = useForm<ProductFormValues>({
-    defaultValues: {
-      name: product?.name ?? "",
-      supplierId: product?.supplierId != null ? String(product.supplierId) : "",
-      projectId: product?.projectId != null ? String(product.projectId) : "",
-      buildingId: product?.buildingId != null ? String(product.buildingId) : "",
-      unit: product?.unit ?? "",
-      unitPrice: product?.unitPrice != null ? String(product.unitPrice) : "",
-      currency: product?.currency ?? "USD",
-    },
-  });
-
-  const projectId = useWatch({ control, name: "projectId" });
-  const selectedProjectId = projectId ? Number(projectId) : undefined;
+  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: buildings } = useQuery({
     queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
     queryFn: () => listProjectBuildings(selectedProjectId),
@@ -83,368 +114,353 @@ function ProductModal({
     mutationFn: async (values: ProductFormValues) => {
       const payload = {
         name: values.name.trim(),
-        supplierId: values.supplierId ? Number(values.supplierId) : null,
-        projectId: values.projectId ? Number(values.projectId) : null,
-        buildingId: values.buildingId ? Number(values.buildingId) : null,
-        unit: values.unit.trim() || null,
-        unitPrice: values.unitPrice ? Number(values.unitPrice) : null,
+        supplierId: values.supplierId ?? null,
+        projectId: values.projectId ?? null,
+        buildingId: values.buildingId ?? null,
+        unit: values.unit?.trim() || null,
+        unitPrice: values.unitPrice ?? null,
         currency: values.currency,
       };
 
       if (product) {
         await updateProduct(product.id, payload);
-      } else {
-        await createProduct(payload);
+        return;
       }
+
+      await createProduct(payload);
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.products }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   return (
-    <Modal title={product ? t.editProduct : t.newProduct} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
-          <input {...register("name", { required: true })} className={controlClassName} />
-        </Field>
+    <Modal
+      open
+      title={product ? t.editProduct : t.newProduct}
+      okText={product ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<ProductFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: product?.name ?? "",
+          supplierId: product?.supplier_id ?? undefined,
+          projectId: product?.project_id ?? undefined,
+          buildingId: product?.building_id ?? undefined,
+          unit: product?.unit ?? "",
+          unitPrice: product?.unit_price ?? undefined,
+          currency: product?.currency ?? "USD",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.namePlaceholder} />
+        </Form.Item>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.supplierLabel}>
-            <select {...register("supplierId")} className={controlClassName}>
-              <option value="">{t.noneOption}</option>
-              {suppliers?.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.projectOption}>
-            <select
-              {...register("projectId", {
-                onChange: () => setValue("buildingId", ""),
-              })}
-              className={controlClassName}
-            >
-              <option value="">{t.noneOption}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.buildingLabel}>
-            <select {...register("buildingId")} className={controlClassName} disabled={!selectedProjectId}>
-              <option value="">{t.noneOption}</option>
-              {buildings?.map((building) => (
-                <option key={building.id} value={building.id}>
-                  {building.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.unit}>
-            <input {...register("unit")} className={controlClassName} placeholder={t.unitPlaceholder} />
-          </Field>
-
-          <Field label={t.unitPrice}>
-            <input type="number" step="0.01" min="0" {...register("unitPrice")} className={controlClassName} />
-          </Field>
-
-          <Field label={t.currency}>
-            <select {...register("currency")} className={controlClassName}>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </Field>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={saveMutation.isPending}>
-            {product ? t.save : t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="supplierId" label={t.supplierLabel}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="projectId" label={t.projectOption}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                onChange={() => form.setFieldValue("buildingId", undefined)}
+                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="buildingId" label={t.buildingLabel}>
+              <Select
+                allowClear
+                showSearch
+                disabled={!selectedProjectId}
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                options={buildings?.map((building) => ({ label: building.name, value: building.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="unit" label={t.unit}>
+              <Input placeholder={t.unitPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="unitPrice" label={t.unitPrice}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="currency" label={t.currency}>
+              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
     </Modal>
   );
 }
 
 export default function Products() {
   const { t } = useLang();
-  const queryClient = useQueryClient();
-  const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
+  const { message } = App.useApp();
+  const [selectedProduct, setSelectedProduct] = useState<ProductRow | undefined>();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const search = useDeferredValue(searchInput.trim());
+
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<ProductRow>({
+    resource: "app_products",
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
+    syncWithLocation: false,
+  });
 
   useEffect(() => {
-    setPage(1);
-  }, [currencyFilter, deferredSearch, projectFilter, supplierFilter]);
+    setCurrentPage(1);
+    setFilters(buildFilters({ search, projectId: projectFilter, supplierId: supplierFilter, currency: currencyFilter }), "replace");
+  }, [currencyFilter, projectFilter, search, setCurrentPage, setFilters, supplierFilter]);
 
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
-  const { data: suppliers } = useQuery({
-    queryKey: erpKeys.suppliers,
-    queryFn: listSuppliers,
+  const deleteMutation = useMutation({
+    mutationFn: (product: ProductRow) => deleteProduct(product.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.productsPage({
-      page,
-      pageSize: 10,
-      search: deferredSearch,
-      projectId: projectFilter === "all" ? null : Number(projectFilter),
-      supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
-      currency: currencyFilter,
-    }),
-    queryFn: () =>
-      listProductsPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-        projectId: projectFilter === "all" ? null : Number(projectFilter),
-        supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
-        currency: currencyFilter,
-      }),
-  });
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const hasFilters = Boolean(
+    searchInput || projectFilter !== "all" || supplierFilter !== "all" || currencyFilter !== "all",
+  );
+  const columns: TableProps<ProductRow>["columns"] = [
+    {
+      title: t.name,
+      dataIndex: "name",
+      render: (value: string, product) => (
+        <Space direction="vertical" size={0}>
+          <Space size="small" wrap>
+            <Typography.Text strong>{value}</Typography.Text>
+            <Tag>{product.currency}</Tag>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {product.unit ?? t.noDetail}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    { title: t.supplierLabel, dataIndex: "supplier_name", render: (value: string | null) => value ?? "-" },
+    { title: t.projectOption, dataIndex: "project_name", render: (value: string | null) => value ?? "-" },
+    { title: t.buildingLabel, dataIndex: "building_name", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.unitPrice,
+      dataIndex: "unit_price",
+      align: "right",
+      render: (value: number | null, product) =>
+        value != null ? <Typography.Text strong>{formatCurrency(value, product.currency)}</Typography.Text> : "-",
+    },
+    {
+      title: "",
+      key: "actions",
+      align: "right",
+      width: 96,
+      render: (_, product) => (
+        <Space size="small">
+          <Button
+            type="text"
+            icon={<Pencil size={16} />}
+            onClick={() => {
+              setSelectedProduct(product);
+              setOpen(true);
+            }}
+          />
+          <Popconfirm
+            title={t.deleteProductConfirm}
+            okText={t.remove}
+            cancelText={t.cancel}
+            onConfirm={() => deleteMutation.mutate(product)}
+          >
+            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   function exportProducts(format: "csv" | "xlsx") {
     const fileBase = t.productsTitle;
-    const rows =
-      data?.items.map((product) => ({
-        [t.name]: product.name,
-        [t.supplierLabel]: product.supplierName ?? "",
-        [t.projectOption]: product.projectName ?? "",
-        [t.buildingLabel]: product.buildingName ?? "",
-        [t.unit]: product.unit ?? "",
-        [t.unitPrice]: product.unitPrice ?? "",
-        [t.currency]: product.currency,
-      })) ?? [];
+    const exportRows = rows.map((product) => ({
+      [t.name]: product.name,
+      [t.supplierLabel]: product.supplier_name ?? "",
+      [t.projectOption]: product.project_name ?? "",
+      [t.buildingLabel]: product.building_name ?? "",
+      [t.unit]: product.unit ?? "",
+      [t.unitPrice]: product.unit_price ?? "",
+      [t.currency]: product.currency,
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteProduct,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.products }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-    },
-  });
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.productsTitle}
-        subtitle={t.product_count(data?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportProducts("csv")} disabled={!data?.items.length}>
-              <Download size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>
+            {t.productsTitle}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t.product_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportProducts("csv")}>
               CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportProducts("xlsx")} disabled={!data?.items.length}>
-              <FileSpreadsheet size={16} />
+            </Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportProducts("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            <PrimaryButton
+            </Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
               onClick={() => {
                 setSelectedProduct(undefined);
                 setOpen(true);
               }}
             >
-              <Plus size={16} />
               {t.addProduct}
-            </PrimaryButton>
-          </div>
-        }
-      />
+            </Button>
+          </Space>
+        </Col>
+      </Row>
 
-      <Card className="p-4">
-        <div className="grid gap-4 xl:grid-cols-4">
-          <div className="xl:col-span-4">
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={8}>
+            <Input
+              allowClear
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
               placeholder={`${t.search} ${t.products.toLowerCase()}`}
             />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.projectOption}</label>
-            <select
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select
               value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allProjects}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.supplierLabel}</label>
-            <select
+              style={{ width: "100%" }}
+              onChange={setProjectFilter}
+              options={[
+                { label: t.allProjects, value: "all" },
+                ...(projects?.map((project) => ({ label: project.name, value: String(project.id) })) ?? []),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select
               value={supplierFilter}
-              onChange={(event) => setSupplierFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allSuppliers}</option>
-              {suppliers?.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.currency}</label>
-            <select
+              style={{ width: "100%" }}
+              onChange={setSupplierFilter}
+              options={[
+                { label: t.allSuppliers, value: "all" },
+                ...(suppliers?.map((supplier) => ({ label: supplier.name, value: String(supplier.id) })) ?? []),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select<Currency | "all">
               value={currencyFilter}
-              onChange={(event) => setCurrencyFilter(event.target.value as Currency | "all")}
-              className={controlClassName}
-            >
-              <option value="all">{t.allCurrencies}</option>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </div>
-          <div className="flex items-end justify-end">
-            <SecondaryButton
+              style={{ width: "100%" }}
+              onChange={setCurrencyFilter}
+              options={[
+                { label: t.allCurrencies, value: "all" },
+                { label: "USD", value: "USD" },
+                { label: "IQD", value: "IQD" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Button
+              block
+              disabled={!hasFilters}
               onClick={() => {
                 setSearchInput("");
                 setProjectFilter("all");
                 setSupplierFilter("all");
                 setCurrencyFilter("all");
               }}
-              disabled={
-                !searchInput &&
-                projectFilter === "all" &&
-                supplierFilter === "all" &&
-                currencyFilter === "all"
-              }
             >
               {t.clearFilters}
-            </SecondaryButton>
-          </div>
-        </div>
+            </Button>
+          </Col>
+        </Row>
       </Card>
 
-      {isError ? (
-        <ErrorState
-          title={t.productsTitle}
-          description={error instanceof Error ? error.message : undefined}
-          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.productsTitle}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
         />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <EmptyState title={t.noProducts} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {data.items.map((product) => (
-              <Card key={product.id} className="p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{product.name}</p>
-                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                        {product.currency}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[product.projectName, product.buildingName, product.supplierName]
-                        .filter(Boolean)
-                        .join(" | ") || t.noDetail}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{product.unit ?? t.noDetail}</p>
-                  </div>
+      ) : null}
 
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-[120px] text-right">
-                      <p className="text-base font-semibold text-foreground">
-                        {product.unitPrice != null ? formatCurrency(product.unitPrice, product.currency) : "-"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{t.unitPrice}</p>
-                    </div>
+      <Table<ProductRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        scroll={{ x: 1000 }}
+        pagination={
+          tableProps.pagination
+            ? {
+                ...tableProps.pagination,
+                itemRender: undefined,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} ${t.products.toLowerCase()}`,
+              }
+            : false
+        }
+      />
 
-                    <div className="flex items-center gap-1">
-                      <IconButton
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil size={16} />
-                      </IconButton>
-                      <IconButton
-                        className="hover:text-rose-700"
-                        onClick={() => {
-                          if (window.confirm(t.deleteProductConfirm)) {
-                            deleteMutation.mutate(product.id);
-                          }
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <PaginationControls
-            page={data.page}
-            pageCount={data.pageCount}
-            total={data.total}
-            itemLabel={t.products.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
-
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <ProductModal product={selectedProduct} onClose={() => setOpen(false)} /> : null}
-    </div>
+      {open ? (
+        <ProductModal
+          product={selectedProduct}
+          onClose={() => setOpen(false)}
+          onSaved={() => void tableQuery.refetch()}
+        />
+      ) : null}
+    </Space>
   );
 }

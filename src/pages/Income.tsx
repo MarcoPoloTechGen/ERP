@@ -1,383 +1,378 @@
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  App,
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  type TableProps,
+} from "antd";
 import { Download, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
 import {
   createIncomeTransaction,
   deleteIncomeTransaction,
   erpKeys,
-  listIncomeTransactionsPage,
   listProjects,
   type Currency,
-  type IncomeTransaction,
+  type RecordStatus,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate, statusColors } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
-import {
-  Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
-  Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
 
-type IncomeFormValues = {
-  projectId: string;
-  amount: string;
+type IncomeRow = {
+  id: number;
+  project_id: number;
+  project_name: string | null;
+  amount: number;
   currency: Currency;
-  description: string;
-  date: string;
+  description: string | null;
+  date: string | null;
+  record_status: RecordStatus;
+  created_by_name: string | null;
 };
 
-function IncomeModal({ onClose }: { onClose: () => void }) {
+type IncomeFormValues = {
+  projectId: number;
+  amount: number;
+  currency: Currency;
+  description?: string;
+  date?: string;
+};
+
+const PAGE_SIZE = 10;
+
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function buildFilters({
+  search,
+  projectId,
+  currency,
+  dateFrom,
+  dateTo,
+}: {
+  search: string;
+  projectId: string;
+  currency: Currency | "all";
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const filters: CrudFilters = [];
+
+  if (search) {
+    filters.push({
+      operator: "or",
+      value: ["project_name", "description", "created_by_name"].map((field) => ({
+        field,
+        operator: "contains",
+        value: search,
+      })),
+    });
+  }
+
+  if (projectId !== "all") {
+    filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
+  }
+
+  if (currency !== "all") {
+    filters.push({ field: "currency", operator: "eq", value: currency });
+  }
+
+  if (dateFrom) {
+    filters.push({ field: "date", operator: "gte", value: dateFrom });
+  }
+
+  if (dateTo) {
+    filters.push({ field: "date", operator: "lte", value: dateTo });
+  }
+
+  return filters;
+}
+
+function IncomeModal({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { t } = useLang();
   const { profile } = useAuth();
-  const queryClient = useQueryClient();
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
-
-  const { register, handleSubmit, formState } = useForm<IncomeFormValues>({
-    defaultValues: {
-      projectId: "",
-      amount: "",
-      currency: "USD",
-      description: "",
-      date: new Date().toISOString().slice(0, 10),
-    },
-  });
+  const { message } = App.useApp();
+  const [form] = Form.useForm<IncomeFormValues>();
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
 
   const createMutation = useMutation({
-    mutationFn: async (values: IncomeFormValues) => {
-      await createIncomeTransaction({
-        projectId: Number(values.projectId),
-        amount: Number(values.amount),
+    mutationFn: (values: IncomeFormValues) =>
+      createIncomeTransaction({
+        projectId: values.projectId,
+        amount: values.amount,
         currency: values.currency,
-        description: values.description.trim() || null,
+        description: values.description?.trim() || null,
         date: values.date || null,
-      });
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.incomes });
+      }),
+    onSuccess: () => {
+      form.resetFields();
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   return (
-    <Modal title={t.newIncomeEntry} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => createMutation.mutate(values))}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.user}>
-            <input
-              readOnly
-              value={profile?.fullName ?? profile?.email ?? ""}
-              className={`${controlClassName} bg-muted`}
-            />
-          </Field>
-
-          <Field label={t.projectOption} required error={formState.errors.projectId ? t.requiredField : null}>
-            <select {...register("projectId", { required: true })} className={controlClassName}>
-              <option value="">{t.noneOption}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.amount} required error={formState.errors.amount ? t.amountRequired : null}>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              {...register("amount", { required: true })}
-              className={controlClassName}
-            />
-          </Field>
-
-          <Field label={t.currency}>
-            <select {...register("currency")} className={controlClassName}>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </Field>
-
-          <Field label={t.date}>
-            <input type="date" {...register("date")} className={controlClassName} />
-          </Field>
-        </div>
-
-        <Field label={t.description}>
-          <textarea {...register("description")} rows={3} className={`${controlClassName} resize-none`} />
-        </Field>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={createMutation.isPending}>
-            {t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+    <Modal
+      open={open}
+      title={t.newIncomeEntry}
+      okText={t.create}
+      cancelText={t.cancel}
+      confirmLoading={createMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<IncomeFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{ currency: "USD", date: new Date().toISOString().slice(0, 10) }}
+        onFinish={(values) => createMutation.mutate(values)}
+      >
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label={t.user}>
+              <Input readOnly value={profile?.fullName ?? profile?.email ?? ""} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="projectId" label={t.projectOption} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                placeholder={t.noneOption}
+                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="amount" label={t.amount} rules={[{ required: true, message: t.amountRequired }]}>
+              <InputNumber min={0.01} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="currency" label={t.currency}>
+              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="date" label={t.date}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item name="description" label={t.description}>
+          <Input.TextArea rows={3} />
+        </Form.Item>
+      </Form>
     </Modal>
   );
 }
 
 export default function Income() {
   const { t } = useLang();
-  const queryClient = useQueryClient();
+  const { message } = App.useApp();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const search = useDeferredValue(searchInput.trim());
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<IncomeRow>({
+    resource: "app_income_transactions",
+    pagination: { pageSize: PAGE_SIZE },
+    sorters: {
+      initial: [
+        { field: "date", order: "desc" },
+        { field: "created_at", order: "desc" },
+      ],
+    },
+    syncWithLocation: false,
+  });
 
   useEffect(() => {
-    setPage(1);
-  }, [currencyFilter, dateFrom, dateTo, deferredSearch, projectFilter]);
-
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
-
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.incomesPage({
-      page,
-      pageSize: 10,
-      search: deferredSearch,
-      projectId: projectFilter === "all" ? null : Number(projectFilter),
-      currency: currencyFilter,
-      dateFrom: dateFrom || null,
-      dateTo: dateTo || null,
-    }),
-    queryFn: () =>
-      listIncomeTransactionsPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-        projectId: projectFilter === "all" ? null : Number(projectFilter),
-        currency: currencyFilter,
-        dateFrom: dateFrom || null,
-        dateTo: dateTo || null,
-      }),
-  });
+    setCurrentPage(1);
+    setFilters(buildFilters({ search, projectId: projectFilter, currency: currencyFilter, dateFrom, dateTo }), "replace");
+  }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters]);
 
   const deleteMutation = useMutation({
-    mutationFn: async (income: IncomeTransaction) => {
-      await deleteIncomeTransaction(income.id);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.incomes });
-    },
+    mutationFn: (income: IncomeRow) => deleteIncomeTransaction(income.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
+
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const hasFilters = Boolean(searchInput || dateFrom || dateTo || projectFilter !== "all" || currencyFilter !== "all");
+
+  const columns = useMemo<TableProps<IncomeRow>["columns"]>(
+    () => [
+      {
+        title: t.projectOption,
+        dataIndex: "project_name",
+        render: (value: string | null, row) => (
+          <Space size="small" wrap>
+            <Typography.Text strong>{value ?? "-"}</Typography.Text>
+            {row.record_status === "deleted" ? <Tag color="red">{t.deleted}</Tag> : null}
+          </Space>
+        ),
+      },
+      {
+        title: t.amount,
+        dataIndex: "amount",
+        align: "right",
+        render: (value: number, row) => (
+          <Typography.Text strong type="success">
+            {formatCurrency(value, row.currency)}
+          </Typography.Text>
+        ),
+      },
+      { title: t.currency, dataIndex: "currency", width: 100 },
+      { title: t.user, dataIndex: "created_by_name", render: (value: string | null) => value ?? "-" },
+      { title: t.description, dataIndex: "description", render: (value: string | null) => value ?? "-" },
+      { title: t.date, dataIndex: "date", render: (value: string | null) => formatDate(value) },
+      {
+        title: "",
+        key: "actions",
+        align: "right",
+        width: 80,
+        render: (_, row) =>
+          row.record_status === "active" ? (
+            <Popconfirm
+              title={t.deleteIncomeConfirm}
+              okText={t.remove}
+              cancelText={t.cancel}
+              onConfirm={() => deleteMutation.mutate(row)}
+            >
+              <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+            </Popconfirm>
+          ) : null,
+      },
+    ],
+    [deleteMutation, t],
+  );
 
   function exportIncome(format: "csv" | "xlsx") {
     const fileBase = t.incomeTitle;
-    const rows =
-      data?.items.map((income) => ({
-        [t.projectOption]: income.projectName ?? "",
-        [t.amount]: income.amount,
-        [t.currency]: income.currency,
-        [t.user]: income.createdByName ?? "",
-        [t.description]: income.description ?? "",
-        [t.date]: income.date ?? "",
-      })) ?? [];
+    const exportRows = rows.map((income) => ({
+      [t.projectOption]: income.project_name ?? "",
+      [t.amount]: income.amount,
+      [t.currency]: income.currency,
+      [t.user]: income.created_by_name ?? "",
+      [t.description]: income.description ?? "",
+      [t.date]: income.date ?? "",
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.incomeTitle}
-        subtitle={t.income_count(data?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportIncome("csv")} disabled={!data?.items.length}>
-              <Download size={16} />
-              CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportIncome("xlsx")} disabled={!data?.items.length}>
-              <FileSpreadsheet size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>{t.incomeTitle}</Typography.Title>
+          <Typography.Text type="secondary">{t.income_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportIncome("csv")}>CSV</Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportIncome("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            <PrimaryButton onClick={() => setOpen(true)}>
-              <Plus size={16} />
-              {t.addIncome}
-            </PrimaryButton>
-          </div>
-        }
-      />
+            </Button>
+            <Button type="primary" icon={<Plus size={16} />} onClick={() => setOpen(true)}>{t.addIncome}</Button>
+          </Space>
+        </Col>
+      </Row>
 
-      <Card className="p-4">
-        <div className="grid gap-4 xl:grid-cols-4">
-          <div className="xl:col-span-4">
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
-              placeholder={`${t.search} ${t.income.toLowerCase()}`}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.projectOption}</label>
-            <select
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={8}>
+            <Input allowClear value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={`${t.search} ${t.income.toLowerCase()}`} />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select
               value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allProjects}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.currency}</label>
-            <select
+              style={{ width: "100%" }}
+              onChange={setProjectFilter}
+              options={[{ label: t.allProjects, value: "all" }, ...(projects?.map((p) => ({ label: p.name, value: String(p.id) })) ?? [])]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select<Currency | "all">
               value={currencyFilter}
-              onChange={(event) => setCurrencyFilter(event.target.value as Currency | "all")}
-              className={controlClassName}
-            >
-              <option value="all">{t.allCurrencies}</option>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateFrom}</label>
-            <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={controlClassName} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateTo}</label>
-            <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={controlClassName} />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <SecondaryButton
-            onClick={() => {
+              style={{ width: "100%" }}
+              onChange={setCurrencyFilter}
+              options={[{ label: t.allCurrencies, value: "all" }, { label: "USD", value: "USD" }, { label: "IQD", value: "IQD" }]}
+            />
+          </Col>
+          <Col xs={24} md={8} lg={3}>
+            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          </Col>
+          <Col xs={24} md={8} lg={3}>
+            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          </Col>
+          <Col xs={24} md={8} lg={2}>
+            <Button block disabled={!hasFilters} onClick={() => {
               setSearchInput("");
               setProjectFilter("all");
               setCurrencyFilter("all");
               setDateFrom("");
               setDateTo("");
-            }}
-            disabled={
-              !searchInput &&
-              projectFilter === "all" &&
-              currencyFilter === "all" &&
-              !dateFrom &&
-              !dateTo
-            }
-          >
-            {t.clearFilters}
-          </SecondaryButton>
-        </div>
+            }}>
+              {t.clearFilters}
+            </Button>
+          </Col>
+        </Row>
       </Card>
 
-      {isError ? (
-        <ErrorState
-          title={t.incomeTitle}
-          description={error instanceof Error ? error.message : undefined}
-          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.incomeTitle}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
         />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <EmptyState title={t.noIncomeEntries} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {data.items.map((income) => (
-              <Card key={income.id} className="p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{income.projectName ?? "-"}</p>
-                      {income.recordStatus === "deleted" ? (
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
-                            income.recordStatus,
-                          )}`}
-                        >
-                          {t.deleted}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[income.description, income.createdByName, formatDate(income.date)].filter(Boolean).join(" | ")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-base font-semibold text-emerald-700">
-                        {formatCurrency(income.amount, income.currency)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{income.currency}</p>
-                    </div>
-                    {income.recordStatus === "active" ? (
-                      <IconButton
-                        className="hover:text-rose-700"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(t.deleteIncomeConfirm)) {
-                            deleteMutation.mutate(income);
-                          }
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    ) : null}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+      ) : null}
 
-          <PaginationControls
-            page={data.page}
-            pageCount={data.pageCount}
-            total={data.total}
-            itemLabel={t.entries.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
+      <Table<IncomeRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        pagination={tableProps.pagination ? { ...tableProps.pagination, itemRender: undefined, showSizeChanger: false, showTotal: (total) => `${total} ${t.entries.toLowerCase()}` } : false}
+      />
 
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <IncomeModal onClose={() => setOpen(false)} /> : null}
-    </div>
+      <IncomeModal open={open} onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
+    </Space>
   );
 }

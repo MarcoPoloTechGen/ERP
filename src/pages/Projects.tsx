@@ -1,202 +1,253 @@
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  App,
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  type TableProps,
+} from "antd";
+import { ChevronRight, Download, FileSpreadsheet, MinusCircle, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createProject,
   deleteProject,
   erpKeys,
   listProjectBuildings,
-  listProjectsPage,
-  type Project,
+  type ProjectStatus,
   updateProject,
 } from "@/lib/erp";
-import { formatCurrency, formatDateInput, statusColors } from "@/lib/format";
-import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { useLang } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
 import {
-  Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
-  Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
+  addContainsSearchFilter,
+  addEqualFilter,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
+import { useLang } from "@/lib/i18n";
+
+type ProjectRow = {
+  id: number;
+  name: string;
+  client: string | null;
+  location: string | null;
+  status: ProjectStatus;
+  budget: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string | null;
+  building_count: number | null;
+};
 
 type ProjectFormValues = {
   name: string;
-  client: string;
-  location: string;
-  status: "active" | "completed" | "paused";
-  budget: string;
-  startDate: string;
-  endDate: string;
+  client?: string;
+  location?: string;
+  status: ProjectStatus;
+  budget?: number;
+  startDate?: string;
+  endDate?: string;
+  buildings?: { name?: string }[];
 };
+
+const statusColor: Record<ProjectStatus, string> = {
+  active: "green",
+  completed: "blue",
+  paused: "orange",
+};
+
+function statusLabel(status: ProjectStatus, t: ReturnType<typeof useLang>["t"]) {
+  if (status === "active") {
+    return t.active;
+  }
+  if (status === "completed") {
+    return t.completed;
+  }
+  return t.paused;
+}
+
+function buildFilters(search: string, status: ProjectStatus | "all") {
+  const filters: CrudFilters = [];
+  addContainsSearchFilter(filters, ["name", "client", "location"], search);
+  addEqualFilter(filters, "status", status);
+  return filters;
+}
 
 function ProjectModal({
   project,
   onClose,
+  onSaved,
 }: {
-  project?: Project;
+  project?: ProjectRow;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const [form] = Form.useForm<ProjectFormValues>();
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(project?.id ?? 0),
     queryFn: () => listProjectBuildings(project?.id),
     enabled: Boolean(project),
   });
-  const [buildings, setBuildings] = useState<string[]>([""]);
 
   useEffect(() => {
-    if (project) {
-      const next = projectBuildings?.map((building) => building.name).filter(Boolean) ?? [];
-      setBuildings(next.length ? next : [""]);
+    if (!project) {
+      form.setFieldValue("buildings", [{ name: "" }]);
       return;
     }
 
-    setBuildings([""]);
-  }, [project, projectBuildings]);
-
-  const { register, handleSubmit, formState } = useForm<ProjectFormValues>({
-    defaultValues: {
-      name: project?.name ?? "",
-      client: project?.client ?? "",
-      location: project?.location ?? "",
-      status: project?.status ?? "active",
-      budget: project?.budget != null ? String(project.budget) : "",
-      startDate: formatDateInput(project?.startDate),
-      endDate: formatDateInput(project?.endDate),
-    },
-  });
+    if (projectBuildings) {
+      const buildings = projectBuildings.map((building) => ({ name: building.name }));
+      form.setFieldValue("buildings", buildings.length ? buildings : [{ name: "" }]);
+    }
+  }, [form, project, projectBuildings]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: ProjectFormValues) => {
       const payload = {
         name: values.name.trim(),
-        client: values.client.trim() || null,
-        location: values.location.trim() || null,
+        client: values.client?.trim() || null,
+        location: values.location?.trim() || null,
         status: values.status,
-        budget: values.budget ? Number(values.budget) : null,
+        budget: values.budget ?? null,
         startDate: values.startDate || null,
         endDate: values.endDate || null,
-        buildings,
+        buildings: (values.buildings ?? []).map((building) => building.name ?? ""),
       };
 
       if (project) {
         await updateProject(project.id, payload);
-      } else {
-        await createProject(payload);
+        return;
       }
+
+      await createProject(payload);
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.projects }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   return (
-    <Modal title={project ? t.editProject : t.newProject} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field label={t.projectName} required error={formState.errors.name ? t.nameRequired : null}>
-          <input
-            {...register("name", { required: true })}
-            className={controlClassName}
-            placeholder={t.projectNamePlaceholder}
-          />
-        </Field>
+    <Modal
+      open
+      width={760}
+      title={project ? t.editProject : t.newProject}
+      okText={project ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<ProjectFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: project?.name ?? "",
+          client: project?.client ?? "",
+          location: project?.location ?? "",
+          status: project?.status ?? "active",
+          budget: project?.budget ?? undefined,
+          startDate: formatDateInput(project?.start_date),
+          endDate: formatDateInput(project?.end_date),
+          buildings: [{ name: "" }],
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.projectName} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.projectNamePlaceholder} />
+        </Form.Item>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.client}>
-            <input {...register("client")} className={controlClassName} placeholder={t.clientPlaceholder} />
-          </Field>
-          <Field label={t.location}>
-            <input
-              {...register("location")}
-              className={controlClassName}
-              placeholder={t.locationPlaceholder}
-            />
-          </Field>
-          <Field label={t.status}>
-            <select {...register("status")} className={controlClassName}>
-              <option value="active">{t.active}</option>
-              <option value="completed">{t.completed}</option>
-              <option value="paused">{t.paused}</option>
-            </select>
-          </Field>
-          <Field label={t.budget}>
-            <input type="number" step="0.01" min="0" {...register("budget")} className={controlClassName} />
-          </Field>
-          <Field label={t.startDate}>
-            <input type="date" {...register("startDate")} className={controlClassName} />
-          </Field>
-          <Field label={t.endDate}>
-            <input type="date" {...register("endDate")} className={controlClassName} />
-          </Field>
-        </div>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="client" label={t.client}>
+              <Input placeholder={t.clientPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="location" label={t.location}>
+              <Input placeholder={t.locationPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="status" label={t.status}>
+              <Select
+                options={[
+                  { label: t.active, value: "active" },
+                  { label: t.completed, value: "completed" },
+                  { label: t.paused, value: "paused" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="budget" label={t.budget}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="startDate" label={t.startDate}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="endDate" label={t.endDate}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+        </Row>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">{t.buildingsTitle}</p>
-              <p className="text-xs text-muted-foreground">{t.buildingsHint}</p>
-            </div>
-            <SecondaryButton type="button" onClick={() => setBuildings((current) => [...current, ""])}>
-              <Plus size={16} />
-              {t.addBuilding}
-            </SecondaryButton>
-          </div>
-
-          <div className="space-y-3">
-            {buildings.map((building, index) => (
-              <div key={index} className="flex items-center gap-3">
-                <input
-                  value={building}
-                  onChange={(event) =>
-                    setBuildings((current) => {
-                      const next = [...current];
-                      next[index] = event.target.value;
-                      return next;
-                    })
-                  }
-                  className={controlClassName}
-                  placeholder={t.buildingNamePlaceholder}
-                />
-                <IconButton
-                  type="button"
-                  className="shrink-0 hover:text-rose-700"
-                  onClick={() =>
-                    setBuildings((current) => {
-                      const next = current.filter((_, currentIndex) => currentIndex !== index);
-                      return next.length ? next : [""];
-                    })
-                  }
-                >
-                  <Trash2 size={16} />
-                </IconButton>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={saveMutation.isPending}>
-            {project ? t.save : t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+        <Typography.Text strong>{t.buildingsTitle}</Typography.Text>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          {t.buildingsHint}
+        </Typography.Paragraph>
+        <Form.List name="buildings">
+          {(fields, { add, remove }) => (
+            <Space direction="vertical" size="small" style={{ width: "100%" }}>
+              {fields.map((field) => (
+                <Space key={field.key} align="baseline" style={{ display: "flex" }}>
+                  <Form.Item {...field} name={[field.name, "name"]} style={{ flex: 1, marginBottom: 0 }}>
+                    <Input placeholder={t.buildingNamePlaceholder} />
+                  </Form.Item>
+                  <Button
+                    danger
+                    type="text"
+                    icon={<MinusCircle size={16} />}
+                    disabled={fields.length === 1}
+                    onClick={() => remove(field.name)}
+                  />
+                </Space>
+              ))}
+              <Button type="dashed" icon={<Plus size={16} />} onClick={() => add({ name: "" })}>
+                {t.addBuilding}
+              </Button>
+            </Space>
+          )}
+        </Form.List>
+      </Form>
     </Modal>
   );
 }
@@ -204,237 +255,224 @@ function ProjectModal({
 export default function Projects() {
   const { t } = useLang();
   const { profile } = useAuth();
-  const queryClient = useQueryClient();
-  const [selectedProject, setSelectedProject] = useState<Project | undefined>(undefined);
+  const { message } = App.useApp();
+  const [selectedProject, setSelectedProject] = useState<ProjectRow | undefined>();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "completed" | "paused">("all");
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const search = useDeferredValue(searchInput.trim());
+  const isAdmin = profile?.role === "admin";
+
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<ProjectRow>({
+    resource: "app_projects",
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
+    syncWithLocation: false,
+  });
 
   useEffect(() => {
-    setPage(1);
-  }, [statusFilter, deferredSearch]);
+    setCurrentPage(1);
+    setFilters(buildFilters(search, statusFilter), "replace");
+  }, [search, setCurrentPage, setFilters, statusFilter]);
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.projectsPage({
-      page,
-      pageSize: 10,
-      search: deferredSearch,
-      status: statusFilter,
-    }),
-    queryFn: () =>
-      listProjectsPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-        status: statusFilter,
-      }),
+  const deleteMutation = useMutation({
+    mutationFn: (project: ProjectRow) => deleteProject(project.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
+
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const hasFilters = Boolean(searchInput || statusFilter !== "all");
+  const columns: TableProps<ProjectRow>["columns"] = [
+    {
+      title: t.projectName,
+      dataIndex: "name",
+      render: (value: string, project) => (
+        <Space direction="vertical" size={0}>
+          <Space size="small" wrap>
+            <Typography.Text strong>{value}</Typography.Text>
+            <Tag color={statusColor[project.status]}>{statusLabel(project.status, t)}</Tag>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {[project.client, project.location].filter(Boolean).join(" | ") || t.noDetail}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: t.buildingsTitle,
+      dataIndex: "building_count",
+      render: (value: number | null) => t.building_count(value ?? 0),
+    },
+    {
+      title: t.budget,
+      dataIndex: "budget",
+      align: "right",
+      render: (value: number | null) => (value != null ? formatCurrency(value) : "-"),
+    },
+    { title: t.startDate, dataIndex: "start_date", render: (value: string | null) => formatDate(value) },
+    { title: t.endDate, dataIndex: "end_date", render: (value: string | null) => formatDate(value) },
+    {
+      title: "",
+      key: "actions",
+      align: "right",
+      width: 144,
+      render: (_, project) => (
+        <Space size="small">
+          {isAdmin ? (
+            <>
+              <Button
+                type="text"
+                icon={<Pencil size={16} />}
+                onClick={() => {
+                  setSelectedProject(project);
+                  setOpen(true);
+                }}
+              />
+              <Popconfirm
+                title={t.deleteProjectConfirm}
+                okText={t.remove}
+                cancelText={t.cancel}
+                onConfirm={() => deleteMutation.mutate(project)}
+              >
+                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+              </Popconfirm>
+            </>
+          ) : null}
+          <Link href={`/projects/${project.id}`}>
+            <Button type="text" icon={<ChevronRight size={16} />} />
+          </Link>
+        </Space>
+      ),
+    },
+  ];
 
   function exportProjects(format: "csv" | "xlsx") {
     const fileBase = t.projectsTitle;
-    const rows =
-      data?.items.map((project) => ({
-        [t.projectName]: project.name,
-        [t.client]: project.client ?? "",
-        [t.location]: project.location ?? "",
-        [t.status]: t[project.status],
-        [t.buildingsTitle]: project.buildingCount,
-        [t.budget]: project.budget ?? "",
-        [t.startDate]: formatDateInput(project.startDate),
-        [t.endDate]: formatDateInput(project.endDate),
-      })) ?? [];
+    const exportRows = rows.map((project) => ({
+      [t.projectName]: project.name,
+      [t.client]: project.client ?? "",
+      [t.location]: project.location ?? "",
+      [t.status]: statusLabel(project.status, t),
+      [t.buildingsTitle]: project.building_count ?? 0,
+      [t.budget]: project.budget ?? "",
+      [t.startDate]: formatDateInput(project.start_date),
+      [t.endDate]: formatDateInput(project.end_date),
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteProject,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.projects }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-    },
-  });
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.projectsTitle}
-        subtitle={t.project_count(data?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportProjects("csv")} disabled={!data?.items.length}>
-              <Download size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>
+            {t.projectsTitle}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t.project_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportProjects("csv")}>
               CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportProjects("xlsx")} disabled={!data?.items.length}>
-              <FileSpreadsheet size={16} />
+            </Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportProjects("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            {profile?.role === "admin" ? (
-              <PrimaryButton
+            </Button>
+            {isAdmin ? (
+              <Button
+                type="primary"
+                icon={<Plus size={16} />}
                 onClick={() => {
                   setSelectedProject(undefined);
                   setOpen(true);
                 }}
               >
-                <Plus size={16} />
                 {t.addProject}
-              </PrimaryButton>
+              </Button>
             ) : null}
-          </div>
-        }
-      />
+          </Space>
+        </Col>
+      </Row>
 
-      <Card className="p-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px_auto]">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={14}>
+            <Input
+              allowClear
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
               placeholder={`${t.search} ${t.projects.toLowerCase()}`}
             />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.status}</label>
-            <select
+          </Col>
+          <Col xs={24} md={12} lg={6}>
+            <Select<ProjectStatus | "all">
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allStatuses}</option>
-              <option value="active">{t.active}</option>
-              <option value="completed">{t.completed}</option>
-              <option value="paused">{t.paused}</option>
-            </select>
-          </div>
-          <div className="flex items-end justify-end">
-            <SecondaryButton
+              style={{ width: "100%" }}
+              onChange={setStatusFilter}
+              options={[
+                { label: t.allStatuses, value: "all" },
+                { label: t.active, value: "active" },
+                { label: t.completed, value: "completed" },
+                { label: t.paused, value: "paused" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Button
+              block
+              disabled={!hasFilters}
               onClick={() => {
                 setSearchInput("");
                 setStatusFilter("all");
               }}
-              disabled={!searchInput && statusFilter === "all"}
             >
               {t.clearFilters}
-            </SecondaryButton>
-          </div>
-        </div>
+            </Button>
+          </Col>
+        </Row>
       </Card>
 
-      {isError ? (
-        <ErrorState
-          title={t.projectsTitle}
-          description={error instanceof Error ? error.message : undefined}
-          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.projectsTitle}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
         />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <EmptyState title={t.noProjects} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {data.items.map((project) => (
-              <Card key={project.id} className="p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-base font-semibold text-foreground">{project.name}</p>
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(project.status)}`}
-                      >
-                        {t[project.status]}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[project.client, project.location].filter(Boolean).join(" | ") || t.noDetail}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t.building_count(project.buildingCount)}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {project.startDate ? `${t.from} ${formatDateInput(project.startDate)}` : ""}
-                      {project.endDate ? ` ${t.to} ${formatDateInput(project.endDate)}` : ""}
-                    </p>
-                  </div>
+      ) : null}
 
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-[140px] text-right">
-                      <p className="text-base font-semibold text-foreground">
-                        {project.budget != null ? formatCurrency(project.budget) : "-"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{t.budget}</p>
-                    </div>
+      <Table<ProjectRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        scroll={{ x: 1000 }}
+        pagination={
+          tableProps.pagination
+            ? {
+                ...tableProps.pagination,
+                itemRender: undefined,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} ${t.projects.toLowerCase()}`,
+              }
+            : false
+        }
+      />
 
-                    <div className="flex items-center gap-1">
-                      {profile?.role === "admin" ? (
-                        <>
-                          <IconButton
-                            onClick={() => {
-                              setSelectedProject(project);
-                              setOpen(true);
-                            }}
-                          >
-                            <Pencil size={16} />
-                          </IconButton>
-                          <IconButton
-                            className="hover:text-rose-700"
-                            onClick={() => {
-                              if (window.confirm(t.deleteProjectConfirm)) {
-                                deleteMutation.mutate(project.id);
-                              }
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </IconButton>
-                        </>
-                      ) : null}
-                      <Link href={`/projects/${project.id}`}>
-                        <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                          <ChevronRight size={16} />
-                        </div>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <PaginationControls
-            page={data.page}
-            pageCount={data.pageCount}
-            total={data.total}
-            itemLabel={t.projects.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
-
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <ProjectModal project={selectedProject} onClose={() => setOpen(false)} /> : null}
-    </div>
+      {open ? (
+        <ProjectModal
+          project={selectedProject}
+          onClose={() => setOpen(false)}
+          onSaved={() => void tableQuery.refetch()}
+        />
+      ) : null}
+    </Space>
   );
 }

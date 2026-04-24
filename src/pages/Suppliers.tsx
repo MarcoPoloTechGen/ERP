@@ -1,302 +1,318 @@
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  createSupplier,
-  deleteSupplier,
-  erpKeys,
-  listSuppliersPage,
-  type Supplier,
-  updateSupplier,
-} from "@/lib/erp";
-import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { useLang } from "@/lib/i18n";
-import {
+  App,
+  Alert,
+  Button,
   Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
+  Col,
+  Form,
+  Input,
   Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
+  Popconfirm,
+  Row,
+  Space,
+  Table,
+  Typography,
+  type TableProps,
+} from "antd";
+import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { createSupplier, deleteSupplier, erpKeys, updateSupplier } from "@/lib/erp";
+import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import {
+  addContainsSearchFilter,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
+import { useLang } from "@/lib/i18n";
+
+type SupplierRow = {
+  id: number;
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  created_at: string | null;
+};
 
 type SupplierFormValues = {
   name: string;
-  contact: string;
-  phone: string;
-  email: string;
-  address: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
 };
+
+function buildFilters(search: string) {
+  const filters: CrudFilters = [];
+  addContainsSearchFilter(filters, ["name", "contact", "phone", "email", "address"], search);
+  return filters;
+}
 
 function SupplierModal({
   supplier,
   onClose,
+  onSaved,
 }: {
-  supplier?: Supplier;
+  supplier?: SupplierRow;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const { register, handleSubmit, formState } = useForm<SupplierFormValues>({
-    defaultValues: {
-      name: supplier?.name ?? "",
-      contact: supplier?.contact ?? "",
-      phone: supplier?.phone ?? "",
-      email: supplier?.email ?? "",
-      address: supplier?.address ?? "",
-    },
-  });
+  const [form] = Form.useForm<SupplierFormValues>();
 
   const saveMutation = useMutation({
     mutationFn: async (values: SupplierFormValues) => {
       const payload = {
         name: values.name.trim(),
-        contact: values.contact.trim() || null,
-        phone: values.phone.trim() || null,
-        email: values.email.trim() || null,
-        address: values.address.trim() || null,
+        contact: values.contact?.trim() || null,
+        phone: values.phone?.trim() || null,
+        email: values.email?.trim() || null,
+        address: values.address?.trim() || null,
       };
 
       if (supplier) {
         await updateSupplier(supplier.id, payload);
-      } else {
-        await createSupplier(payload);
+        return;
       }
+
+      await createSupplier(payload);
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.suppliers }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   return (
-    <Modal title={supplier ? t.editSupplier : t.newSupplier} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <Field label={t.name} required error={formState.errors.name ? t.nameRequired : null}>
-          <input {...register("name", { required: true })} className={controlClassName} />
-        </Field>
+    <Modal
+      open
+      title={supplier ? t.editSupplier : t.newSupplier}
+      okText={supplier ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<SupplierFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: supplier?.name ?? "",
+          contact: supplier?.contact ?? "",
+          phone: supplier?.phone ?? "",
+          email: supplier?.email ?? "",
+          address: supplier?.address ?? "",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.namePlaceholder} />
+        </Form.Item>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.contact}>
-            <input
-              {...register("contact")}
-              className={controlClassName}
-              placeholder={t.contactPlaceholder}
-            />
-          </Field>
-          <Field label={t.phoneSup}>
-            <input {...register("phone")} className={controlClassName} placeholder={t.phonePlaceholder} />
-          </Field>
-          <Field label={t.email}>
-            <input
-              type="email"
-              {...register("email")}
-              className={controlClassName}
-              placeholder={t.emailPlaceholder}
-            />
-          </Field>
-          <Field label={t.address}>
-            <input
-              {...register("address")}
-              className={controlClassName}
-              placeholder={t.addressPlaceholder}
-            />
-          </Field>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={saveMutation.isPending}>
-            {supplier ? t.save : t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="contact" label={t.contact}>
+              <Input placeholder={t.contactPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="phone" label={t.phoneSup}>
+              <Input placeholder={t.phonePlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="email" label={t.email}>
+              <Input type="email" placeholder={t.emailPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="address" label={t.address}>
+              <Input placeholder={t.addressPlaceholder} />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
     </Modal>
   );
 }
 
 export default function Suppliers() {
   const { t } = useLang();
-  const queryClient = useQueryClient();
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | undefined>(undefined);
+  const { message } = App.useApp();
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierRow | undefined>();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const search = useDeferredValue(searchInput.trim());
+
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<SupplierRow>({
+    resource: "suppliers",
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
+    sorters: { initial: [{ field: "created_at", order: "desc" }] },
+    syncWithLocation: false,
+  });
 
   useEffect(() => {
-    setPage(1);
-  }, [deferredSearch]);
+    setCurrentPage(1);
+    setFilters(buildFilters(search), "replace");
+  }, [search, setCurrentPage, setFilters]);
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.suppliersPage({ page, pageSize: 10, search: deferredSearch }),
-    queryFn: () =>
-      listSuppliersPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-      }),
+  const deleteMutation = useMutation({
+    mutationFn: (supplier: SupplierRow) => deleteSupplier(supplier.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
+
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const columns: TableProps<SupplierRow>["columns"] = [
+    {
+      title: t.name,
+      dataIndex: "name",
+      render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
+    },
+    { title: t.contact, dataIndex: "contact", render: (value: string | null) => value ?? "-" },
+    { title: t.phoneSup, dataIndex: "phone", render: (value: string | null) => value ?? "-" },
+    { title: t.email, dataIndex: "email", render: (value: string | null) => value ?? "-" },
+    { title: t.address, dataIndex: "address", render: (value: string | null) => value ?? "-" },
+    {
+      title: "",
+      key: "actions",
+      align: "right",
+      width: 96,
+      render: (_, supplier) => (
+        <Space size="small">
+          <Button
+            type="text"
+            icon={<Pencil size={16} />}
+            onClick={() => {
+              setSelectedSupplier(supplier);
+              setOpen(true);
+            }}
+          />
+          <Popconfirm
+            title={t.deleteSupplierConfirm}
+            okText={t.remove}
+            cancelText={t.cancel}
+            onConfirm={() => deleteMutation.mutate(supplier)}
+          >
+            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   function exportSuppliers(format: "csv" | "xlsx") {
     const fileBase = t.suppliersTitle;
-    const rows =
-      data?.items.map((supplier) => ({
-        [t.name]: supplier.name,
-        [t.contact]: supplier.contact ?? "",
-        [t.phoneSup]: supplier.phone ?? "",
-        [t.email]: supplier.email ?? "",
-        [t.address]: supplier.address ?? "",
-      })) ?? [];
+    const exportRows = rows.map((supplier) => ({
+      [t.name]: supplier.name,
+      [t.contact]: supplier.contact ?? "",
+      [t.phoneSup]: supplier.phone ?? "",
+      [t.email]: supplier.email ?? "",
+      [t.address]: supplier.address ?? "",
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteSupplier,
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.suppliers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-    },
-  });
-
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.suppliersTitle}
-        subtitle={t.supplier_count(data?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportSuppliers("csv")} disabled={!data?.items.length}>
-              <Download size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>
+            {t.suppliersTitle}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t.supplier_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportSuppliers("csv")}>
               CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportSuppliers("xlsx")} disabled={!data?.items.length}>
-              <FileSpreadsheet size={16} />
+            </Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportSuppliers("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            <PrimaryButton
+            </Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
               onClick={() => {
                 setSelectedSupplier(undefined);
                 setOpen(true);
               }}
             >
-              <Plus size={16} />
               {t.addSupplier}
-            </PrimaryButton>
-          </div>
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={20}>
+            <Input
+              allowClear
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={`${t.search} ${t.suppliers.toLowerCase()}`}
+            />
+          </Col>
+          <Col xs={24} lg={4}>
+            <Button block disabled={!searchInput} onClick={() => setSearchInput("")}>
+              {t.clearFilters}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.suppliersTitle}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
+        />
+      ) : null}
+
+      <Table<SupplierRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        scroll={{ x: 900 }}
+        pagination={
+          tableProps.pagination
+            ? {
+                ...tableProps.pagination,
+                itemRender: undefined,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} ${t.suppliers.toLowerCase()}`,
+              }
+            : false
         }
       />
 
-      <Card className="p-4">
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
-              placeholder={`${t.search} ${t.suppliers.toLowerCase()}`}
-            />
-          </div>
-          <div className="flex items-end justify-end">
-            <SecondaryButton onClick={() => setSearchInput("")} disabled={!searchInput}>
-              {t.clearFilters}
-            </SecondaryButton>
-          </div>
-        </div>
-      </Card>
-
-      {isError ? (
-        <ErrorState
-          title={t.suppliersTitle}
-          description={error instanceof Error ? error.message : undefined}
-          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+      {open ? (
+        <SupplierModal
+          supplier={selectedSupplier}
+          onClose={() => setOpen(false)}
+          onSaved={() => void tableQuery.refetch()}
         />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-24 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <EmptyState title={t.noSuppliers} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {data.items.map((supplier) => (
-              <Card key={supplier.id} className="p-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold text-foreground">{supplier.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {[supplier.contact, supplier.phone, supplier.email].filter(Boolean).join(" | ") || t.noDetail}
-                    </p>
-                    {supplier.address ? (
-                      <p className="mt-1 text-xs text-muted-foreground">{supplier.address}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <IconButton
-                      onClick={() => {
-                        setSelectedSupplier(supplier);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </IconButton>
-                    <IconButton
-                      className="hover:text-rose-700"
-                      onClick={() => {
-                        if (window.confirm(t.deleteSupplierConfirm)) {
-                          deleteMutation.mutate(supplier.id);
-                        }
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </IconButton>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <PaginationControls
-            page={data.page}
-            pageCount={data.pageCount}
-            total={data.total}
-            itemLabel={t.suppliers.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
-
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <SupplierModal supplier={selectedSupplier} onClose={() => setOpen(false)} /> : null}
-    </div>
+      ) : null}
+    </Space>
   );
 }

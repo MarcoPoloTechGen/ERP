@@ -1,162 +1,252 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import type { CrudFilters } from "@refinedev/core";
+import { useTable } from "@refinedev/antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import {
+  App,
+  Alert,
+  Button,
+  Card,
+  Col,
+  Form,
+  Image as AntImage,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  Upload,
+  type TableProps,
+} from "antd";
 import { ChevronRight, Download, FileSpreadsheet, Image as ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createInvoice,
   deleteInvoice,
   erpKeys,
-  listInvoicesPage,
   listProducts,
   listProjectBuildings,
   listProjects,
   listSuppliers,
   type Currency,
-  type Invoice,
+  type InvoiceStatus,
+  type RecordStatus,
   updateInvoice,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
-import { formatCurrency, formatDate, formatDateInput, statusColors } from "@/lib/format";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { useLang } from "@/lib/i18n";
-import { deleteInvoiceImageByUrl, uploadInvoiceImage } from "@/lib/supabase";
+import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
 import {
-  Card,
-  controlClassName,
-  EmptyState,
-  ErrorState,
-  Field,
-  IconButton,
-  Modal,
-  PageHeader,
-  PaginationControls,
-  PrimaryButton,
-  SecondaryButton,
-} from "@/components/ui-kit";
+  addContainsSearchFilter,
+  addDateRangeFilter,
+  addEqualFilter,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
+import { useLang } from "@/lib/i18n";
+import {
+  createSignedInvoiceImageUrl,
+  createSignedInvoiceImageUrls,
+  deleteInvoiceImageByUrl,
+  resolveInvoiceImagePath,
+  uploadInvoiceImage,
+} from "@/lib/supabase";
+
+type InvoiceRow = {
+  id: number;
+  number: string;
+  status: InvoiceStatus;
+  record_status: RecordStatus;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  building_id: number | null;
+  building_name: string | null;
+  product_id: number | null;
+  product_name: string | null;
+  total_amount: number | null;
+  paid_amount: number | null;
+  remaining_amount: number | null;
+  currency: Currency;
+  invoice_date: string | null;
+  due_date: string | null;
+  notes: string | null;
+  image_path: string | null;
+  created_by_name: string | null;
+  created_at: string | null;
+};
 
 type InvoiceFormValues = {
   number: string;
-  supplierId: string;
-  projectId: string;
+  supplierId?: number;
+  projectId?: number;
   assignmentScope: "project" | "building";
-  buildingId: string;
-  productId: string;
-  totalAmount: string;
-  paidAmount: string;
+  buildingId?: number;
+  productId?: number;
+  totalAmount: number;
+  paidAmount?: number;
   currency: Currency;
-  status: "unpaid" | "partial" | "paid";
-  invoiceDate: string;
-  dueDate: string;
-  notes: string;
+  status: InvoiceStatus;
+  invoiceDate?: string;
+  dueDate?: string;
+  notes?: string;
 };
 
-function ExpenseImageField({
-  value,
-  previewUrl,
-  onChange,
+const invoiceStatusColor: Record<InvoiceStatus, string> = {
+  unpaid: "red",
+  partial: "orange",
+  paid: "green",
+};
+
+function invoiceStatusLabel(status: InvoiceStatus, t: ReturnType<typeof useLang>["t"]) {
+  if (status === "paid") {
+    return t.paid;
+  }
+  if (status === "partial") {
+    return t.partial;
+  }
+  return t.unpaid;
+}
+
+function buildFilters({
+  search,
+  status,
+  projectId,
+  supplierId,
+  currency,
+  dateFrom,
+  dateTo,
+}: {
+  search: string;
+  status: InvoiceStatus | "all";
+  projectId: string;
+  supplierId: string;
+  currency: Currency | "all";
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const filters: CrudFilters = [];
+  addContainsSearchFilter(
+    filters,
+    ["number", "supplier_name", "project_name", "building_name", "product_name", "created_by_name", "notes"],
+    search,
+  );
+  addEqualFilter(filters, "status", status);
+  addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
+  addEqualFilter(filters, "supplier_id", supplierId === "all" ? "all" : Number(supplierId));
+  addEqualFilter(filters, "currency", currency);
+  addDateRangeFilter(filters, "invoice_date", dateFrom, dateTo);
+  return filters;
+}
+
+function InvoiceImageField({
+  displayUrl,
   label,
   removeLabel,
+  onSelect,
+  onRemove,
 }: {
-  value: string | null;
-  previewUrl?: string | null;
-  onChange: (value: File | null) => void;
+  displayUrl: string | null;
   label: string;
   removeLabel: string;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const displayUrl = previewUrl ?? value;
-
   return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium text-foreground">{label}</span>
+    <Space direction="vertical" size="small">
+      <Typography.Text strong>{label}</Typography.Text>
       {displayUrl ? (
-        <div className="flex items-center gap-4">
-          <img src={displayUrl} alt={label} className="h-20 rounded-xl border border-border object-cover" />
-          <SecondaryButton
-            onClick={() => {
-              onChange(null);
-              if (inputRef.current) {
-                inputRef.current.value = "";
-              }
-            }}
-          >
-            {removeLabel}
-          </SecondaryButton>
-        </div>
+        <Space align="center">
+          <AntImage width={88} height={88} src={displayUrl} alt={label} style={{ objectFit: "cover", borderRadius: 6 }} />
+          <Button onClick={onRemove}>{removeLabel}</Button>
+        </Space>
       ) : (
-        <SecondaryButton onClick={() => inputRef.current?.click()}>
-          <ImageIcon size={16} />
-          {label}
-        </SecondaryButton>
+        <Upload
+          accept="image/*"
+          showUploadList={false}
+          beforeUpload={(file) => {
+            onSelect(file);
+            return false;
+          }}
+        >
+          <Button icon={<ImageIcon size={16} />}>{label}</Button>
+        </Upload>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          onChange(file ?? null);
-        }}
-      />
-    </div>
+    </Space>
   );
 }
 
 function InvoiceModal({
   invoice,
   onClose,
+  onSaved,
 }: {
-  invoice?: Invoice;
+  invoice?: InvoiceRow;
   onClose: () => void;
+  onSaved: () => void;
 }) {
   const { t } = useLang();
   const { profile } = useAuth();
+  const { message } = App.useApp();
   const queryClient = useQueryClient();
-  const [storedImagePath, setStoredImagePath] = useState<string | null>(invoice?.imagePath ?? null);
+  const [form] = Form.useForm<InvoiceFormValues>();
+  const projectId = Form.useWatch("projectId", form);
+  const assignmentScope = Form.useWatch("assignmentScope", form);
+  const selectedProjectId = typeof projectId === "number" ? projectId : undefined;
+  const [storedImagePath, setStoredImagePath] = useState<string | null>(invoice?.image_path ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(invoice?.imageUrl ?? null);
-  const { data: suppliers } = useQuery({
-    queryKey: erpKeys.suppliers,
-    queryFn: listSuppliers,
-  });
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
-  const { data: products } = useQuery({
-    queryKey: erpKeys.products,
-    queryFn: listProducts,
-  });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
 
-  const { register, control, handleSubmit, formState, setValue } = useForm<InvoiceFormValues>({
-    defaultValues: {
-      number: invoice?.number ?? "",
-      supplierId: invoice?.supplierId != null ? String(invoice.supplierId) : "",
-      projectId: invoice?.projectId != null ? String(invoice.projectId) : "",
-      assignmentScope: invoice?.buildingId != null ? "building" : "project",
-      buildingId: invoice?.buildingId != null ? String(invoice.buildingId) : "",
-      productId: invoice?.productId != null ? String(invoice.productId) : "",
-      totalAmount: String(invoice?.totalAmount ?? ""),
-      paidAmount: String(invoice?.paidAmount ?? 0),
-      currency: invoice?.currency ?? "USD",
-      status: invoice?.status ?? "unpaid",
-      invoiceDate: formatDateInput(invoice?.invoiceDate) || new Date().toISOString().slice(0, 10),
-      dueDate: formatDateInput(invoice?.dueDate),
-      notes: invoice?.notes ?? "",
-    },
-  });
-
-  const projectId = useWatch({ control, name: "projectId" });
-  const assignmentScope = useWatch({ control, name: "assignmentScope" });
-  const selectedProjectId = projectId ? Number(projectId) : null;
-
+  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
-    queryFn: () => listProjectBuildings(selectedProjectId ?? undefined),
+    queryFn: () => listProjectBuildings(selectedProjectId),
     enabled: selectedProjectId != null,
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSignedImage() {
+      if (!invoice?.image_path) {
+        setExistingImageUrl(null);
+        return;
+      }
+
+      try {
+        const signedUrl = await createSignedInvoiceImageUrl(invoice.image_path);
+        if (!cancelled) {
+          setExistingImageUrl(signedUrl);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          void message.error(toErrorMessage(error));
+        }
+      }
+    }
+
+    void loadSignedImage();
+    return () => {
+      cancelled = true;
+    };
+  }, [invoice?.image_path, message]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const projectProducts = useMemo(() => {
     return (products ?? []).filter((product) => {
@@ -174,38 +264,33 @@ function InvoiceModal({
       const paidAmount = Number(values.paidAmount || 0);
       let nextImagePath = storedImagePath;
       let uploadedPath: string | null = null;
-      const previousImagePath = invoice?.imagePath ?? null;
+      const previousImagePath = invoice?.image_path ?? null;
 
       if (selectedImageFile) {
         const uploaded = await uploadInvoiceImage(
           selectedImageFile,
           values.number || "expense",
-          values.projectId ? Number(values.projectId) : null,
+          values.projectId ?? null,
         );
         uploadedPath = uploaded.path;
         nextImagePath = uploaded.path;
-      } else if (!previewUrl && storedImagePath) {
-        nextImagePath = null;
       }
 
       const payload = {
         number: values.number.trim(),
-        supplierId: values.supplierId ? Number(values.supplierId) : null,
-        projectId: values.projectId ? Number(values.projectId) : null,
-        buildingId:
-          values.projectId && values.assignmentScope === "building" && values.buildingId
-            ? Number(values.buildingId)
-            : null,
-        productId: values.productId ? Number(values.productId) : null,
+        supplierId: values.supplierId ?? null,
+        projectId: values.projectId ?? null,
+        buildingId: values.projectId && values.assignmentScope === "building" ? values.buildingId ?? null : null,
+        productId: values.productId ?? null,
         totalAmount,
         paidAmount,
         currency: values.currency,
         status: values.status,
         invoiceDate: values.invoiceDate || null,
         dueDate: values.dueDate || null,
-        notes: values.notes.trim() || null,
+        notes: values.notes?.trim() || null,
         imagePath: nextImagePath,
-      } as const;
+      };
 
       try {
         if (invoice) {
@@ -229,528 +314,546 @@ function InvoiceModal({
         queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
+      onSaved();
       onClose();
     },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
+  const imageUrl = previewUrl ?? (storedImagePath ? existingImageUrl : null);
+
   return (
-    <Modal title={invoice ? t.editInvoice : t.newInvoice} onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit((values) => saveMutation.mutate(values))}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={t.invoiceNumber} required error={formState.errors.number ? t.nameRequired : null}>
-            <input
-              {...register("number", { required: true })}
-              className={controlClassName}
-              placeholder={t.invoiceNumberPlaceholder}
-            />
-          </Field>
-
-          <Field label={t.invoiceStatus_label}>
-            <select {...register("status")} className={controlClassName}>
-              <option value="unpaid">{t.unpaid}</option>
-              <option value="partial">{t.partial}</option>
-              <option value="paid">{t.paid}</option>
-            </select>
-          </Field>
-
-          <Field label={t.user}>
-            <input
-              readOnly
-              value={profile?.fullName ?? profile?.email ?? ""}
-              className={`${controlClassName} bg-muted`}
-            />
-          </Field>
-
-          <Field label={t.supplierOption}>
-            <select {...register("supplierId")} className={controlClassName}>
-              <option value="">{t.noneOption}</option>
-              {suppliers?.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.projectOption}>
-            <select
-              {...register("projectId", {
-                onChange: () => {
-                  setValue("assignmentScope", "project");
-                  setValue("buildingId", "");
-                  setValue("productId", "");
-                },
-              })}
-              className={controlClassName}
-            >
-              <option value="">{t.noneOption}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={t.invoiceAssignment}>
-            <select
-              {...register("assignmentScope", {
-                onChange: (event) => {
-                  if (event.target.value !== "building") {
-                    setValue("buildingId", "");
+    <Modal
+      open
+      width={860}
+      title={invoice ? t.editInvoice : t.newInvoice}
+      okText={invoice ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<InvoiceFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          number: invoice?.number ?? "",
+          supplierId: invoice?.supplier_id ?? undefined,
+          projectId: invoice?.project_id ?? undefined,
+          assignmentScope: invoice?.building_id != null ? "building" : "project",
+          buildingId: invoice?.building_id ?? undefined,
+          productId: invoice?.product_id ?? undefined,
+          totalAmount: invoice?.total_amount ?? undefined,
+          paidAmount: invoice?.paid_amount ?? 0,
+          currency: invoice?.currency ?? "USD",
+          status: invoice?.status ?? "unpaid",
+          invoiceDate: formatDateInput(invoice?.invoice_date) || new Date().toISOString().slice(0, 10),
+          dueDate: formatDateInput(invoice?.due_date),
+          notes: invoice?.notes ?? "",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="number" label={t.invoiceNumber} rules={[{ required: true, message: t.nameRequired }]}>
+              <Input placeholder={t.invoiceNumberPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="status" label={t.invoiceStatus_label}>
+              <Select
+                options={[
+                  { label: t.unpaid, value: "unpaid" },
+                  { label: t.partial, value: "partial" },
+                  { label: t.paid, value: "paid" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item label={t.user}>
+              <Input readOnly value={profile?.fullName ?? profile?.email ?? ""} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="supplierId" label={t.supplierOption}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="projectId" label={t.projectOption}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                onChange={() =>
+                  form.setFieldsValue({ assignmentScope: "project", buildingId: undefined, productId: undefined })
+                }
+                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="assignmentScope" label={t.invoiceAssignment}>
+              <Select
+                disabled={!projectId}
+                onChange={(value) => {
+                  if (value !== "building") {
+                    form.setFieldValue("buildingId", undefined);
                   }
-                },
-              })}
-              className={controlClassName}
-              disabled={!projectId}
-            >
-              <option value="project">{t.projectGlobalCost}</option>
-              <option value="building" disabled={!projectBuildings?.length}>
-                {t.projectBuildingCost}
-              </option>
-            </select>
-          </Field>
-
+                }}
+                options={[
+                  { label: t.projectGlobalCost, value: "project" },
+                  { label: t.projectBuildingCost, value: "building", disabled: !projectBuildings?.length },
+                ]}
+              />
+            </Form.Item>
+          </Col>
           {projectId && assignmentScope === "building" ? (
-            <Field label={t.buildingLabel}>
-              <select {...register("buildingId")} className={controlClassName}>
-                <option value="">{t.noneOption}</option>
-                {projectBuildings?.map((building) => (
-                  <option key={building.id} value={building.id}>
-                    {building.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <Col xs={24} md={12}>
+              <Form.Item name="buildingId" label={t.buildingLabel}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  options={projectBuildings?.map((building) => ({ label: building.name, value: building.id }))}
+                />
+              </Form.Item>
+            </Col>
           ) : null}
+          <Col xs={24} md={12}>
+            <Form.Item name="productId" label={t.products}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                options={projectProducts.map((product) => ({
+                  label: product.buildingName ? `${product.name} - ${product.buildingName}` : product.name,
+                  value: product.id,
+                }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="totalAmount" label={t.totalAmount} rules={[{ required: true, message: t.amountRequired }]}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="paidAmount" label={t.paidAmount}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="currency" label={t.currency}>
+              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="invoiceDate" label={t.invoiceDate}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="dueDate" label={t.dueDate}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+        </Row>
 
-          <Field label={t.products}>
-            <select {...register("productId")} className={controlClassName}>
-              <option value="">{t.noneOption}</option>
-              {projectProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                  {product.buildingName ? ` - ${product.buildingName}` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <Form.Item name="notes" label={t.notes}>
+          <Input.TextArea rows={3} />
+        </Form.Item>
 
-          <Field label={t.totalAmount} required error={formState.errors.totalAmount ? t.amountRequired : null}>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              {...register("totalAmount", { required: true })}
-              className={controlClassName}
-            />
-          </Field>
-
-          <Field label={t.paidAmount}>
-            <input type="number" step="0.01" min="0" {...register("paidAmount")} className={controlClassName} />
-          </Field>
-
-          <Field label={t.currency}>
-            <select {...register("currency")} className={controlClassName}>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </Field>
-
-          <Field label={t.invoiceDate}>
-            <input type="date" {...register("invoiceDate")} className={controlClassName} />
-          </Field>
-
-          <Field label={t.dueDate}>
-            <input type="date" {...register("dueDate")} className={controlClassName} />
-          </Field>
-        </div>
-
-        <Field label={t.notes}>
-          <textarea {...register("notes")} rows={3} className={`${controlClassName} resize-none`} />
-        </Field>
-
-        <ExpenseImageField
-          value={storedImagePath ? invoice?.imageUrl ?? null : null}
-          previewUrl={previewUrl}
-          onChange={(file) => {
-            setSelectedImageFile(file);
-            if (file) {
-              setPreviewUrl(URL.createObjectURL(file));
-            } else {
-              setPreviewUrl(null);
-              setStoredImagePath(null);
-            }
-          }}
+        <InvoiceImageField
+          displayUrl={imageUrl}
           label={t.receiptImage}
           removeLabel={t.remove}
+          onSelect={(file) => {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+            }
+            setSelectedImageFile(file);
+            setPreviewUrl(URL.createObjectURL(file));
+          }}
+          onRemove={() => {
+            if (previewUrl) {
+              URL.revokeObjectURL(previewUrl);
+            }
+            setSelectedImageFile(null);
+            setPreviewUrl(null);
+            setStoredImagePath(null);
+            setExistingImageUrl(null);
+          }}
         />
-
-        <div className="flex justify-end gap-3 pt-2">
-          <SecondaryButton onClick={onClose}>{t.cancel}</SecondaryButton>
-          <PrimaryButton type="submit" disabled={saveMutation.isPending}>
-            {invoice ? t.save : t.create}
-          </PrimaryButton>
-        </div>
-      </form>
+      </Form>
     </Modal>
   );
 }
 
 export default function Invoices() {
   const { t } = useLang();
-  const queryClient = useQueryClient();
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | undefined>(undefined);
+  const { message } = App.useApp();
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
   const [open, setOpen] = useState(false);
-  const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState<"all" | "unpaid" | "partial" | "paid">("all");
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const deferredSearch = useDeferredValue(searchInput.trim());
+  const [imageUrlsByPath, setImageUrlsByPath] = useState(new Map<string, string>());
+  const search = useDeferredValue(searchInput.trim());
+
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+
+  const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<InvoiceRow>({
+    resource: "app_invoices",
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
+    sorters: {
+      initial: [
+        { field: "invoice_date", order: "desc" },
+        { field: "created_at", order: "desc" },
+      ],
+    },
+    syncWithLocation: false,
+  });
 
   useEffect(() => {
-    setPage(1);
-  }, [currencyFilter, dateFrom, dateTo, deferredSearch, filter, projectFilter, supplierFilter]);
-
-  const { data: projects } = useQuery({
-    queryKey: erpKeys.projects,
-    queryFn: listProjects,
-  });
-  const { data: suppliers } = useQuery({
-    queryKey: erpKeys.suppliers,
-    queryFn: listSuppliers,
-  });
-
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: erpKeys.invoicesPage({
-      page,
-      pageSize: 10,
-      search: deferredSearch,
-      status: filter,
-      projectId: projectFilter === "all" ? null : Number(projectFilter),
-      supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
-      currency: currencyFilter,
-      dateFrom: dateFrom || null,
-      dateTo: dateTo || null,
-    }),
-    queryFn: () =>
-      listInvoicesPage({
-        page,
-        pageSize: 10,
-        search: deferredSearch,
-        status: filter,
-        projectId: projectFilter === "all" ? null : Number(projectFilter),
-        supplierId: supplierFilter === "all" ? null : Number(supplierFilter),
+    setCurrentPage(1);
+    setFilters(
+      buildFilters({
+        search,
+        status: statusFilter,
+        projectId: projectFilter,
+        supplierId: supplierFilter,
         currency: currencyFilter,
-        dateFrom: dateFrom || null,
-        dateTo: dateTo || null,
+        dateFrom,
+        dateTo,
       }),
-  });
+      "replace",
+    );
+  }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters, statusFilter, supplierFilter]);
 
   const deleteMutation = useMutation({
-    mutationFn: async (invoice: Invoice) => {
-      await deleteInvoice(invoice.id);
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-    },
+    mutationFn: (invoice: InvoiceRow) => deleteInvoice(invoice.id),
+    onSuccess: () => void tableQuery.refetch(),
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
+
+  const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const imagePathKey = rows.map((invoice) => invoice.image_path ?? "").join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSignedImages() {
+      try {
+        const urls = await createSignedInvoiceImageUrls(rows.map((invoice) => invoice.image_path));
+        if (!cancelled) {
+          setImageUrlsByPath(urls);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          void message.error(toErrorMessage(error));
+        }
+      }
+    }
+
+    void loadSignedImages();
+    return () => {
+      cancelled = true;
+    };
+  }, [imagePathKey, message, rows]);
+
+  const hasFilters = Boolean(
+    searchInput ||
+      statusFilter !== "all" ||
+      projectFilter !== "all" ||
+      supplierFilter !== "all" ||
+      currencyFilter !== "all" ||
+      dateFrom ||
+      dateTo,
+  );
+
+  function imageUrlFor(invoice: InvoiceRow) {
+    const path = resolveInvoiceImagePath(invoice.image_path);
+    return path ? imageUrlsByPath.get(path) ?? null : null;
+  }
+
+  const columns: TableProps<InvoiceRow>["columns"] = [
+    {
+      title: t.reference,
+      dataIndex: "number",
+      render: (value: string, invoice) => {
+        const imageUrl = imageUrlFor(invoice);
+        return (
+          <Space>
+            {imageUrl ? (
+              <AntImage
+                width={48}
+                height={48}
+                src={imageUrl}
+                alt={t.receiptImage}
+                style={{ objectFit: "cover", borderRadius: 6 }}
+              />
+            ) : null}
+            <Space direction="vertical" size={0}>
+              <Space size="small" wrap>
+                <Typography.Text strong>{value}</Typography.Text>
+                <Tag color={invoiceStatusColor[invoice.status]}>{invoiceStatusLabel(invoice.status, t)}</Tag>
+                {invoice.record_status === "deleted" ? <Tag>{t.deleted}</Tag> : null}
+              </Space>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {[invoice.supplier_name, invoice.project_name, invoice.product_name].filter(Boolean).join(" | ") ||
+                  t.noDetail}
+              </Typography.Text>
+            </Space>
+          </Space>
+        );
+      },
+    },
+    {
+      title: t.invoiceAssignment,
+      dataIndex: "building_name",
+      render: (value: string | null) => (value ? t.projectBuildingCost : t.projectGlobalCost),
+    },
+    { title: t.user, dataIndex: "created_by_name", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.totalAmount,
+      dataIndex: "total_amount",
+      align: "right",
+      render: (value: number | null, invoice) => formatCurrency(value ?? 0, invoice.currency),
+    },
+    {
+      title: t.remaining_label,
+      dataIndex: "remaining_amount",
+      align: "right",
+      render: (value: number | null, invoice) => formatCurrency(value ?? 0, invoice.currency),
+    },
+    { title: t.invoiceDate, dataIndex: "invoice_date", render: (value: string | null) => formatDate(value) },
+    {
+      title: "",
+      key: "actions",
+      align: "right",
+      width: 144,
+      render: (_, invoice) => (
+        <Space size="small">
+          {invoice.record_status === "active" ? (
+            <>
+              <Button
+                type="text"
+                icon={<Pencil size={16} />}
+                onClick={() => {
+                  setSelectedInvoice(invoice);
+                  setOpen(true);
+                }}
+              />
+              <Popconfirm
+                title={t.deleteInvoiceConfirm}
+                okText={t.remove}
+                cancelText={t.cancel}
+                onConfirm={() => deleteMutation.mutate(invoice)}
+              >
+                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+              </Popconfirm>
+            </>
+          ) : null}
+          <Link href={`/expenses/${invoice.id}`}>
+            <Button type="text" icon={<ChevronRight size={16} />} />
+          </Link>
+        </Space>
+      ),
+    },
+  ];
 
   function exportInvoices(format: "csv" | "xlsx") {
     const fileBase = t.invoicesTitle;
-    const rows =
-      data?.items.map((invoice) => ({
-        [t.reference]: invoice.number,
-        [t.status]: t[invoice.status],
-        [t.invoiceAssignment]: invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost,
-        [t.buildingLabel]: invoice.buildingName ?? "",
-        [t.supplierOption]: invoice.supplierName ?? "",
-        [t.products]: invoice.productName ?? "",
-        [t.projectOption]: invoice.projectName ?? "",
-        [t.createdBy]: invoice.createdByName ?? "",
-        [t.totalAmount]: invoice.totalAmount,
-        [t.paidAmount]: invoice.paidAmount,
-        [t.currency]: invoice.currency,
-        [t.remaining_label]: invoice.remainingAmount,
-        [t.invoiceDate]: formatDateInput(invoice.invoiceDate),
-        [t.dueDate]: formatDateInput(invoice.dueDate),
-        [t.notes]: invoice.notes ?? "",
-      })) ?? [];
+    const exportRows = rows.map((invoice) => ({
+      [t.reference]: invoice.number,
+      [t.status]: invoiceStatusLabel(invoice.status, t),
+      [t.invoiceAssignment]: invoice.building_name ? t.projectBuildingCost : t.projectGlobalCost,
+      [t.buildingLabel]: invoice.building_name ?? "",
+      [t.supplierOption]: invoice.supplier_name ?? "",
+      [t.products]: invoice.product_name ?? "",
+      [t.projectOption]: invoice.project_name ?? "",
+      [t.createdBy]: invoice.created_by_name ?? "",
+      [t.totalAmount]: invoice.total_amount ?? 0,
+      [t.paidAmount]: invoice.paid_amount ?? 0,
+      [t.currency]: invoice.currency,
+      [t.remaining_label]: invoice.remaining_amount ?? 0,
+      [t.invoiceDate]: formatDateInput(invoice.invoice_date),
+      [t.dueDate]: formatDateInput(invoice.due_date),
+      [t.notes]: invoice.notes ?? "",
+    }));
 
     if (format === "csv") {
-      exportRowsToCsv(`${fileBase}.csv`, rows);
+      exportRowsToCsv(`${fileBase}.csv`, exportRows);
       return;
     }
 
-    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, rows);
+    exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.invoicesTitle}
-        subtitle={t.expense_count(data?.total ?? 0)}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <SecondaryButton onClick={() => exportInvoices("csv")} disabled={!data?.items.length}>
-              <Download size={16} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="bottom" gutter={[16, 16]} justify="space-between">
+        <Col>
+          <Typography.Title level={2} style={{ marginBottom: 4 }}>
+            {t.invoicesTitle}
+          </Typography.Title>
+          <Typography.Text type="secondary">{t.expense_count(tableQuery.data?.total ?? 0)}</Typography.Text>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportInvoices("csv")}>
               CSV
-            </SecondaryButton>
-            <SecondaryButton onClick={() => exportInvoices("xlsx")} disabled={!data?.items.length}>
-              <FileSpreadsheet size={16} />
+            </Button>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportInvoices("xlsx")}>
               {t.excel}
-            </SecondaryButton>
-            <PrimaryButton
+            </Button>
+            <Button
+              type="primary"
+              icon={<Plus size={16} />}
               onClick={() => {
                 setSelectedInvoice(undefined);
                 setOpen(true);
               }}
             >
-              <Plus size={16} />
               {t.addInvoice}
-            </PrimaryButton>
-          </div>
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+
+      <Card size="small">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={8}>
+            <Input
+              allowClear
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder={`${t.search} ${t.expenses.toLowerCase()}`}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select<InvoiceStatus | "all">
+              value={statusFilter}
+              style={{ width: "100%" }}
+              onChange={setStatusFilter}
+              options={[
+                { label: t.allStatuses, value: "all" },
+                { label: t.unpaidFilter, value: "unpaid" },
+                { label: t.partialFilter, value: "partial" },
+                { label: t.paidFilter, value: "paid" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select
+              value={projectFilter}
+              style={{ width: "100%" }}
+              onChange={setProjectFilter}
+              options={[
+                { label: t.allProjects, value: "all" },
+                ...(projects?.map((project) => ({ label: project.name, value: String(project.id) })) ?? []),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select
+              value={supplierFilter}
+              style={{ width: "100%" }}
+              onChange={setSupplierFilter}
+              options={[
+                { label: t.allSuppliers, value: "all" },
+                ...(suppliers?.map((supplier) => ({ label: supplier.name, value: String(supplier.id) })) ?? []),
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={12} lg={4}>
+            <Select<Currency | "all">
+              value={currencyFilter}
+              style={{ width: "100%" }}
+              onChange={setCurrencyFilter}
+              options={[
+                { label: t.allCurrencies, value: "all" },
+                { label: "USD", value: "USD" },
+                { label: "IQD", value: "IQD" },
+              ]}
+            />
+          </Col>
+          <Col xs={24} md={8} lg={4}>
+            <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          </Col>
+          <Col xs={24} md={8} lg={4}>
+            <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          </Col>
+          <Col xs={24} md={8} lg={4}>
+            <Button
+              block
+              disabled={!hasFilters}
+              onClick={() => {
+                setSearchInput("");
+                setStatusFilter("all");
+                setProjectFilter("all");
+                setSupplierFilter("all");
+                setCurrencyFilter("all");
+                setDateFrom("");
+                setDateTo("");
+              }}
+            >
+              {t.clearFilters}
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {tableQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.invoicesTitle}
+          description={toErrorMessage(tableQuery.error)}
+          action={<Button onClick={() => void tableQuery.refetch()}>{t.retry}</Button>}
+        />
+      ) : null}
+
+      <Table<InvoiceRow>
+        {...tableProps}
+        rowKey="id"
+        columns={columns}
+        scroll={{ x: 1200 }}
+        pagination={
+          tableProps.pagination
+            ? {
+                ...tableProps.pagination,
+                itemRender: undefined,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} ${t.expenses.toLowerCase()}`,
+              }
+            : false
         }
       />
 
-      <Card className="p-4">
-        <div className="grid gap-4 xl:grid-cols-4">
-          <div className="xl:col-span-4">
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.search}</label>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              className={controlClassName}
-              placeholder={`${t.search} ${t.expenses.toLowerCase()}`}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.status}</label>
-            <select
-              value={filter}
-              onChange={(event) => setFilter(event.target.value as typeof filter)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allStatuses}</option>
-              <option value="unpaid">{t.unpaidFilter}</option>
-              <option value="partial">{t.partialFilter}</option>
-              <option value="paid">{t.paidFilter}</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.projectOption}</label>
-            <select
-              value={projectFilter}
-              onChange={(event) => setProjectFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allProjects}</option>
-              {projects?.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.supplierOption}</label>
-            <select
-              value={supplierFilter}
-              onChange={(event) => setSupplierFilter(event.target.value)}
-              className={controlClassName}
-            >
-              <option value="all">{t.allSuppliers}</option>
-              {suppliers?.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.currency}</label>
-            <select
-              value={currencyFilter}
-              onChange={(event) => setCurrencyFilter(event.target.value as Currency | "all")}
-              className={controlClassName}
-            >
-              <option value="all">{t.allCurrencies}</option>
-              <option value="USD">USD</option>
-              <option value="IQD">IQD</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateFrom}</label>
-            <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={controlClassName} />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">{t.dateTo}</label>
-            <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={controlClassName} />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <SecondaryButton
-            onClick={() => {
-              setSearchInput("");
-              setFilter("all");
-              setProjectFilter("all");
-              setSupplierFilter("all");
-              setCurrencyFilter("all");
-              setDateFrom("");
-              setDateTo("");
-            }}
-            disabled={
-              !searchInput &&
-              filter === "all" &&
-              projectFilter === "all" &&
-              supplierFilter === "all" &&
-              currencyFilter === "all" &&
-              !dateFrom &&
-              !dateTo
-            }
-          >
-            {t.clearFilters}
-          </SecondaryButton>
-        </div>
-      </Card>
-
-      {isError ? (
-        <ErrorState
-          title={t.invoicesTitle}
-          description={error instanceof Error ? error.message : undefined}
-          action={<PrimaryButton onClick={() => void refetch()}>{t.retry}</PrimaryButton>}
+      {open ? (
+        <InvoiceModal
+          invoice={selectedInvoice}
+          onClose={() => setOpen(false)}
+          onSaved={() => void tableQuery.refetch()}
         />
-      ) : isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-2xl border border-card-border bg-card" />
-          ))}
-        </div>
-      ) : !data?.items.length ? (
-        <EmptyState title={t.noExpenses} />
-      ) : (
-        <>
-          <div className="space-y-3">
-            {data.items.map((invoice) => (
-              <Card key={invoice.id} className="p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex min-w-0 flex-1 items-center gap-4">
-                    {invoice.imageUrl ? (
-                      <img
-                        src={invoice.imageUrl}
-                        alt={t.receiptImage}
-                        className="h-16 w-16 rounded-2xl border border-border object-cover"
-                      />
-                    ) : null}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-base font-semibold text-foreground">{invoice.number}</p>
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}
-                        >
-                          {t[invoice.status]}
-                        </span>
-                        {invoice.recordStatus === "deleted" ? (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
-                              invoice.recordStatus,
-                            )}`}
-                          >
-                            {t.deleted}
-                          </span>
-                        ) : null}
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                            invoice.buildingName
-                              ? "bg-sky-100 text-sky-800"
-                              : "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {invoice.buildingName ? t.projectBuildingCost : t.projectGlobalCost}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {[invoice.supplierName, invoice.projectName, invoice.productName, formatDate(invoice.invoiceDate)]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">{invoice.createdByName ?? "-"}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-[160px] text-right">
-                      <p className="text-base font-semibold text-foreground">
-                        {formatCurrency(invoice.totalAmount, invoice.currency)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t.remaining_label}: {formatCurrency(invoice.remainingAmount, invoice.currency)}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {invoice.recordStatus === "active" ? (
-                        <>
-                          <IconButton
-                            onClick={() => {
-                              setSelectedInvoice(invoice);
-                              setOpen(true);
-                            }}
-                          >
-                            <Pencil size={16} />
-                          </IconButton>
-                          <IconButton
-                            className="hover:text-rose-700"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => {
-                              if (window.confirm(t.deleteInvoiceConfirm)) {
-                                deleteMutation.mutate(invoice);
-                              }
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </IconButton>
-                        </>
-                      ) : null}
-                      <Link href={`/expenses/${invoice.id}`}>
-                        <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
-                          <ChevronRight size={16} />
-                        </div>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <PaginationControls
-            page={data.page}
-            pageCount={data.pageCount}
-            total={data.total}
-            itemLabel={t.expenses.toLowerCase()}
-            previousLabel={t.previous}
-            nextLabel={t.next}
-            onPageChange={(nextPage) => {
-              startTransition(() => {
-                setPage(nextPage);
-              });
-            }}
-          />
-        </>
-      )}
-
-      {isFetching && !isLoading ? <p className="text-xs text-muted-foreground">{t.loading}...</p> : null}
-
-      {open ? <InvoiceModal invoice={selectedInvoice} onClose={() => setOpen(false)} /> : null}
-    </div>
+      ) : null}
+    </Space>
   );
 }
