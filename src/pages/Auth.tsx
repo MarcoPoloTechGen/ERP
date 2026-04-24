@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "antd";
 import BrandMark from "@/components/BrandMark";
-import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { isEmailRateLimitErrorMessage, localizeAuthErrorMessage } from "@/lib/auth-utils";
 import { erpKeys, getAppSettings } from "@/lib/erp";
@@ -315,22 +315,21 @@ export default function AuthPage() {
                   <p>{error}</p>
                   {mode === "signup" && showResetSuggestion ? (
                     <div className="mt-3">
-                      <SecondaryButton
-                        type="button"
-                        className="border-rose-200 bg-white text-rose-900 hover:bg-rose-100"
+                      <Button
+                        htmlType="button"
                         onClick={() => {
                           setShowResetSuggestion(false);
                           switchMode("recover");
                         }}
                       >
                         {t.resetPasswordAction}
-                      </SecondaryButton>
+                      </Button>
                     </div>
                   ) : null}
                 </div>
               ) : null}
               <div className="flex gap-3">
-                <PrimaryButton type="submit" disabled={submitting || isRecoverCoolingDown}>
+                <Button type="primary" htmlType="submit" loading={submitting} disabled={isRecoverCoolingDown}>
                   {mode === "signin"
                     ? t.signIn
                     : mode === "signup"
@@ -338,9 +337,9 @@ export default function AuthPage() {
                       : isRecoverCoolingDown
                         ? t.sendResetLinkCooldown(recoverCooldownSeconds)
                         : t.sendResetLink}
-                </PrimaryButton>
-                <SecondaryButton
-                  type="button"
+                </Button>
+                <Button
+                  htmlType="button"
                   onClick={() => {
                     if (mode === "recover") {
                       switchMode("signin");
@@ -355,7 +354,7 @@ export default function AuthPage() {
                   }}
                 >
                   {mode === "recover" ? t.backToSignIn : t.reset}
-                </SecondaryButton>
+                </Button>
               </div>
             </form>
           </div>

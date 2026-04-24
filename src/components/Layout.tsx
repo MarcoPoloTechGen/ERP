@@ -15,8 +15,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Button } from "antd";
 import BrandMark from "@/components/BrandMark";
-import { SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
@@ -164,15 +164,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </div>
 
-            <SecondaryButton
-              className="w-full justify-center border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
+            <Button
+              block
+              icon={<LogOut size={16} />}
               onClick={() => {
                 void signOut();
               }}
             >
-              <LogOut size={16} />
               {t.signOut}
-            </SecondaryButton>
+            </Button>
 
             <p className="text-center text-xs text-sidebar-foreground/45">{t.version}</p>
           </div>

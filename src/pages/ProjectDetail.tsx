@@ -1,10 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, FileText } from "lucide-react";
-import { Card, EmptyState } from "@/components/ui-kit";
-import { erpKeys, getProject, listInvoices, listProjectBuildings } from "@/lib/erp";
-import { formatCurrency, formatDate, statusColors } from "@/lib/format";
+import { Button, Card, Col, Empty, Row, Skeleton, Space, Tag, Typography } from "antd";
+import { erpKeys, getProject, listInvoices, listProjectBuildings, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+
+function projectStatusColor(status: ProjectStatus) {
+  if (status === "completed") {
+    return "blue";
+  }
+  if (status === "paused") {
+    return "orange";
+  }
+  return "green";
+}
+
+function invoiceStatusColor(status: InvoiceStatus) {
+  if (status === "paid") {
+    return "green";
+  }
+  if (status === "partial") {
+    return "orange";
+  }
+  return "red";
+}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,150 +52,123 @@ export default function ProjectDetail() {
   const globalInvoices = relatedInvoices.filter((invoice) => invoice.buildingId == null);
 
   if (isLoading || !project) {
-    return isLoading ? (
-      <div className="h-32 animate-pulse rounded-2xl border border-card-border bg-card" />
-    ) : (
-      <EmptyState title={t.notFound} />
-    );
+    return isLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : <Empty description={t.notFound} />;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/projects">
-          <div className="cursor-pointer rounded-xl border border-border bg-background p-2 text-foreground transition hover:bg-muted">
-            <ArrowLeft size={18} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="middle" gutter={[16, 16]}>
+        <Col flex="none">
+          <Link href="/projects">
+            <Button icon={<ArrowLeft size={16} />} />
+          </Link>
+        </Col>
+        <Col flex="auto">
+          <Space size="small" wrap>
+            <Typography.Title level={2} style={{ margin: 0 }}>
+              {project.name}
+            </Typography.Title>
+            <Tag color={projectStatusColor(project.status)}>{t[project.status]}</Tag>
+          </Space>
+          <div>
+            <Typography.Text type="secondary">{project.client ?? t.noClient}</Typography.Text>
           </div>
-        </Link>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold text-foreground">{project.name}</h1>
-            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(project.status)}`}>
-              {t[project.status]}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{project.client ?? t.noClient}</p>
-        </div>
-      </div>
+        </Col>
+      </Row>
 
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">{t.projectInfo}</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted-foreground">{t.location}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{project.location ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.budget}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">
-              {project.budget != null ? formatCurrency(project.budget) : "-"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.startDate}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{formatDate(project.startDate)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.endDate}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{formatDate(project.endDate)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.buildingsTitle}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{t.building_count(buildings?.length ?? 0)}</p>
-          </div>
-        </div>
+      <Card title={t.projectInfo}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={12}>
+            <Typography.Text type="secondary">{t.location}</Typography.Text>
+            <div><Typography.Text strong>{project.location ?? "-"}</Typography.Text></div>
+          </Col>
+          <Col xs={24} md={12}>
+            <Typography.Text type="secondary">{t.budget}</Typography.Text>
+            <div><Typography.Text strong>{project.budget != null ? formatCurrency(project.budget) : "-"}</Typography.Text></div>
+          </Col>
+          <Col xs={24} md={12}>
+            <Typography.Text type="secondary">{t.startDate}</Typography.Text>
+            <div><Typography.Text strong>{formatDate(project.startDate)}</Typography.Text></div>
+          </Col>
+          <Col xs={24} md={12}>
+            <Typography.Text type="secondary">{t.endDate}</Typography.Text>
+            <div><Typography.Text strong>{formatDate(project.endDate)}</Typography.Text></div>
+          </Col>
+          <Col xs={24} md={12}>
+            <Typography.Text type="secondary">{t.buildingsTitle}</Typography.Text>
+            <div><Typography.Text strong>{t.building_count(buildings?.length ?? 0)}</Typography.Text></div>
+          </Col>
+        </Row>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-foreground">{t.buildingsTitle}</h2>
-        </div>
-
+      <Card title={t.buildingsTitle}>
         {!buildings?.length ? (
-          <div className="p-5">
-            <EmptyState title={t.noBuildings} />
-          </div>
+          <Empty description={t.noBuildings} />
         ) : (
-          <div className="divide-y divide-border">
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
             {buildings.map((building) => {
               const buildingInvoices = relatedInvoices.filter((invoice) => invoice.buildingId === building.id);
               const total = buildingInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
 
               return (
-                <div key={building.id} className="px-5 py-4">
+                <Card key={building.id} size="small">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-foreground">{building.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.relatedInvoices_count(buildingInvoices.length)}</p>
+                      <Typography.Text strong>{building.name}</Typography.Text>
+                      <div>
+                        <Typography.Text type="secondary">{t.relatedInvoices_count(buildingInvoices.length)}</Typography.Text>
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold text-foreground">{formatCurrency(total)}</p>
+                    <Typography.Text strong>{formatCurrency(total)}</Typography.Text>
                   </div>
-                </div>
+                </Card>
               );
             })}
-          </div>
+          </Space>
         )}
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-          <FileText size={16} className="text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">{t.expense_count(relatedInvoices.length)}</h2>
-        </div>
-
+      <Card
+        title={
+          <Space>
+            <FileText size={16} />
+            <span>{t.expense_count(relatedInvoices.length)}</span>
+          </Space>
+        }
+      >
         {!relatedInvoices.length ? (
-          <div className="p-5">
-            <EmptyState title={t.noInvoicesForProject} />
-          </div>
+          <Empty description={t.noInvoicesForProject} />
         ) : (
-          <div className="divide-y divide-border">
-            {globalInvoices.length ? (
-              <div className="px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {t.projectGlobalCost}
-              </div>
-            ) : null}
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            {globalInvoices.length ? <Typography.Text type="secondary">{t.projectGlobalCost}</Typography.Text> : null}
             {relatedInvoices.map((invoice) => (
               <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
-                <div className="cursor-pointer px-5 py-4 transition hover:bg-muted/40">
+                <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{invoice.number}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? t.projectGlobalCost, formatDate(invoice.invoiceDate)]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      </p>
+                      <Typography.Text strong ellipsis>{invoice.number}</Typography.Text>
+                      <div>
+                        <Typography.Text type="secondary">
+                          {[invoice.supplierName ?? t.noSupplier, invoice.buildingName ?? t.projectGlobalCost, formatDate(invoice.invoiceDate)]
+                            .filter(Boolean)
+                            .join(" | ")}
+                        </Typography.Text>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">
-                        {formatCurrency(invoice.totalAmount, invoice.currency)}
-                      </p>
-                      <div className="mt-1 flex flex-wrap justify-end gap-1">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
-                            invoice.status,
-                          )}`}
-                        >
-                          {t[invoice.status]}
-                        </span>
-                        {invoice.recordStatus === "deleted" ? (
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
-                              invoice.recordStatus,
-                            )}`}
-                          >
-                            {t.deleted}
-                          </span>
-                        ) : null}
+                      <Typography.Text strong>{formatCurrency(invoice.totalAmount, invoice.currency)}</Typography.Text>
+                      <div style={{ marginTop: 4 }}>
+                        <Tag color={invoiceStatusColor(invoice.status)}>{t[invoice.status]}</Tag>
+                        {invoice.recordStatus === "deleted" ? <Tag>{t.deleted}</Tag> : null}
                       </div>
                     </div>
                   </div>
                 </div>
               </Link>
             ))}
-          </div>
+          </Space>
         )}
       </Card>
-    </div>
+    </Space>
   );
 }

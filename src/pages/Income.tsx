@@ -28,22 +28,31 @@ import {
   erpKeys,
   listProjects,
   type Currency,
-  type RecordStatus,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrency, formatDate } from "@/lib/format";
+import {
+  addContainsSearchFilter,
+  addDateRangeFilter,
+  addEqualFilter,
+  asCurrency,
+  asNumber,
+  asRecordStatus,
+  STANDARD_PAGE_SIZE,
+  toErrorMessage,
+} from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 
 type IncomeRow = {
-  id: number;
-  project_id: number;
+  id: number | null;
+  project_id: number | null;
   project_name: string | null;
-  amount: number;
-  currency: Currency;
+  amount: number | null;
+  currency: string | null;
   description: string | null;
   date: string | null;
-  record_status: RecordStatus;
+  record_status: string | null;
   created_by_name: string | null;
 };
 
@@ -54,12 +63,6 @@ type IncomeFormValues = {
   description?: string;
   date?: string;
 };
-
-const PAGE_SIZE = 10;
-
-function toErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function buildFilters({
   search,
@@ -75,34 +78,10 @@ function buildFilters({
   dateTo: string;
 }) {
   const filters: CrudFilters = [];
-
-  if (search) {
-    filters.push({
-      operator: "or",
-      value: ["project_name", "description", "created_by_name"].map((field) => ({
-        field,
-        operator: "contains",
-        value: search,
-      })),
-    });
-  }
-
-  if (projectId !== "all") {
-    filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
-  }
-
-  if (currency !== "all") {
-    filters.push({ field: "currency", operator: "eq", value: currency });
-  }
-
-  if (dateFrom) {
-    filters.push({ field: "date", operator: "gte", value: dateFrom });
-  }
-
-  if (dateTo) {
-    filters.push({ field: "date", operator: "lte", value: dateTo });
-  }
-
+  addContainsSearchFilter(filters, ["project_name", "description", "created_by_name"], search);
+  addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
+  addEqualFilter(filters, "currency", currency);
+  addDateRangeFilter(filters, "date", dateFrom, dateTo);
   return filters;
 }
 
@@ -206,7 +185,7 @@ export default function Income() {
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<IncomeRow>({
     resource: "app_income_transactions",
-    pagination: { pageSize: PAGE_SIZE },
+    pagination: { pageSize: STANDARD_PAGE_SIZE },
     sorters: {
       initial: [
         { field: "date", order: "desc" },
@@ -222,7 +201,13 @@ export default function Income() {
   }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters]);
 
   const deleteMutation = useMutation({
-    mutationFn: (income: IncomeRow) => deleteIncomeTransaction(income.id),
+    mutationFn: (income: IncomeRow) => {
+      if (income.id == null) {
+        throw new Error(t.notFound);
+      }
+
+      return deleteIncomeTransaction(income.id);
+    },
     onSuccess: () => void tableQuery.refetch(),
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -238,7 +223,7 @@ export default function Income() {
         render: (value: string | null, row) => (
           <Space size="small" wrap>
             <Typography.Text strong>{value ?? "-"}</Typography.Text>
-            {row.record_status === "deleted" ? <Tag color="red">{t.deleted}</Tag> : null}
+            {asRecordStatus(row.record_status) === "deleted" ? <Tag color="red">{t.deleted}</Tag> : null}
           </Space>
         ),
       },
@@ -246,13 +231,13 @@ export default function Income() {
         title: t.amount,
         dataIndex: "amount",
         align: "right",
-        render: (value: number, row) => (
+        render: (value: number | null, row) => (
           <Typography.Text strong type="success">
-            {formatCurrency(value, row.currency)}
+            {formatCurrency(asNumber(value), asCurrency(row.currency))}
           </Typography.Text>
         ),
       },
-      { title: t.currency, dataIndex: "currency", width: 100 },
+      { title: t.currency, dataIndex: "currency", width: 100, render: (value: string | null) => asCurrency(value) },
       { title: t.user, dataIndex: "created_by_name", render: (value: string | null) => value ?? "-" },
       { title: t.description, dataIndex: "description", render: (value: string | null) => value ?? "-" },
       { title: t.date, dataIndex: "date", render: (value: string | null) => formatDate(value) },
@@ -262,7 +247,7 @@ export default function Income() {
         align: "right",
         width: 80,
         render: (_, row) =>
-          row.record_status === "active" ? (
+          row.id != null && asRecordStatus(row.record_status) === "active" ? (
             <Popconfirm
               title={t.deleteIncomeConfirm}
               okText={t.remove}
@@ -281,8 +266,8 @@ export default function Income() {
     const fileBase = t.incomeTitle;
     const exportRows = rows.map((income) => ({
       [t.projectOption]: income.project_name ?? "",
-      [t.amount]: income.amount,
-      [t.currency]: income.currency,
+      [t.amount]: asNumber(income.amount),
+      [t.currency]: asCurrency(income.currency),
       [t.user]: income.created_by_name ?? "",
       [t.description]: income.description ?? "",
       [t.date]: income.date ?? "",

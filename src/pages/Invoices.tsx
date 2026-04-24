@@ -35,7 +35,6 @@ import {
   listSuppliers,
   type Currency,
   type InvoiceStatus,
-  type RecordStatus,
   updateInvoice,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
@@ -45,6 +44,10 @@ import {
   addContainsSearchFilter,
   addDateRangeFilter,
   addEqualFilter,
+  asCurrency,
+  asInvoiceStatus,
+  asNumber,
+  asRecordStatus,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
@@ -58,10 +61,10 @@ import {
 } from "@/lib/supabase";
 
 type InvoiceRow = {
-  id: number;
-  number: string;
-  status: InvoiceStatus;
-  record_status: RecordStatus;
+  id: number | null;
+  number: string | null;
+  status: string | null;
+  record_status: string | null;
   supplier_id: number | null;
   supplier_name: string | null;
   project_id: number | null;
@@ -73,7 +76,7 @@ type InvoiceRow = {
   total_amount: number | null;
   paid_amount: number | null;
   remaining_amount: number | null;
-  currency: Currency;
+  currency: string | null;
   invoice_date: string | null;
   due_date: string | null;
   notes: string | null;
@@ -294,6 +297,10 @@ function InvoiceModal({
 
       try {
         if (invoice) {
+          if (invoice.id == null) {
+            throw new Error(t.notFound);
+          }
+
           await updateInvoice(invoice.id, payload);
         } else {
           await createInvoice(payload);
@@ -345,8 +352,8 @@ function InvoiceModal({
           productId: invoice?.product_id ?? undefined,
           totalAmount: invoice?.total_amount ?? undefined,
           paidAmount: invoice?.paid_amount ?? 0,
-          currency: invoice?.currency ?? "USD",
-          status: invoice?.status ?? "unpaid",
+          currency: asCurrency(invoice?.currency),
+          status: asInvoiceStatus(invoice?.status, invoice?.total_amount ?? 0, invoice?.paid_amount ?? 0),
           invoiceDate: formatDateInput(invoice?.invoice_date) || new Date().toISOString().slice(0, 10),
           dueDate: formatDateInput(invoice?.due_date),
           notes: invoice?.notes ?? "",
@@ -547,7 +554,13 @@ export default function Invoices() {
   }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters, statusFilter, supplierFilter]);
 
   const deleteMutation = useMutation({
-    mutationFn: (invoice: InvoiceRow) => deleteInvoice(invoice.id),
+    mutationFn: (invoice: InvoiceRow) => {
+      if (invoice.id == null) {
+        throw new Error(t.notFound);
+      }
+
+      return deleteInvoice(invoice.id);
+    },
     onSuccess: () => void tableQuery.refetch(),
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -611,9 +624,11 @@ export default function Invoices() {
             ) : null}
             <Space direction="vertical" size={0}>
               <Space size="small" wrap>
-                <Typography.Text strong>{value}</Typography.Text>
-                <Tag color={invoiceStatusColor[invoice.status]}>{invoiceStatusLabel(invoice.status, t)}</Tag>
-                {invoice.record_status === "deleted" ? <Tag>{t.deleted}</Tag> : null}
+                <Typography.Text strong>{value ?? "-"}</Typography.Text>
+                <Tag color={invoiceStatusColor[asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0)]}>
+                  {invoiceStatusLabel(asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0), t)}
+                </Tag>
+                {asRecordStatus(invoice.record_status) === "deleted" ? <Tag>{t.deleted}</Tag> : null}
               </Space>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {[invoice.supplier_name, invoice.project_name, invoice.product_name].filter(Boolean).join(" | ") ||
@@ -634,13 +649,13 @@ export default function Invoices() {
       title: t.totalAmount,
       dataIndex: "total_amount",
       align: "right",
-      render: (value: number | null, invoice) => formatCurrency(value ?? 0, invoice.currency),
+      render: (value: number | null, invoice) => formatCurrency(value ?? 0, asCurrency(invoice.currency)),
     },
     {
       title: t.remaining_label,
       dataIndex: "remaining_amount",
       align: "right",
-      render: (value: number | null, invoice) => formatCurrency(value ?? 0, invoice.currency),
+      render: (value: number | null, invoice) => formatCurrency(value ?? 0, asCurrency(invoice.currency)),
     },
     { title: t.invoiceDate, dataIndex: "invoice_date", render: (value: string | null) => formatDate(value) },
     {
@@ -650,7 +665,7 @@ export default function Invoices() {
       width: 144,
       render: (_, invoice) => (
         <Space size="small">
-          {invoice.record_status === "active" ? (
+          {invoice.id != null && asRecordStatus(invoice.record_status) === "active" ? (
             <>
               <Button
                 type="text"
@@ -670,9 +685,11 @@ export default function Invoices() {
               </Popconfirm>
             </>
           ) : null}
-          <Link href={`/expenses/${invoice.id}`}>
-            <Button type="text" icon={<ChevronRight size={16} />} />
-          </Link>
+          {invoice.id != null ? (
+            <Link href={`/expenses/${invoice.id}`}>
+              <Button type="text" icon={<ChevronRight size={16} />} />
+            </Link>
+          ) : null}
         </Space>
       ),
     },
@@ -681,18 +698,18 @@ export default function Invoices() {
   function exportInvoices(format: "csv" | "xlsx") {
     const fileBase = t.invoicesTitle;
     const exportRows = rows.map((invoice) => ({
-      [t.reference]: invoice.number,
-      [t.status]: invoiceStatusLabel(invoice.status, t),
+      [t.reference]: invoice.number ?? "",
+      [t.status]: invoiceStatusLabel(asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0), t),
       [t.invoiceAssignment]: invoice.building_name ? t.projectBuildingCost : t.projectGlobalCost,
       [t.buildingLabel]: invoice.building_name ?? "",
       [t.supplierOption]: invoice.supplier_name ?? "",
       [t.products]: invoice.product_name ?? "",
       [t.projectOption]: invoice.project_name ?? "",
       [t.createdBy]: invoice.created_by_name ?? "",
-      [t.totalAmount]: invoice.total_amount ?? 0,
-      [t.paidAmount]: invoice.paid_amount ?? 0,
-      [t.currency]: invoice.currency,
-      [t.remaining_label]: invoice.remaining_amount ?? 0,
+      [t.totalAmount]: asNumber(invoice.total_amount),
+      [t.paidAmount]: asNumber(invoice.paid_amount),
+      [t.currency]: asCurrency(invoice.currency),
+      [t.remaining_label]: asNumber(invoice.remaining_amount),
       [t.invoiceDate]: formatDateInput(invoice.invoice_date),
       [t.dueDate]: formatDateInput(invoice.due_date),
       [t.notes]: invoice.notes ?? "",

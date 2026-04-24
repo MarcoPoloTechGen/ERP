@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Card, Empty, Typography } from "antd";
 import {
   erpKeys,
   getAppSettings,
@@ -13,7 +14,6 @@ import {
 } from "@/lib/erp";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
-import { Card, EmptyState, PageHeader, PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useLang } from "@/lib/i18n";
 import { deleteCompanyLogo, uploadCompanyLogo } from "@/lib/supabase";
 
@@ -147,15 +147,17 @@ export default function Admin() {
   });
 
   if (profile?.role !== "admin") {
-    return <EmptyState title={t.adminRestricted} />;
+    return <Empty description={t.adminRestricted} />;
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t.adminTitle}
-        subtitle={t.adminSubtitle}
-      />
+      <div>
+        <Typography.Title level={2} style={{ marginBottom: 4 }}>
+          {t.adminTitle}
+        </Typography.Title>
+        <Typography.Text type="secondary">{t.adminSubtitle}</Typography.Text>
+      </div>
 
       <Card className="p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -201,13 +203,14 @@ export default function Admin() {
             ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <PrimaryButton
+              <Button
+                type="primary"
                 onClick={() => brandingMutation.mutate({ remove: false })}
                 disabled={!selectedLogoFile || brandingMutation.isPending}
               >
                 {t.saveCompanyLogo}
-              </PrimaryButton>
-              <SecondaryButton
+              </Button>
+              <Button
                 onClick={() => {
                   setSelectedLogoFile(null);
                   setBrandingNotice(null);
@@ -219,20 +222,20 @@ export default function Admin() {
                 disabled={!selectedLogoFile || brandingMutation.isPending}
               >
                 {t.reset}
-              </SecondaryButton>
-              <SecondaryButton
+              </Button>
+              <Button
                 onClick={() => brandingMutation.mutate({ remove: true })}
                 disabled={!appSettings?.companyLogoPath || brandingMutation.isPending}
               >
                 {t.removeCompanyLogo}
-              </SecondaryButton>
+              </Button>
             </div>
           </div>
         </div>
       </Card>
 
       {!profiles?.length ? (
-        <EmptyState title={t.noUsersFound} />
+        <Empty description={t.noUsersFound} />
       ) : (
         <div className="space-y-3">
           {profiles.map((user) => {
@@ -271,7 +274,8 @@ export default function Admin() {
                           className={`${selectClassName} flex-1`}
                           placeholder={t.fullNamePlaceholder}
                         />
-                        <PrimaryButton
+                        <Button
+                          type="primary"
                           onClick={() =>
                             nameMutation.mutate({
                               userId: user.id,
@@ -281,7 +285,7 @@ export default function Admin() {
                           disabled={!canSaveName || isSavingName}
                         >
                           {t.save}
-                        </PrimaryButton>
+                        </Button>
                       </div>
                     </div>
 

@@ -381,68 +381,6 @@ export interface IncomeTransactionInput {
   date: string | null;
 }
 
-export interface PaginatedResult<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-  pageCount: number;
-}
-
-export interface WorkersPageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  category?: string;
-}
-
-export interface SuppliersPageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-}
-
-export interface ProjectsPageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: "all" | ProjectStatus;
-}
-
-export interface ProductsPageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  projectId?: number | null;
-  supplierId?: number | null;
-  currency?: Currency | "all";
-}
-
-export interface InvoicesPageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: "all" | InvoiceStatus;
-  projectId?: number | null;
-  supplierId?: number | null;
-  currency?: Currency | "all";
-  dateFrom?: string | null;
-  dateTo?: string | null;
-}
-
-export interface IncomePageFilters {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  projectId?: number | null;
-  currency?: Currency | "all";
-  dateFrom?: string | null;
-  dateTo?: string | null;
-}
-
-const DEFAULT_PAGE_SIZE = 10;
-const MAX_PAGE_SIZE = 50;
-
 export const erpKeys = {
   profile: ["profile"] as const,
   appSettings: ["appSettings"] as const,
@@ -450,23 +388,17 @@ export const erpKeys = {
   projectMemberships: ["projectMemberships"] as const,
   dashboard: ["dashboard"] as const,
   workers: ["workers"] as const,
-  workersPage: (filters: WorkersPageFilters) => ["workers", "page", filters] as const,
   worker: (id: number) => ["worker", id] as const,
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,
   suppliers: ["suppliers"] as const,
-  suppliersPage: (filters: SuppliersPageFilters) => ["suppliers", "page", filters] as const,
   projects: ["projects"] as const,
-  projectsPage: (filters: ProjectsPageFilters) => ["projects", "page", filters] as const,
   project: (id: number) => ["project", id] as const,
   projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
   products: ["products"] as const,
-  productsPage: (filters: ProductsPageFilters) => ["products", "page", filters] as const,
   invoices: ["invoices"] as const,
-  invoicesPage: (filters: InvoicesPageFilters) => ["invoices", "page", filters] as const,
   invoice: (id: number) => ["invoice", id] as const,
   invoiceHistory: (id: number) => ["invoice", id, "history"] as const,
   incomes: ["incomes"] as const,
-  incomesPage: (filters: IncomePageFilters) => ["incomes", "page", filters] as const,
 };
 
 function asRow(value: unknown): Row {
@@ -823,38 +755,6 @@ function normalizeDashboardOverview(row: Row): DashboardOverview {
   };
 }
 
-function buildPaginatedResult<T>(items: T[], total: number, page: number, pageSize: number): PaginatedResult<T> {
-  return {
-    items,
-    total,
-    page,
-    pageSize,
-    pageCount: Math.max(1, Math.ceil(total / pageSize)),
-  };
-}
-
-function getPagination(options?: { page?: number; pageSize?: number }) {
-  const page = Math.max(1, options?.page ?? 1);
-  const pageSize = Math.max(1, Math.min(MAX_PAGE_SIZE, options?.pageSize ?? DEFAULT_PAGE_SIZE));
-
-  return {
-    page,
-    pageSize,
-    from: (page - 1) * pageSize,
-    to: page * pageSize - 1,
-  };
-}
-
-function applySearch(query: any, search: string | undefined, columns: string[]) {
-  const trimmed = search?.trim();
-  if (!trimmed) {
-    return query;
-  }
-
-  const safeSearch = trimmed.replace(/,/g, " ");
-  return query.or(columns.map((column) => `${column}.ilike.%${safeSearch}%`).join(","));
-}
-
 async function executeSelect<TRow extends Row, T>(
   query: PromiseLike<{ data: TRow[] | null; error: { message: string } | null }>,
   normalize: (row: TRow) => T,
@@ -877,27 +777,6 @@ async function executeSingle<TRow extends Row, T>(
   }
 
   return normalize(data as TRow);
-}
-
-async function executePaged<TRow extends Row, T>(
-  query: {
-    range: (
-      from: number,
-      to: number,
-    ) => PromiseLike<{ data: TRow[] | null; error: { message: string } | null; count: number | null }>;
-  },
-  normalize: (row: TRow) => T,
-  page?: number,
-  pageSize?: number,
-) {
-  const pagination = getPagination({ page, pageSize });
-  const { data, error, count } = await query.range(pagination.from, pagination.to);
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const items = (data ?? []).map((row) => normalize(row));
-  return buildPaginatedResult(items, count ?? items.length, pagination.page, pagination.pageSize);
 }
 
 async function getCurrentUserId() {
@@ -1220,21 +1099,6 @@ export async function listWorkers() {
   );
 }
 
-export async function listWorkersPage(filters: WorkersPageFilters = {}) {
-  let query: any = supabase
-    .from("workers")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, ["name", "role", "category", "phone"]);
-
-  if (filters.category && filters.category !== "all") {
-    query = query.eq("category", filters.category);
-  }
-
-  return executePaged(query, normalizeWorker, filters.page, filters.pageSize);
-}
-
 export async function getWorker(id: number) {
   return executeSingle(supabase.from("workers").select("*").eq("id", id).single(), normalizeWorker);
 }
@@ -1269,17 +1133,6 @@ export async function listSuppliers() {
   );
 }
 
-export async function listSuppliersPage(filters: SuppliersPageFilters = {}) {
-  let query: any = supabase
-    .from("suppliers")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, ["name", "contact", "phone", "email", "address"]);
-
-  return executePaged(query, normalizeSupplier, filters.page, filters.pageSize);
-}
-
 export async function createSupplier(input: SupplierInput) {
   const payload = normalizeSupplierInput(input);
   const { error } = await supabase.from("suppliers").insert(payload);
@@ -1308,21 +1161,6 @@ export async function listProjects() {
     supabase.from("app_projects").select("*").order("created_at", { ascending: false }),
     normalizeProject,
   );
-}
-
-export async function listProjectsPage(filters: ProjectsPageFilters = {}) {
-  let query: any = supabase
-    .from("app_projects")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, ["name", "client", "location"]);
-
-  if (filters.status && filters.status !== "all") {
-    query = query.eq("status", filters.status);
-  }
-
-  return executePaged(query, normalizeProject, filters.page, filters.pageSize);
 }
 
 export async function getProject(id: number) {
@@ -1417,35 +1255,6 @@ export async function listProducts() {
   );
 }
 
-export async function listProductsPage(filters: ProductsPageFilters = {}) {
-  let query: any = supabase
-    .from("app_products")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, [
-    "name",
-    "supplier_name",
-    "project_name",
-    "building_name",
-    "unit",
-  ]);
-
-  if (filters.projectId != null) {
-    query = query.eq("project_id", filters.projectId);
-  }
-
-  if (filters.supplierId != null) {
-    query = query.eq("supplier_id", filters.supplierId);
-  }
-
-  if (filters.currency && filters.currency !== "all") {
-    query = query.eq("currency", filters.currency);
-  }
-
-  return executePaged(query, normalizeProduct, filters.page, filters.pageSize);
-}
-
 export async function createProduct(input: ProductInput) {
   const payload = normalizeProductInput(input);
   const { error } = await supabase.from("products").insert(payload);
@@ -1482,54 +1291,6 @@ export async function listInvoices() {
   );
 
   return hydrateInvoices(rows);
-}
-
-export async function listInvoicesPage(filters: InvoicesPageFilters = {}) {
-  let query: any = supabase
-    .from("app_invoices")
-    .select("*", { count: "exact" })
-    .order("invoice_date", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, [
-    "number",
-    "supplier_name",
-    "project_name",
-    "building_name",
-    "product_name",
-    "created_by_name",
-    "notes",
-  ]);
-
-  if (filters.status && filters.status !== "all") {
-    query = query.eq("status", filters.status);
-  }
-
-  if (filters.projectId != null) {
-    query = query.eq("project_id", filters.projectId);
-  }
-
-  if (filters.supplierId != null) {
-    query = query.eq("supplier_id", filters.supplierId);
-  }
-
-  if (filters.currency && filters.currency !== "all") {
-    query = query.eq("currency", filters.currency);
-  }
-
-  if (filters.dateFrom) {
-    query = query.gte("invoice_date", filters.dateFrom);
-  }
-
-  if (filters.dateTo) {
-    query = query.lte("invoice_date", filters.dateTo);
-  }
-
-  const page = await executePaged(query, normalizeInvoice, filters.page, filters.pageSize);
-  return {
-    ...page,
-    items: await hydrateInvoices(page.items),
-  };
 }
 
 export async function getInvoice(id: number) {
@@ -1627,34 +1388,6 @@ export async function listIncomeTransactions() {
       .order("created_at", { ascending: false }),
     normalizeIncomeTransaction,
   );
-}
-
-export async function listIncomeTransactionsPage(filters: IncomePageFilters = {}) {
-  let query: any = supabase
-    .from("app_income_transactions")
-    .select("*", { count: "exact" })
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  query = applySearch(query, filters.search, ["project_name", "description", "created_by_name"]);
-
-  if (filters.projectId != null) {
-    query = query.eq("project_id", filters.projectId);
-  }
-
-  if (filters.currency && filters.currency !== "all") {
-    query = query.eq("currency", filters.currency);
-  }
-
-  if (filters.dateFrom) {
-    query = query.gte("date", filters.dateFrom);
-  }
-
-  if (filters.dateTo) {
-    query = query.lte("date", filters.dateTo);
-  }
-
-  return executePaged(query, normalizeIncomeTransaction, filters.page, filters.pageSize);
 }
 
 export async function createIncomeTransaction(input: IncomeTransactionInput) {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { Button } from "antd";
 import BrandMark from "@/components/BrandMark";
-import { PrimaryButton, SecondaryButton } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 import { localizeAuthErrorMessage } from "@/lib/auth-utils";
 import { erpKeys, getAppSettings } from "@/lib/erp";
@@ -122,9 +122,9 @@ export default function ResetPasswordPage() {
                   <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     {success}
                   </p>
-                  <PrimaryButton type="button" onClick={() => navigate("/")}>
+                  <Button type="primary" htmlType="button" onClick={() => navigate("/")}>
                     {t.dashboard}
-                  </PrimaryButton>
+                  </Button>
                 </div>
               ) : isPasswordRecovery && !session && !authCallbackError && !showRecoveryFallback ? (
                 <div className="space-y-4">
@@ -158,12 +158,12 @@ export default function ResetPasswordPage() {
                   />
                   {error ? <p className="text-sm text-rose-700">{error}</p> : null}
                   <div className="flex gap-3">
-                    <PrimaryButton type="submit" disabled={submitting}>
+                    <Button type="primary" htmlType="submit" loading={submitting}>
                       {t.updatePassword}
-                    </PrimaryButton>
-                    <SecondaryButton type="button" onClick={() => navigate("/")}>
+                    </Button>
+                    <Button htmlType="button" onClick={() => navigate("/")}>
                       {t.dashboard}
-                    </SecondaryButton>
+                    </Button>
                   </div>
                 </form>
               ) : (
@@ -171,9 +171,9 @@ export default function ResetPasswordPage() {
                   <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                     {localizeAuthErrorMessage(authCallbackError) ?? t.invalidRecoveryLink}
                   </p>
-                  <PrimaryButton type="button" onClick={() => navigate("/")}>
+                  <Button type="primary" htmlType="button" onClick={() => navigate("/")}>
                     {t.requestNewResetLink}
-                  </PrimaryButton>
+                  </Button>
                 </div>
               )}
             </div>

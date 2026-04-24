@@ -2,17 +2,27 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
-import { Card, EmptyState, PrimaryButton } from "@/components/ui-kit";
-import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid } from "@/lib/erp";
-import { formatCurrency, formatDate, formatDateTime, statusColors } from "@/lib/format";
+import { Button, Card, Col, Empty, Image, Progress, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
+import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid, type InvoiceStatus } from "@/lib/erp";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+
+function invoiceStatusColor(status: InvoiceStatus) {
+  if (status === "paid") {
+    return "green";
+  }
+  if (status === "partial") {
+    return "orange";
+  }
+  return "red";
+}
 
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
   const { t } = useLang();
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: erpKeys.invoice(invoiceId),
@@ -43,244 +53,177 @@ export default function InvoiceDetail() {
   });
 
   if (isLoading || !invoice) {
-    return isLoading ? (
-      <div className="h-32 animate-pulse rounded-2xl border border-card-border bg-card" />
-    ) : (
-      <EmptyState title={t.notFound} />
-    );
+    return isLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : <Empty description={t.notFound} />;
   }
 
   const remaining = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-  const progress = invoice.totalAmount > 0 ? Math.min(100, (invoice.paidAmount / invoice.totalAmount) * 100) : 0;
+  const progress = invoice.totalAmount > 0 ? Math.min(100, Math.round((invoice.paidAmount / invoice.totalAmount) * 100)) : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link href="/expenses">
-          <div className="cursor-pointer rounded-xl border border-border bg-background p-2 text-foreground transition hover:bg-muted">
-            <ArrowLeft size={18} />
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Row align="middle" gutter={[16, 16]} justify="space-between">
+        <Col flex="none">
+          <Link href="/expenses">
+            <Button icon={<ArrowLeft size={16} />} />
+          </Link>
+        </Col>
+        <Col flex="auto">
+          <Space size="small" wrap>
+            <Typography.Title level={2} style={{ margin: 0 }}>
+              {invoice.number}
+            </Typography.Title>
+            <Tag color={invoiceStatusColor(invoice.status)}>{t[invoice.status]}</Tag>
+            {invoice.recordStatus === "deleted" ? <Tag>{t.deleted}</Tag> : null}
+          </Space>
+          <div>
+            <Typography.Text type="secondary">{invoice.supplierName ?? t.noSupplier}</Typography.Text>
           </div>
-        </Link>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold text-foreground">{invoice.number}</h1>
-            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}>
-              {t[invoice.status]}
-            </span>
-            {invoice.recordStatus === "deleted" ? (
-              <span
-                className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
-                  invoice.recordStatus,
-                )}`}
-              >
-                {t.deleted}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{invoice.supplierName ?? t.noSupplier}</p>
-        </div>
-
+        </Col>
         {invoice.recordStatus === "active" && invoice.status !== "paid" ? (
-          <PrimaryButton onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>
-            <CheckCircle2 size={16} />
-            {t.markPaid}
-          </PrimaryButton>
+          <Col>
+            <Button
+              type="primary"
+              icon={<CheckCircle2 size={16} />}
+              loading={markPaidMutation.isPending}
+              onClick={() => markPaidMutation.mutate()}
+            >
+              {t.markPaid}
+            </Button>
+          </Col>
         ) : null}
-      </div>
+      </Row>
 
       {invoice.imageUrl ? (
-        <Card className="p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <ImageIcon size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">{t.receiptImage}</h2>
-          </div>
-          <img
+        <Card
+          title={
+            <Space>
+              <ImageIcon size={16} />
+              <span>{t.receiptImage}</span>
+            </Space>
+          }
+        >
+          <Image
             src={invoice.imageUrl}
             alt={t.receiptImage}
-            onClick={() => setExpanded((current) => !current)}
-            className={`cursor-zoom-in rounded-2xl border border-border object-contain transition ${
-              expanded ? "max-h-[70vh] w-full" : "max-h-56"
-            }`}
+            style={{ maxHeight: 260, objectFit: "contain" }}
+            preview={{ visible: previewOpen, onVisibleChange: setPreviewOpen }}
           />
         </Card>
       ) : null}
 
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">{t.expenseDetails}</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted-foreground">{t.supplierOption}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.supplierName ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.projectOption}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.projectName ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.invoiceAssignment}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.buildingName ?? t.projectGlobalCost}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.products}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.productName ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.user}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{invoice.createdByName ?? "-"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.invoiceDate}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{formatDate(invoice.invoiceDate)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t.dueDate}</p>
-            <p className="mt-1 text-sm font-medium text-foreground">{formatDate(invoice.dueDate)}</p>
-          </div>
-        </div>
+      <Card title={t.expenseDetails}>
+        <Row gutter={[16, 16]}>
+          {[
+            [t.supplierOption, invoice.supplierName ?? "-"],
+            [t.projectOption, invoice.projectName ?? "-"],
+            [t.invoiceAssignment, invoice.buildingName ?? t.projectGlobalCost],
+            [t.products, invoice.productName ?? "-"],
+            [t.user, invoice.createdByName ?? "-"],
+            [t.invoiceDate, formatDate(invoice.invoiceDate)],
+            [t.dueDate, formatDate(invoice.dueDate)],
+          ].map(([label, value]) => (
+            <Col key={label} xs={24} md={12}>
+              <Typography.Text type="secondary">{label}</Typography.Text>
+              <div><Typography.Text strong>{value}</Typography.Text></div>
+            </Col>
+          ))}
+        </Row>
 
         {invoice.notes ? (
-          <div className="mt-4">
-            <p className="text-xs text-muted-foreground">{t.notes}</p>
-            <p className="mt-1 text-sm text-foreground">{invoice.notes}</p>
+          <div style={{ marginTop: 16 }}>
+            <Typography.Text type="secondary">{t.notes}</Typography.Text>
+            <Typography.Paragraph>{invoice.notes}</Typography.Paragraph>
           </div>
         ) : null}
       </Card>
 
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">{t.financialSummaryInv}</h2>
-        <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
-            <span className="text-sm text-muted-foreground">{t.totalAmount}</span>
-            <span className="text-sm font-semibold text-foreground">
-              {formatCurrency(invoice.totalAmount, invoice.currency)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3">
-            <span className="text-sm text-emerald-700">{t.alreadyPaid}</span>
-            <span className="text-sm font-semibold text-emerald-800">
-              {formatCurrency(invoice.paidAmount, invoice.currency)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3">
-            <span className="text-sm text-amber-700">{t.remaining_label}</span>
-            <span className="text-sm font-semibold text-amber-900">
-              {formatCurrency(remaining, invoice.currency)}
-            </span>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between text-sm text-muted-foreground">
-              <span>{t.progress}</span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <div className="h-3 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        </div>
+      <Card title={t.financialSummaryInv}>
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Card size="small">
+                <Typography.Text type="secondary">{t.totalAmount}</Typography.Text>
+                <div><Typography.Text strong>{formatCurrency(invoice.totalAmount, invoice.currency)}</Typography.Text></div>
+              </Card>
+            </Col>
+            <Col xs={24} md={8}>
+              <Card size="small">
+                <Typography.Text type="success">{t.alreadyPaid}</Typography.Text>
+                <div><Typography.Text strong>{formatCurrency(invoice.paidAmount, invoice.currency)}</Typography.Text></div>
+              </Card>
+            </Col>
+            <Col xs={24} md={8}>
+              <Card size="small">
+                <Typography.Text type="warning">{t.remaining_label}</Typography.Text>
+                <div><Typography.Text strong>{formatCurrency(remaining, invoice.currency)}</Typography.Text></div>
+              </Card>
+            </Col>
+          </Row>
+          <Progress percent={progress} />
+        </Space>
       </Card>
 
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-foreground">{t.expenseLog}</h2>
-
+      <Card title={t.expenseLog}>
         {isHistoryLoading ? (
-          <div className="mt-4 h-32 animate-pulse rounded-2xl border border-card-border bg-card" />
+          <Skeleton active paragraph={{ rows: 4 }} />
         ) : !history?.length ? (
-          <p className="mt-4 text-sm text-muted-foreground">{t.noExpenseLog}</p>
+          <Empty description={t.noExpenseLog} />
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.date}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.user}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.changeType}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.reference}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.status}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.supplierOption}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.projectOption}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.invoiceAssignment}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.products}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.totalAmount}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.paidAmount}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.remaining_label}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.invoiceDate}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.dueDate}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.notes}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t.receiptImage}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((entry) => (
-                  <tr key={entry.id} className="align-top text-foreground">
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatDateTime(entry.changedAt)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.changedByName ?? "-"}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.action === "updated" ? t.changeUpdated : t.changeCreated}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">{entry.number}</td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(entry.status)}`}
-                      >
-                        {t[entry.status]}
-                      </span>
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.supplierName ?? "-"}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.projectName ?? "-"}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.buildingName ?? t.projectGlobalCost}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.productName ?? "-"}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatCurrency(entry.totalAmount, entry.currency)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatCurrency(entry.paidAmount, entry.currency)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatCurrency(entry.remainingAmount, entry.currency)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatDate(entry.invoiceDate)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {formatDate(entry.dueDate)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3">
-                      <div className="max-w-xs whitespace-pre-wrap text-sm">{entry.notes ?? "-"}</div>
-                    </td>
-                    <td className="border-b border-border px-3 py-3 whitespace-nowrap">
-                      {entry.imageUrl ? (
-                        <a href={entry.imageUrl} target="_blank" rel="noreferrer">
-                          <img
-                            src={entry.imageUrl}
-                            alt={t.receiptImage}
-                            className="h-14 w-14 rounded-xl border border-border object-cover"
-                          />
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={history}
+            scroll={{ x: 1500 }}
+            pagination={false}
+            columns={[
+              { title: t.date, dataIndex: "changedAt", render: (value) => formatDateTime(value) },
+              { title: t.user, dataIndex: "changedByName", render: (value) => value ?? "-" },
+              {
+                title: t.changeType,
+                dataIndex: "action",
+                render: (value) => (value === "updated" ? t.changeUpdated : t.changeCreated),
+              },
+              { title: t.reference, dataIndex: "number" },
+              {
+                title: t.status,
+                dataIndex: "status",
+                render: (value: InvoiceStatus) => <Tag color={invoiceStatusColor(value)}>{t[value]}</Tag>,
+              },
+              { title: t.supplierOption, dataIndex: "supplierName", render: (value) => value ?? "-" },
+              { title: t.projectOption, dataIndex: "projectName", render: (value) => value ?? "-" },
+              { title: t.invoiceAssignment, dataIndex: "buildingName", render: (value) => value ?? t.projectGlobalCost },
+              { title: t.products, dataIndex: "productName", render: (value) => value ?? "-" },
+              {
+                title: t.totalAmount,
+                dataIndex: "totalAmount",
+                align: "right",
+                render: (value, row) => formatCurrency(value, row.currency),
+              },
+              {
+                title: t.paidAmount,
+                dataIndex: "paidAmount",
+                align: "right",
+                render: (value, row) => formatCurrency(value, row.currency),
+              },
+              {
+                title: t.remaining_label,
+                dataIndex: "remainingAmount",
+                align: "right",
+                render: (value, row) => formatCurrency(value, row.currency),
+              },
+              { title: t.invoiceDate, dataIndex: "invoiceDate", render: (value) => formatDate(value) },
+              { title: t.dueDate, dataIndex: "dueDate", render: (value) => formatDate(value) },
+              { title: t.notes, dataIndex: "notes", render: (value) => value ?? "-" },
+              {
+                title: t.receiptImage,
+                dataIndex: "imageUrl",
+                render: (value: string | null) =>
+                  value ? <Image width={48} height={48} src={value} alt={t.receiptImage} /> : "-",
+              },
+            ]}
+          />
         )}
       </Card>
-    </div>
+    </Space>
   );
 }

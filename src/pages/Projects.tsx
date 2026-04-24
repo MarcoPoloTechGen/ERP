@@ -37,17 +37,18 @@ import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addEqualFilter,
+  asProjectStatus,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 
 type ProjectRow = {
-  id: number;
-  name: string;
+  id: number | null;
+  name: string | null;
   client: string | null;
   location: string | null;
-  status: ProjectStatus;
+  status: string | null;
   budget: number | null;
   start_date: string | null;
   end_date: string | null;
@@ -105,7 +106,7 @@ function ProjectModal({
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(project?.id ?? 0),
     queryFn: () => listProjectBuildings(project?.id),
-    enabled: Boolean(project),
+    enabled: project?.id != null,
   });
 
   useEffect(() => {
@@ -134,6 +135,10 @@ function ProjectModal({
       };
 
       if (project) {
+        if (project.id == null) {
+          throw new Error(t.notFound);
+        }
+
         await updateProject(project.id, payload);
         return;
       }
@@ -169,7 +174,7 @@ function ProjectModal({
           name: project?.name ?? "",
           client: project?.client ?? "",
           location: project?.location ?? "",
-          status: project?.status ?? "active",
+          status: asProjectStatus(project?.status),
           budget: project?.budget ?? undefined,
           startDate: formatDateInput(project?.start_date),
           endDate: formatDateInput(project?.end_date),
@@ -276,7 +281,13 @@ export default function Projects() {
   }, [search, setCurrentPage, setFilters, statusFilter]);
 
   const deleteMutation = useMutation({
-    mutationFn: (project: ProjectRow) => deleteProject(project.id),
+    mutationFn: (project: ProjectRow) => {
+      if (project.id == null) {
+        throw new Error(t.notFound);
+      }
+
+      return deleteProject(project.id);
+    },
     onSuccess: () => void tableQuery.refetch(),
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -287,17 +298,20 @@ export default function Projects() {
     {
       title: t.projectName,
       dataIndex: "name",
-      render: (value: string, project) => (
+      render: (value: string | null, project) => {
+        const status = asProjectStatus(project.status);
+        return (
         <Space direction="vertical" size={0}>
           <Space size="small" wrap>
-            <Typography.Text strong>{value}</Typography.Text>
-            <Tag color={statusColor[project.status]}>{statusLabel(project.status, t)}</Tag>
+            <Typography.Text strong>{value ?? "-"}</Typography.Text>
+            <Tag color={statusColor[status]}>{statusLabel(status, t)}</Tag>
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {[project.client, project.location].filter(Boolean).join(" | ") || t.noDetail}
           </Typography.Text>
         </Space>
-      ),
+        );
+      },
     },
     {
       title: t.buildingsTitle,
@@ -329,19 +343,23 @@ export default function Projects() {
                   setOpen(true);
                 }}
               />
-              <Popconfirm
-                title={t.deleteProjectConfirm}
-                okText={t.remove}
-                cancelText={t.cancel}
-                onConfirm={() => deleteMutation.mutate(project)}
-              >
-                <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-              </Popconfirm>
+              {project.id != null ? (
+                <Popconfirm
+                  title={t.deleteProjectConfirm}
+                  okText={t.remove}
+                  cancelText={t.cancel}
+                  onConfirm={() => deleteMutation.mutate(project)}
+                >
+                  <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+                </Popconfirm>
+              ) : null}
             </>
           ) : null}
-          <Link href={`/projects/${project.id}`}>
-            <Button type="text" icon={<ChevronRight size={16} />} />
-          </Link>
+          {project.id != null ? (
+            <Link href={`/projects/${project.id}`}>
+              <Button type="text" icon={<ChevronRight size={16} />} />
+            </Link>
+          ) : null}
         </Space>
       ),
     },
@@ -350,10 +368,10 @@ export default function Projects() {
   function exportProjects(format: "csv" | "xlsx") {
     const fileBase = t.projectsTitle;
     const exportRows = rows.map((project) => ({
-      [t.projectName]: project.name,
+      [t.projectName]: project.name ?? "",
       [t.client]: project.client ?? "",
       [t.location]: project.location ?? "",
-      [t.status]: statusLabel(project.status, t),
+      [t.status]: statusLabel(asProjectStatus(project.status), t),
       [t.buildingsTitle]: project.building_count ?? 0,
       [t.budget]: project.budget ?? "",
       [t.startDate]: formatDateInput(project.start_date),

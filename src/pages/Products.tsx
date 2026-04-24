@@ -37,14 +37,15 @@ import { formatCurrency } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addEqualFilter,
+  asCurrency,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 
 type ProductRow = {
-  id: number;
-  name: string;
+  id: number | null;
+  name: string | null;
   supplier_id: number | null;
   supplier_name: string | null;
   project_id: number | null;
@@ -53,7 +54,7 @@ type ProductRow = {
   building_name: string | null;
   unit: string | null;
   unit_price: number | null;
-  currency: Currency;
+  currency: string | null;
   created_at: string | null;
 };
 
@@ -123,6 +124,10 @@ function ProductModal({
       };
 
       if (product) {
+        if (product.id == null) {
+          throw new Error(t.notFound);
+        }
+
         await updateProduct(product.id, payload);
         return;
       }
@@ -160,7 +165,7 @@ function ProductModal({
           buildingId: product?.building_id ?? undefined,
           unit: product?.unit ?? "",
           unitPrice: product?.unit_price ?? undefined,
-          currency: product?.currency ?? "USD",
+          currency: asCurrency(product?.currency),
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -252,7 +257,13 @@ export default function Products() {
   }, [currencyFilter, projectFilter, search, setCurrentPage, setFilters, supplierFilter]);
 
   const deleteMutation = useMutation({
-    mutationFn: (product: ProductRow) => deleteProduct(product.id),
+    mutationFn: (product: ProductRow) => {
+      if (product.id == null) {
+        throw new Error(t.notFound);
+      }
+
+      return deleteProduct(product.id);
+    },
     onSuccess: () => void tableQuery.refetch(),
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -265,11 +276,11 @@ export default function Products() {
     {
       title: t.name,
       dataIndex: "name",
-      render: (value: string, product) => (
+      render: (value: string | null, product) => (
         <Space direction="vertical" size={0}>
           <Space size="small" wrap>
-            <Typography.Text strong>{value}</Typography.Text>
-            <Tag>{product.currency}</Tag>
+            <Typography.Text strong>{value ?? "-"}</Typography.Text>
+            <Tag>{asCurrency(product.currency)}</Tag>
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {product.unit ?? t.noDetail}
@@ -285,7 +296,7 @@ export default function Products() {
       dataIndex: "unit_price",
       align: "right",
       render: (value: number | null, product) =>
-        value != null ? <Typography.Text strong>{formatCurrency(value, product.currency)}</Typography.Text> : "-",
+        value != null ? <Typography.Text strong>{formatCurrency(value, asCurrency(product.currency))}</Typography.Text> : "-",
     },
     {
       title: "",
@@ -302,14 +313,16 @@ export default function Products() {
               setOpen(true);
             }}
           />
-          <Popconfirm
-            title={t.deleteProductConfirm}
-            okText={t.remove}
-            cancelText={t.cancel}
-            onConfirm={() => deleteMutation.mutate(product)}
-          >
-            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-          </Popconfirm>
+          {product.id != null ? (
+            <Popconfirm
+              title={t.deleteProductConfirm}
+              okText={t.remove}
+              cancelText={t.cancel}
+              onConfirm={() => deleteMutation.mutate(product)}
+            >
+              <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
+            </Popconfirm>
+          ) : null}
         </Space>
       ),
     },
@@ -318,13 +331,13 @@ export default function Products() {
   function exportProducts(format: "csv" | "xlsx") {
     const fileBase = t.productsTitle;
     const exportRows = rows.map((product) => ({
-      [t.name]: product.name,
+      [t.name]: product.name ?? "",
       [t.supplierLabel]: product.supplier_name ?? "",
       [t.projectOption]: product.project_name ?? "",
       [t.buildingLabel]: product.building_name ?? "",
       [t.unit]: product.unit ?? "",
       [t.unitPrice]: product.unit_price ?? "",
-      [t.currency]: product.currency,
+      [t.currency]: asCurrency(product.currency),
     }));
 
     if (format === "csv") {
