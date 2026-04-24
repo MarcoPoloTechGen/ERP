@@ -454,9 +454,6 @@ export default function Invoices() {
   const deleteMutation = useMutation({
     mutationFn: async (invoice: Invoice) => {
       await deleteInvoice(invoice.id);
-      if (invoice.imagePath) {
-        await deleteInvoiceImageByUrl(invoice.imagePath);
-      }
     },
     onSuccess: async () => {
       await Promise.all([
@@ -661,6 +658,15 @@ export default function Invoices() {
                         >
                           {t[invoice.status]}
                         </span>
+                        {invoice.recordStatus === "deleted" ? (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
+                              invoice.recordStatus,
+                            )}`}
+                          >
+                            {t.deleted}
+                          </span>
+                        ) : null}
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                             invoice.buildingName
@@ -691,24 +697,29 @@ export default function Invoices() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <IconButton
-                        onClick={() => {
-                          setSelectedInvoice(invoice);
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil size={16} />
-                      </IconButton>
-                      <IconButton
-                        className="hover:text-rose-700"
-                        onClick={() => {
-                          if (window.confirm(t.deleteInvoiceConfirm)) {
-                            deleteMutation.mutate(invoice);
-                          }
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </IconButton>
+                      {invoice.recordStatus === "active" ? (
+                        <>
+                          <IconButton
+                            onClick={() => {
+                              setSelectedInvoice(invoice);
+                              setOpen(true);
+                            }}
+                          >
+                            <Pencil size={16} />
+                          </IconButton>
+                          <IconButton
+                            className="hover:text-rose-700"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => {
+                              if (window.confirm(t.deleteInvoiceConfirm)) {
+                                deleteMutation.mutate(invoice);
+                              }
+                            }}
+                          >
+                            <Trash2 size={16} />
+                          </IconButton>
+                        </>
+                      ) : null}
                       <Link href={`/expenses/${invoice.id}`}>
                         <div className="cursor-pointer rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
                           <ChevronRight size={16} />

@@ -68,11 +68,20 @@ export default function InvoiceDetail() {
             <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}>
               {t[invoice.status]}
             </span>
+            {invoice.recordStatus === "deleted" ? (
+              <span
+                className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
+                  invoice.recordStatus,
+                )}`}
+              >
+                {t.deleted}
+              </span>
+            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{invoice.supplierName ?? t.noSupplier}</p>
         </div>
 
-        {invoice.status !== "paid" ? (
+        {invoice.recordStatus === "active" && invoice.status !== "paid" ? (
           <PrimaryButton onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>
             <CheckCircle2 size={16} />
             {t.markPaid}

@@ -90,6 +90,7 @@ type TranslationShape = {
   previous: string;
   next: string;
   status: string;
+  deleted: string;
   currency: string;
   category: string;
   workersTitle: string;
@@ -253,6 +254,7 @@ type TranslationShape = {
   addIncome: string;
   newIncomeEntry: string;
   noIncomeEntries: string;
+  deleteIncomeConfirm: string;
   expenseDetails: string;
   expenseLog: string;
   changeType: string;
@@ -374,6 +376,7 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     previous: "Previous",
     next: "Next",
     status: "Status",
+    deleted: "Deleted",
     currency: "Currency",
     category: "Category",
     workersTitle: "Workers",
@@ -537,6 +540,7 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     addIncome: "Add",
     newIncomeEntry: "New income entry",
     noIncomeEntries: "No income entries yet.",
+    deleteIncomeConfirm: "Delete this income entry?",
     expenseDetails: "Expense details",
     expenseLog: "Expense log",
     changeType: "Action",
@@ -668,6 +672,7 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     previous: "پێشوو",
     next: "دواتر",
     status: "دۆخ",
+    deleted: "سڕاوەتەوە",
     currency: "دراو",
     category: "پۆل",
     workersTitle: "کرێکارەکان",
@@ -831,6 +836,7 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     addIncome: "زیادکردن",
     newIncomeEntry: "تۆماری نوێی داهات",
     noIncomeEntries: "هێشتا هیچ تۆمارێکی داهات نییە.",
+    deleteIncomeConfirm: "ئەم تۆمارەی داهاتە بسڕدرێتەوە؟",
     expenseDetails: "وردەکاری خەرجی",
     expenseLog: "تۆماری خەرجی",
     changeType: "جۆری گۆڕانکاری",

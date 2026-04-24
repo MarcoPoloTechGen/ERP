@@ -68,6 +68,10 @@ type InvoiceWritePayload = Required<
   >
 >;
 type InvoiceCreatePayload = InvoiceWritePayload & Pick<TableInsertPayload<"invoices">, "created_by">;
+type InvoiceRecordStatusUpdatePayload = Pick<
+  TableUpdatePayload<"invoices">,
+  "record_status" | "deleted_at" | "deleted_by"
+>;
 type WorkerTransactionWritePayload = Required<
   Pick<
     TableInsertPayload<"worker_transactions">,
@@ -79,6 +83,10 @@ type IncomeTransactionWritePayload = Required<
 >;
 type IncomeTransactionCreatePayload = IncomeTransactionWritePayload &
   Pick<TableInsertPayload<"income_transactions">, "created_by">;
+type IncomeTransactionUpdatePayload = Pick<
+  TableUpdatePayload<"income_transactions">,
+  "record_status" | "deleted_at" | "deleted_by"
+>;
 type AppSettingsUpsertPayload = Pick<
   TableInsertPayload<"app_settings">,
   "id" | "company_logo_path" | "updated_by" | "updated_at"
@@ -95,6 +103,7 @@ export type InvoiceHistoryAction = "created" | "updated";
 export type TransactionType = "credit" | "debit";
 export type Currency = "USD" | "IQD";
 export type UserRole = "admin" | "user";
+export type RecordStatus = "active" | "deleted";
 
 export interface AppUserProfile {
   id: string;
@@ -177,6 +186,7 @@ export interface Invoice {
   id: number;
   number: string;
   status: InvoiceStatus;
+  recordStatus: RecordStatus;
   supplierId: number | null;
   supplierName: string | null;
   projectId: number | null;
@@ -196,6 +206,8 @@ export interface Invoice {
   imageUrl: string | null;
   createdBy: string | null;
   createdByName: string | null;
+  deletedBy: string | null;
+  deletedAt: string | null;
   createdAt: string | null;
 }
 
@@ -248,8 +260,11 @@ export interface IncomeTransaction {
   currency: Currency;
   description: string | null;
   date: string | null;
+  recordStatus: RecordStatus;
   createdBy: string | null;
   createdByName: string | null;
+  deletedBy: string | null;
+  deletedAt: string | null;
   createdAt: string | null;
 }
 
@@ -520,6 +535,10 @@ function toInvoiceHistoryAction(value: unknown): InvoiceHistoryAction {
   return value === "updated" ? "updated" : "created";
 }
 
+function toRecordStatus(value: unknown): RecordStatus {
+  return value === "deleted" ? "deleted" : "active";
+}
+
 function toTransactionType(value: unknown): TransactionType {
   return value === "debit" ? "debit" : "credit";
 }
@@ -651,6 +670,7 @@ function normalizeInvoice(row: AppInvoiceRow): Invoice {
     id: readId(row, "id"),
     number: readString(row, "number") ?? "INV",
     status: toInvoiceStatus(readString(row, "status"), totalAmount, paidAmount),
+    recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
     supplierId: readNumber(row, "supplier_id", "supplierId"),
     supplierName: readString(row, "supplier_name", "supplierName"),
     projectId: readNumber(row, "project_id", "projectId"),
@@ -671,6 +691,8 @@ function normalizeInvoice(row: AppInvoiceRow): Invoice {
     imageUrl,
     createdBy: readString(row, "created_by", "createdBy"),
     createdByName: readString(row, "created_by_name", "createdByName"),
+    deletedBy: readString(row, "deleted_by", "deletedBy"),
+    deletedAt: readDate(row, "deleted_at", "deletedAt"),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -734,8 +756,11 @@ function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransac
     currency: toCurrency(readString(row, "currency")),
     description: readString(row, "description"),
     date: readDate(row, "date"),
+    recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
     createdBy: readString(row, "created_by", "createdBy"),
     createdByName: readString(row, "created_by_name", "createdByName"),
+    deletedBy: readString(row, "deleted_by", "deletedBy"),
+    deletedAt: readDate(row, "deleted_at", "deletedAt"),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -911,13 +936,14 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
     listWorkerTransactions(),
   ]);
 
-  const totalInvoiceAmount = invoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
-  const totalPaidAmount = invoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
-  const remainingAmount = invoices.reduce((total, invoice) => total + invoice.remainingAmount, 0);
+  const activeInvoices = invoices.filter((invoice) => invoice.recordStatus === "active");
+  const totalInvoiceAmount = activeInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
+  const totalPaidAmount = activeInvoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
+  const remainingAmount = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmount, 0);
 
   const projectsSummary = projects
     .map((project) => {
-      const relatedInvoices = invoices.filter((invoice) => invoice.projectId === project.id);
+      const relatedInvoices = activeInvoices.filter((invoice) => invoice.projectId === project.id);
       const totalInvoiced = relatedInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
       const totalPaid = relatedInvoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
 
@@ -951,7 +977,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
     })
     .sort((left, right) => Math.abs(right.balance) - Math.abs(left.balance));
 
-  const invoicesSummary = [...invoices]
+  const invoicesSummary = [...activeInvoices]
     .sort((left, right) => right.remainingAmount - left.remainingAmount || left.number.localeCompare(right.number))
     .map((invoice) => ({
       id: invoice.id,
@@ -968,7 +994,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
     totalWorkers: workers.length,
     activeProjects: projects.filter((project) => project.status === "active").length,
     totalSuppliers: suppliers.length,
-    invoicesUnpaid: invoices.filter((invoice) => invoice.status !== "paid").length,
+    invoicesUnpaid: activeInvoices.filter((invoice) => invoice.status !== "paid").length,
     totalInvoiceAmount,
     totalPaidAmount,
     remainingAmount,
@@ -1554,7 +1580,8 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
   const { error } = await supabase
     .from("invoices")
     .update(payload)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("record_status", "active");
 
   if (error) {
     throw new Error(error.message);
@@ -1566,7 +1593,8 @@ export async function markInvoicePaid(id: number, totalAmount: number) {
   const { error } = await supabase
     .from("invoices")
     .update(payload)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("record_status", "active");
 
   if (error) {
     throw new Error(error.message);
@@ -1574,7 +1602,17 @@ export async function markInvoicePaid(id: number, totalAmount: number) {
 }
 
 export async function deleteInvoice(id: number) {
-  const { error } = await supabase.from("invoices").delete().eq("id", id);
+  const currentUserId = await getCurrentUserId();
+  const payload: InvoiceRecordStatusUpdatePayload = {
+    record_status: "deleted",
+    deleted_at: new Date().toISOString(),
+    deleted_by: currentUserId,
+  };
+  const { error } = await supabase
+    .from("invoices")
+    .update(payload)
+    .eq("id", id)
+    .eq("record_status", "active");
   if (error) {
     throw new Error(error.message);
   }
@@ -1626,6 +1664,24 @@ export async function createIncomeTransaction(input: IncomeTransactionInput) {
     created_by: currentUserId,
   };
   const { error } = await supabase.from("income_transactions").insert(payload);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteIncomeTransaction(id: number) {
+  const currentUserId = await getCurrentUserId();
+  const payload: IncomeTransactionUpdatePayload = {
+    record_status: "deleted",
+    deleted_at: new Date().toISOString(),
+    deleted_by: currentUserId,
+  };
+  const { error } = await supabase
+    .from("income_transactions")
+    .update(payload)
+    .eq("id", id)
+    .eq("record_status", "active");
 
   if (error) {
     throw new Error(error.message);

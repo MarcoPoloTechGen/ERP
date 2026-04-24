@@ -150,9 +150,24 @@ export default function ProjectDetail() {
                       <p className="text-sm font-semibold text-foreground">
                         {formatCurrency(invoice.totalAmount, invoice.currency)}
                       </p>
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(invoice.status)}`}>
-                        {t[invoice.status]}
-                      </span>
+                      <div className="mt-1 flex flex-wrap justify-end gap-1">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
+                            invoice.status,
+                          )}`}
+                        >
+                          {t[invoice.status]}
+                        </span>
+                        {invoice.recordStatus === "deleted" ? (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
+                              invoice.recordStatus,
+                            )}`}
+                          >
+                            {t.deleted}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>

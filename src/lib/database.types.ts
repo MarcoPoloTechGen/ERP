@@ -50,9 +50,13 @@ export type Database = {
           created_by: string | null
           currency: string
           date: string
+          deleted_at: string | null
+          deleted_by: string | null
           description: string | null
           id: number
+          internal_id: string
           project_id: number
+          record_status: string
         }
         Insert: {
           amount: number
@@ -60,9 +64,13 @@ export type Database = {
           created_by?: string | null
           currency?: string
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           id?: number
+          internal_id?: string
           project_id: number
+          record_status?: string
         }
         Update: {
           amount?: number
@@ -70,9 +78,13 @@ export type Database = {
           created_by?: string | null
           currency?: string
           date?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string | null
           id?: number
+          internal_id?: string
           project_id?: number
+          record_status?: string
         }
         Relationships: [
           {
@@ -246,15 +258,19 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          deleted_at: string | null
+          deleted_by: string | null
           due_date: string | null
           id: number
           image_path: string | null
+          internal_id: string
           invoice_date: string
           notes: string | null
           number: string
           paid_amount: number
           product_id: number | null
           project_id: number | null
+          record_status: string
           status: string
           supplier_id: number | null
           total_amount: number
@@ -264,15 +280,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           due_date?: string | null
           id?: number
           image_path?: string | null
+          internal_id?: string
           invoice_date?: string
           notes?: string | null
           number: string
           paid_amount?: number
           product_id?: number | null
           project_id?: number | null
+          record_status?: string
           status?: string
           supplier_id?: number | null
           total_amount: number
@@ -282,15 +302,19 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           due_date?: string | null
           id?: number
           image_path?: string | null
+          internal_id?: string
           invoice_date?: string
           notes?: string | null
           number?: string
           paid_amount?: number
           product_id?: number | null
           project_id?: number | null
+          record_status?: string
           status?: string
           supplier_id?: number | null
           total_amount?: number
@@ -630,10 +654,13 @@ export type Database = {
           created_by_name: string | null
           currency: string | null
           date: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           description: string | null
           id: number | null
           project_id: number | null
           project_name: string | null
+          record_status: string | null
         }
         Relationships: [
           {
@@ -812,6 +839,8 @@ export type Database = {
           created_by: string | null
           created_by_name: string | null
           currency: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           due_date: string | null
           id: number | null
           image_path: string | null
@@ -823,6 +852,7 @@ export type Database = {
           product_name: string | null
           project_id: number | null
           project_name: string | null
+          record_status: string | null
           remaining_amount: number | null
           status: string | null
           supplier_id: number | null

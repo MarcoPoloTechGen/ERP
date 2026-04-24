@@ -78,6 +78,8 @@ export function statusColors(status: string) {
     case "paid":
     case "credit":
       return "bg-emerald-100 text-emerald-800";
+    case "deleted":
+      return "bg-slate-200 text-slate-700";
     case "completed":
       return "bg-sky-100 text-sky-800";
     case "paused":

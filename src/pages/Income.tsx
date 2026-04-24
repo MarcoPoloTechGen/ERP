@@ -1,17 +1,19 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileSpreadsheet, Plus } from "lucide-react";
+import { Download, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
 import {
   createIncomeTransaction,
+  deleteIncomeTransaction,
   erpKeys,
   listIncomeTransactionsPage,
   listProjects,
   type Currency,
+  type IncomeTransaction,
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, statusColors } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import {
   Card,
@@ -19,6 +21,7 @@ import {
   EmptyState,
   ErrorState,
   Field,
+  IconButton,
   Modal,
   PageHeader,
   PaginationControls,
@@ -131,6 +134,7 @@ function IncomeModal({ onClose }: { onClose: () => void }) {
 
 export default function Income() {
   const { t } = useLang();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
@@ -169,6 +173,15 @@ export default function Income() {
         dateFrom: dateFrom || null,
         dateTo: dateTo || null,
       }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (income: IncomeTransaction) => {
+      await deleteIncomeTransaction(income.id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: erpKeys.incomes });
+    },
   });
 
   function exportIncome(format: "csv" | "xlsx") {
@@ -304,16 +317,42 @@ export default function Income() {
               <Card key={income.id} className="p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold text-foreground">{income.projectName ?? "-"}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-base font-semibold text-foreground">{income.projectName ?? "-"}</p>
+                      {income.recordStatus === "deleted" ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusColors(
+                            income.recordStatus,
+                          )}`}
+                        >
+                          {t.deleted}
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {[income.description, income.createdByName, formatDate(income.date)].filter(Boolean).join(" | ")}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-base font-semibold text-emerald-700">
-                      {formatCurrency(income.amount, income.currency)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{income.currency}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-base font-semibold text-emerald-700">
+                        {formatCurrency(income.amount, income.currency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{income.currency}</p>
+                    </div>
+                    {income.recordStatus === "active" ? (
+                      <IconButton
+                        className="hover:text-rose-700"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(t.deleteIncomeConfirm)) {
+                            deleteMutation.mutate(income);
+                          }
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    ) : null}
                   </div>
                 </div>
               </Card>
