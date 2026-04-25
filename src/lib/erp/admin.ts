@@ -5,6 +5,7 @@ export {
   listProjectMemberships,
   replaceUserProjectMemberships,
   updateCompanyLogoPath,
+  updateExchangeRateIqdPer100Usd,
   updateMySelectedProjectId,
   updateProfileName,
   updateProfileRole,

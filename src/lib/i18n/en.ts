@@ -92,6 +92,7 @@ export function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape 
     all: "All",
     allProjects: "All projects",
     projectScope: "Project scope",
+    exchangeRate: "Exchange rate",
     allSuppliers: "All suppliers",
     allStatuses: "All statuses",
     allCurrencies: "All currencies",

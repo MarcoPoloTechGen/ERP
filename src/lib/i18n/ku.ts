@@ -89,6 +89,7 @@ export function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     all: "هەموو",
     allProjects: "هەموو پڕۆژەکان",
     projectScope: "سنوری پڕۆژە",
+    exchangeRate: "نرخی گۆڕینەوە",
     allSuppliers: "هەموو دابینکەرەکان",
     allStatuses: "هەموو دۆخەکان",
     allCurrencies: "هەموو دراوەکان",

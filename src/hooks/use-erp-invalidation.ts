@@ -33,6 +33,9 @@ export function useErpInvalidation() {
           erpKeys.invoices,
           erpKeys.workers,
           erpKeys.workerTransactionsList,
+          erpKeys.suppliers,
+          erpKeys.supplierBalances,
+          erpKeys.supplierTransactionsList,
           erpKeys.dashboard,
         ]),
       invoices: () =>
@@ -41,6 +44,9 @@ export function useErpInvalidation() {
           erpKeys.dashboard,
           erpKeys.workers,
           erpKeys.workerTransactionsList,
+          erpKeys.suppliers,
+          erpKeys.supplierBalances,
+          erpKeys.supplierTransactionsList,
         ]),
       products: () => invalidateGroup(queryClient, [erpKeys.products, erpKeys.dashboard]),
       projects: () =>
@@ -53,7 +59,21 @@ export function useErpInvalidation() {
           erpKeys.products,
         ]),
       suppliers: () =>
-        invalidateGroup(queryClient, [erpKeys.suppliers, erpKeys.supplierBalances, erpKeys.invoices]),
+        invalidateGroup(queryClient, [
+          erpKeys.suppliers,
+          erpKeys.supplierBalances,
+          erpKeys.supplierTransactionsList,
+          erpKeys.invoices,
+        ]),
+      supplierDetail: (supplierId: number) =>
+        invalidateGroup(queryClient, [
+          erpKeys.supplier(supplierId),
+          erpKeys.supplierTransactions(supplierId),
+          erpKeys.supplierTransactionsList,
+          erpKeys.supplierBalances,
+          erpKeys.suppliers,
+          erpKeys.dashboard,
+        ]),
       projectScope: () =>
         invalidateGroup(queryClient, [erpKeys.dashboard, erpKeys.invoices, erpKeys.incomes, erpKeys.products]),
       users: () => invalidateGroup(queryClient, [erpKeys.profile, erpKeys.users, erpKeys.projectMemberships]),

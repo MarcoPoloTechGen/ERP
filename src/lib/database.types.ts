@@ -17,18 +17,21 @@ export type Database = {
       app_settings: {
         Row: {
           company_logo_path: string | null
+          exchange_rate_iqd_per_100_usd: number | null
           id: string
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           company_logo_path?: string | null
+          exchange_rate_iqd_per_100_usd?: number | null
           id?: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           company_logo_path?: string | null
+          exchange_rate_iqd_per_100_usd?: number | null
           id?: string
           updated_at?: string
           updated_by?: string | null
@@ -508,6 +511,103 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_transactions: {
+        Row: {
+          amount: number
+          amount_iqd: number
+          amount_usd: number
+          created_at: string
+          currency: string
+          date: string
+          description: string | null
+          id: number
+          party_type: string
+          project_id: number | null
+          source_invoice_id: number | null
+          source_kind: string | null
+          supplier_id: number | null
+          type: string
+          worker_id: number | null
+        }
+        Insert: {
+          amount: number
+          amount_iqd?: number
+          amount_usd?: number
+          created_at?: string
+          currency?: string
+          date?: string
+          description?: string | null
+          id?: number
+          party_type: string
+          project_id?: number | null
+          source_invoice_id?: number | null
+          source_kind?: string | null
+          supplier_id?: number | null
+          type: string
+          worker_id?: number | null
+        }
+        Update: {
+          amount?: number
+          amount_iqd?: number
+          amount_usd?: number
+          created_at?: string
+          currency?: string
+          date?: string
+          description?: string | null
+          id?: number
+          party_type?: string
+          project_id?: number | null
+          source_invoice_id?: number | null
+          source_kind?: string | null
+          supplier_id?: number | null
+          type?: string
+          worker_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "app_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "app_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
         ]
@@ -1177,6 +1277,74 @@ export type Database = {
           },
         ]
       }
+      app_party_transactions: {
+        Row: {
+          amount: number | null
+          amount_iqd: number | null
+          amount_usd: number | null
+          created_at: string | null
+          currency: string | null
+          date: string | null
+          description: string | null
+          id: number | null
+          party_id: number | null
+          party_name: string | null
+          party_type: string | null
+          project_id: number | null
+          project_name: string | null
+          source_invoice_id: number | null
+          source_kind: string | null
+          supplier_id: number | null
+          supplier_name: string | null
+          type: string | null
+          worker_id: number | null
+          worker_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "app_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "app_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_invoices: {
         Row: {
           building_id: number | null
@@ -1294,6 +1462,61 @@ export type Database = {
           status: string | null
         }
         Relationships: []
+      }
+      app_supplier_transactions: {
+        Row: {
+          amount: number | null
+          amount_iqd: number | null
+          amount_usd: number | null
+          created_at: string | null
+          currency: string | null
+          date: string | null
+          description: string | null
+          id: number | null
+          project_id: number | null
+          project_name: string | null
+          source_invoice_id: number | null
+          source_kind: string | null
+          supplier_id: number | null
+          type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "app_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "app_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       app_worker_transactions: {
         Row: {

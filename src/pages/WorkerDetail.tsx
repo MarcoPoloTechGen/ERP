@@ -22,7 +22,9 @@ import {
 import {
   createWorkerTransaction,
   erpKeys,
+  getAppSettings,
   getWorker,
+  listInvoices,
   listProjects,
   listWorkerTransactions,
   type TransactionType,
@@ -151,6 +153,11 @@ export default function WorkerDetail() {
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const [showModal, setShowModal] = useState(false);
 
+  const { data: appSettings } = useQuery({
+    queryKey: erpKeys.appSettings,
+    queryFn: getAppSettings,
+  });
+
   const { data: worker, isLoading: workerLoading } = useQuery({
     queryKey: erpKeys.worker(workerId),
     queryFn: () => getWorker(workerId),
@@ -162,12 +169,24 @@ export default function WorkerDetail() {
     queryFn: () => listWorkerTransactions(workerId),
     enabled: Number.isFinite(workerId),
   });
+  const { data: invoices } = useQuery({
+    queryKey: erpKeys.invoices,
+    queryFn: listInvoices,
+  });
 
   const visibleTransactions =
     scopedProjectId == null
       ? transactions
       : transactions?.filter((transaction) => transaction.projectId === scopedProjectId);
   const transactionRows = visibleTransactions ?? [];
+  const invoicesById = new Map((invoices ?? []).map((invoice) => [invoice.id, invoice]));
+  const chartBalance = transactionRows.reduce(
+    (totals, transaction) => ({
+      usd: totals.usd + (transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd),
+      iqd: totals.iqd + (transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd),
+    }),
+    { usd: 0, iqd: 0 },
+  );
   const chartEntries = transactionRows.map((transaction) => ({
     id: transaction.id,
     date: transaction.date,
@@ -175,6 +194,14 @@ export default function WorkerDetail() {
     creditIqd: transaction.type === "credit" ? transaction.amountIqd : 0,
     debitUsd: transaction.type === "debit" ? transaction.amountUsd : 0,
     debitIqd: transaction.type === "debit" ? transaction.amountIqd : 0,
+    balanceDeltaUsd: transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd,
+    balanceDeltaIqd: transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd,
+    transactionUsd: transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd,
+    transactionIqd: transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd,
+    buildingName:
+      transaction.sourceInvoiceId != null
+        ? invoicesById.get(transaction.sourceInvoiceId)?.buildingName ?? t.projectGlobalCost
+        : transaction.projectName,
   }));
   const creditTotals = transactionRows.reduce(
     (totals, transaction) =>
@@ -241,7 +268,7 @@ export default function WorkerDetail() {
       ) : (
         <AccountFlowChart
           amountLabel={t.amount}
-          balance={{ usd: worker.balanceUsd, iqd: worker.balanceIqd }}
+          balance={scopedProjectId == null ? { usd: worker.balanceUsd, iqd: worker.balanceIqd } : chartBalance}
           balanceLabel={t.balance}
           countLabel={t.transactionsCount(transactionRows.length)}
           credit={creditTotals}
@@ -252,6 +279,7 @@ export default function WorkerDetail() {
           empty={!transactionRows.length}
           emptyDescription={t.noTransactions}
           entries={chartEntries}
+          exchangeRateIqdPer100Usd={appSettings?.exchangeRateIqdPer100Usd}
           title={t.debitCredit}
         />
       )}

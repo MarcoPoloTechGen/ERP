@@ -1,11 +1,15 @@
 export {
+  createSupplierTransaction,
   createSupplier,
   deleteSupplier,
   getSupplier,
   listSupplierBalances,
+  listSupplierTransactions,
   listSuppliers,
   updateSupplier,
   type Supplier,
   type SupplierBalance,
   type SupplierInput,
+  type SupplierTransaction,
+  type SupplierTransactionInput,
 } from "@/lib/erp-core";

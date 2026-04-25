@@ -11,6 +11,10 @@ create table if not exists public.profiles (
 create table if not exists public.app_settings (
   id text primary key default 'default' check (id = 'default'),
   company_logo_path text,
+  exchange_rate_iqd_per_100_usd numeric(14,2) check (
+    exchange_rate_iqd_per_100_usd is null
+    or exchange_rate_iqd_per_100_usd between 100000 and 1000000
+  ),
   updated_by uuid references public.profiles(id) on delete set null,
   updated_at timestamptz not null default now()
 );

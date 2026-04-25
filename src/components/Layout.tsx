@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   BadgeDollarSign,
@@ -15,13 +15,16 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Button, Select } from "antd";
+import { App, Button, InputNumber, Select } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
-import { erpKeys, getAppSettings } from "@/lib/erp";
+import { erpKeys, getAppSettings, updateExchangeRateIqdPer100Usd } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { useProjectScope } from "@/lib/project-scope";
+
+const MIN_EXCHANGE_RATE_IQD_PER_100_USD = 100_000;
+const MAX_EXCHANGE_RATE_IQD_PER_100_USD = 1_000_000;
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "en", label: "EN" },
@@ -61,15 +64,36 @@ function NavLink({
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [exchangeRateDraft, setExchangeRateDraft] = useState<number | null>(null);
   const [location] = useLocation();
   const { t, lang, setLang } = useLang();
+  const { message } = App.useApp();
   const { profile, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const { forcedProjectId, loading: projectScopeLoading, projects, selectedProjectId, setSelectedProjectId } =
     useProjectScope();
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
     queryFn: getAppSettings,
   });
+  const canEditAppSettings = hasAdminAccess(profile?.role);
+  const exchangeRateValue = appSettings?.exchangeRateIqdPer100Usd ?? null;
+  const exchangeRateDisplay = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(exchangeRateValue ?? 0);
+  const exchangeRateMutation = useMutation({
+    mutationFn: updateExchangeRateIqdPer100Usd,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: erpKeys.appSettings });
+    },
+    onError: (error) => {
+      void message.error(error instanceof Error ? error.message : t.unexpectedError);
+    },
+  });
+
+  useEffect(() => {
+    setExchangeRateDraft(exchangeRateValue);
+  }, [exchangeRateValue]);
 
   const navItems = [
     { href: "/", label: t.dashboard, icon: LayoutDashboard },
@@ -159,6 +183,40 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   ...projects.map((project) => ({ label: project.name, value: String(project.id) })),
                 ]}
               />
+            </div>
+
+            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
+                {t.exchangeRate}
+              </p>
+              <p className="mb-2 text-sm font-semibold text-sidebar-foreground">
+                100$ = {exchangeRateValue == null ? "-" : exchangeRateDisplay} IQD
+              </p>
+              {canEditAppSettings ? (
+                <div className="flex gap-2">
+                  <InputNumber
+                    min={MIN_EXCHANGE_RATE_IQD_PER_100_USD}
+                    max={MAX_EXCHANGE_RATE_IQD_PER_100_USD}
+                    precision={0}
+                    value={exchangeRateDraft}
+                    controls={false}
+                    style={{ width: "100%" }}
+                    onChange={(value) => setExchangeRateDraft(typeof value === "number" ? value : null)}
+                  />
+                  <Button
+                    loading={exchangeRateMutation.isPending}
+                    disabled={
+                      exchangeRateDraft === exchangeRateValue ||
+                      exchangeRateDraft == null ||
+                      exchangeRateDraft < MIN_EXCHANGE_RATE_IQD_PER_100_USD ||
+                      exchangeRateDraft > MAX_EXCHANGE_RATE_IQD_PER_100_USD
+                    }
+                    onClick={() => exchangeRateMutation.mutate(exchangeRateDraft)}
+                  >
+                    {t.save}
+                  </Button>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">

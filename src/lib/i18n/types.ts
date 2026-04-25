@@ -91,6 +91,7 @@ export type TranslationShape = {
   all: string;
   allProjects: string;
   projectScope: string;
+  exchangeRate: string;
   allSuppliers: string;
   allStatuses: string;
   allCurrencies: string;

@@ -28,6 +28,10 @@ export default defineConfig({
             return "fullcalendar";
           }
 
+          if (id.includes("echarts") || id.includes("zrender")) {
+            return "echarts";
+          }
+
           if (id.includes("antd") || id.includes("@ant-design") || id.includes("rc-")) {
             return "antd";
           }

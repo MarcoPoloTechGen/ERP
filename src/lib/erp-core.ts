@@ -40,6 +40,7 @@ type AppProductRow = ViewRow<"app_products">;
 type AppInvoiceRow = ViewRow<"app_invoices">;
 type AppInvoiceHistoryRow = ViewRow<"app_invoice_history">;
 type AppWorkerTransactionRow = ViewRow<"app_worker_transactions">;
+type AppSupplierTransactionRow = ViewRow<"app_supplier_transactions">;
 type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
 
@@ -86,8 +87,10 @@ type InvoiceRecordStatusUpdatePayload = Pick<
   TableUpdatePayload<"invoices">,
   "record_status" | "deleted_at" | "deleted_by"
 >;
-type WorkerTransactionWritePayload = {
-  worker_id: number;
+type PartyTransactionWritePayload = {
+  party_type: PartyType;
+  worker_id: number | null;
+  supplier_id: number | null;
   type: TransactionType;
   amount: number;
   currency: Currency;
@@ -114,7 +117,7 @@ type IncomeTransactionRecordStatusUpdatePayload = Pick<
 >;
 type AppSettingsUpsertPayload = Pick<
   TableInsertPayload<"app_settings">,
-  "id" | "company_logo_path" | "updated_by" | "updated_at"
+  "id" | "company_logo_path" | "exchange_rate_iqd_per_100_usd" | "updated_by" | "updated_at"
 >;
 type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
@@ -134,6 +137,7 @@ export type InvoiceStatus = "unpaid" | "partial" | "paid";
 export type InvoiceHistoryAction = "created" | "updated";
 export type IncomeTransactionHistoryAction = "created" | "updated" | "deleted";
 export type TransactionType = "credit" | "debit";
+export type PartyType = "worker" | "supplier";
 export type Currency = "USD" | "IQD";
 export const CURRENCIES: Currency[] = ["USD", "IQD"];
 export type UserRole = "super_admin" | "admin" | "user";
@@ -152,6 +156,7 @@ export interface AppSettings {
   id: string;
   companyLogoPath: string | null;
   companyLogoUrl: string | null;
+  exchangeRateIqdPer100Usd: number | null;
   updatedAt: string | null;
 }
 
@@ -316,6 +321,25 @@ export interface WorkerTransaction {
   date: string | null;
   projectId: number | null;
   projectName: string | null;
+  sourceInvoiceId: number | null;
+  sourceKind: string | null;
+  createdAt: string | null;
+}
+
+export interface SupplierTransaction {
+  id: number;
+  supplierId: number;
+  type: TransactionType;
+  amount: number;
+  currency: Currency;
+  amountUsd: number;
+  amountIqd: number;
+  description: string | null;
+  date: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  sourceInvoiceId: number | null;
+  sourceKind: string | null;
   createdAt: string | null;
 }
 
@@ -495,6 +519,18 @@ export interface WorkerTransactionInput {
   projectId: number | null;
 }
 
+export interface SupplierTransactionInput {
+  supplierId: number;
+  type: TransactionType;
+  amount?: number;
+  currency?: Currency;
+  amountUsd: number;
+  amountIqd: number;
+  description: string | null;
+  date: string | null;
+  projectId: number | null;
+}
+
 export interface IncomeTransactionInput {
   projectId: number;
   amount?: number;
@@ -517,7 +553,9 @@ export const erpKeys = {
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,
   suppliers: ["suppliers"] as const,
   supplier: (id: number) => ["supplier", id] as const,
-  supplierBalances: ["invoices", "supplierBalances"] as const,
+  supplierTransactionsList: ["supplierTransactions"] as const,
+  supplierTransactions: (supplierId: number) => ["supplierTransactions", supplierId] as const,
+  supplierBalances: ["supplierBalances"] as const,
   projects: ["projects"] as const,
   project: (id: number) => ["project", id] as const,
   projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
@@ -685,6 +723,7 @@ function normalizeAppSettings(row: AppSettingsRow): AppSettings {
       companyLogoUrl && updatedAt
         ? `${companyLogoUrl}${companyLogoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(updatedAt)}`
         : companyLogoUrl,
+    exchangeRateIqdPer100Usd: readNumber(row, "exchange_rate_iqd_per_100_usd", "exchangeRateIqdPer100Usd"),
     updatedAt,
   };
 }
@@ -951,6 +990,36 @@ function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransac
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
+    sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
+    sourceKind: readString(row, "source_kind", "sourceKind"),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierTransaction {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd, amountIqd } = readDualCurrencyAmount(
+    row,
+    ["amount_usd", "amountUsd"],
+    ["amount_iqd", "amountIqd"],
+    ["amount"],
+    currency,
+  );
+
+  return {
+    id: readId(row, "id"),
+    supplierId: readId(row, "supplier_id", "supplierId"),
+    type: toTransactionType(readString(row, "type")),
+    amount: readNumber(row, "amount") ?? 0,
+    currency,
+    amountUsd,
+    amountIqd,
+    description: readString(row, "description"),
+    date: readDate(row, "date"),
+    projectId: readNumber(row, "project_id", "projectId"),
+    projectName: readString(row, "project_name", "projectName"),
+    sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
+    sourceKind: readString(row, "source_kind", "sourceKind"),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -1436,15 +1505,26 @@ function normalizeInvoiceInput(input: InvoiceInput) {
   return payload;
 }
 
-function normalizeWorkerTransactionInput(input: WorkerTransactionInput) {
+function normalizePartyTransactionInput(input: {
+  partyId: number;
+  partyType: PartyType;
+  type: TransactionType;
+  amountUsd: number;
+  amountIqd: number;
+  description: string | null;
+  date: string | null;
+  projectId: number | null;
+}) {
   const amountUsd = input.amountUsd ?? 0;
   const amountIqd = input.amountIqd ?? 0;
   const currency = pickPrimaryCurrency(amountUsd, amountIqd);
 
   assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Transaction amount");
 
-  const payload: WorkerTransactionWritePayload = {
-    worker_id: input.workerId,
+  const payload: PartyTransactionWritePayload = {
+    party_type: input.partyType,
+    worker_id: input.partyType === "worker" ? input.partyId : null,
+    supplier_id: input.partyType === "supplier" ? input.partyId : null,
     type: input.type,
     amount: pickPrimaryAmount(amountUsd, amountIqd),
     currency,
@@ -1506,6 +1586,7 @@ export async function getAppSettings() {
   const fallbackSettingsRow: AppSettingsRow = {
     id: "default",
     company_logo_path: null,
+    exchange_rate_iqd_per_100_usd: null,
     updated_at: "",
     updated_by: null,
   };
@@ -1518,6 +1599,33 @@ export async function updateCompanyLogoPath(companyLogoPath: string | null) {
   const payload: AppSettingsUpsertPayload = {
     id: "default",
     company_logo_path: companyLogoPath,
+    exchange_rate_iqd_per_100_usd: undefined,
+    updated_by: currentUserId,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("app_settings").upsert(payload, {
+    onConflict: "id",
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateExchangeRateIqdPer100Usd(exchangeRateIqdPer100Usd: number | null) {
+  if (
+    exchangeRateIqdPer100Usd == null ||
+    exchangeRateIqdPer100Usd < 100_000 ||
+    exchangeRateIqdPer100Usd > 1_000_000
+  ) {
+    throw new Error("Exchange rate must be between 100,000 and 1,000,000 IQD.");
+  }
+
+  const currentUserId = await getCurrentUserId();
+  const payload: AppSettingsUpsertPayload = {
+    id: "default",
+    company_logo_path: undefined,
+    exchange_rate_iqd_per_100_usd: exchangeRateIqdPer100Usd,
     updated_by: currentUserId,
     updated_at: new Date().toISOString(),
   };
@@ -1635,22 +1743,23 @@ export async function getSupplier(id: number) {
 }
 
 export async function listSupplierBalances(): Promise<SupplierBalance[]> {
-  const invoiceBalances = await executeSelect(
+  const transactionBalances = await executeSelect(
     supabase
-      .from("app_invoices")
-      .select("supplier_id,total_amount_usd,paid_amount_usd,total_amount_iqd,paid_amount_iqd,record_status")
-      .eq("record_status", "active"),
+      .from("app_supplier_transactions")
+      .select("supplier_id,type,amount_usd,amount_iqd"),
     (row: Row) => ({
       supplierId: readNumber(row, "supplier_id", "supplierId"),
-      balanceUsd: (readNumber(row, "total_amount_usd", "totalAmountUsd") ?? 0) -
-        (readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? 0),
-      balanceIqd: (readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? 0) -
-        (readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? 0),
+      balanceUsd:
+        (readString(row, "type") === "debit" ? -1 : 1) *
+        (readNumber(row, "amount_usd", "amountUsd") ?? 0),
+      balanceIqd:
+        (readString(row, "type") === "debit" ? -1 : 1) *
+        (readNumber(row, "amount_iqd", "amountIqd") ?? 0),
     }),
   );
   const balancesBySupplier = new Map<number, { balanceUsd: number; balanceIqd: number }>();
 
-  for (const balance of invoiceBalances) {
+  for (const balance of transactionBalances) {
     if (balance.supplierId == null) {
       continue;
     }
@@ -1776,8 +1885,49 @@ export async function listWorkerTransactions(workerId?: number) {
 }
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
-  const payload = normalizeWorkerTransactionInput(input);
-  const { error } = await supabase.from("worker_transactions").insert(payload);
+  const payload = normalizePartyTransactionInput({
+    partyId: input.workerId,
+    partyType: "worker",
+    type: input.type,
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    description: input.description,
+    date: input.date,
+    projectId: input.projectId,
+  });
+  const { error } = await supabase.from("party_transactions").insert(payload);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function listSupplierTransactions(supplierId?: number) {
+  let query: any = supabase
+    .from("app_supplier_transactions")
+    .select("*")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (supplierId != null) {
+    query = query.eq("supplier_id", supplierId);
+  }
+
+  return executeSelect(query, normalizeSupplierTransaction);
+}
+
+export async function createSupplierTransaction(input: SupplierTransactionInput) {
+  const payload = normalizePartyTransactionInput({
+    partyId: input.supplierId,
+    partyType: "supplier",
+    type: input.type,
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    description: input.description,
+    date: input.date,
+    projectId: input.projectId,
+  });
+  const { error } = await supabase.from("party_transactions").insert(payload);
 
   if (error) {
     throw new Error(error.message);
