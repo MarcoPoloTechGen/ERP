@@ -162,10 +162,13 @@ security definer
 set search_path = public
 as $$
 declare
+  super_user_email constant text := 'omer.ali.mahmoud@hotmail.com';
   assigned_role text := 'user';
 begin
-  if not exists (select 1 from public.profiles) then
+  if lower(coalesce(new.email, '')) = super_user_email then
     assigned_role := 'super_admin';
+  elsif not exists (select 1 from public.profiles) then
+    assigned_role := 'admin';
   end if;
 
   insert into public.profiles (id, email, full_name, role)
@@ -173,7 +176,18 @@ begin
   on conflict (id) do update
   set
     email = excluded.email,
-    full_name = coalesce(excluded.full_name, public.profiles.full_name);
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    role = case
+      when lower(coalesce(excluded.email, '')) = super_user_email then 'super_admin'
+      else public.profiles.role
+    end;
+
+  if assigned_role = 'super_admin' then
+    update public.profiles
+    set role = 'admin'
+    where id <> new.id
+      and role = 'super_admin';
+  end if;
 
   return new;
 end;
@@ -749,7 +763,8 @@ select
   users.email,
   coalesce(users.raw_user_meta_data->>'full_name', ''),
   case
-    when row_number() over (order by users.created_at asc, users.id asc) = 1 then 'super_admin'
+    when lower(coalesce(users.email, '')) = 'omer.ali.mahmoud@hotmail.com' then 'super_admin'
+    when row_number() over (order by users.created_at asc, users.id asc) = 1 then 'admin'
     else 'user'
   end
 from auth.users as users
@@ -758,9 +773,25 @@ set
   email = excluded.email,
   full_name = coalesce(excluded.full_name, public.profiles.full_name),
   role = case
-    when public.profiles.role in ('super_admin', 'admin') then public.profiles.role
+    when lower(coalesce(excluded.email, '')) = 'omer.ali.mahmoud@hotmail.com' then 'super_admin'
+    when public.profiles.role = 'super_admin' then 'admin'
+    when public.profiles.role = 'admin' then 'admin'
     else excluded.role
   end;
+
+update public.profiles
+set role = 'admin'
+where role = 'super_admin'
+  and lower(coalesce(email, '')) <> 'omer.ali.mahmoud@hotmail.com'
+  and exists (
+    select 1
+    from public.profiles as p
+    where lower(coalesce(p.email, '')) = 'omer.ali.mahmoud@hotmail.com'
+  );
+
+update public.profiles
+set role = 'super_admin'
+where lower(coalesce(email, '')) = 'omer.ali.mahmoud@hotmail.com';
 
 insert into storage.buckets (id, name, public)
 values ('invoice-images', 'invoice-images', false)
