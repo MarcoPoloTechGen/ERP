@@ -215,8 +215,8 @@ type TranslationShape = {
   noExpenses: string;
   newInvoice: string;
   editInvoice: string;
-  invoiceNumber: string;
-  invoiceNumberPlaceholder: string;
+  expenseTitle: string;
+  expenseTitlePlaceholder: string;
   invoiceStatus_label: string;
   supplierOption: string;
   projectOption: string;
@@ -244,7 +244,6 @@ type TranslationShape = {
   viewImage: string;
   invoiceImage: string;
   receiptImage: string;
-  reference: string;
   user: string;
   createdBy: string;
   notFound: string;
@@ -515,8 +514,8 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     noExpenses: "No expenses yet.",
     newInvoice: "New expense",
     editInvoice: "Edit expense",
-    invoiceNumber: "Reference",
-    invoiceNumberPlaceholder: "EXP-2026-001",
+    expenseTitle: "Title",
+    expenseTitlePlaceholder: "Concrete delivery, rent, tool repair...",
     invoiceStatus_label: "Status",
     supplierOption: "Supplier",
     projectOption: "Project",
@@ -544,7 +543,6 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     viewImage: "View image",
     invoiceImage: "Expense image",
     receiptImage: "Receipt image",
-    reference: "Reference",
     user: "User",
     createdBy: "Created by",
     notFound: "Item not found.",
@@ -817,8 +815,8 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     noExpenses: "هێشتا هیچ خەرجییەک نییە.",
     newInvoice: "خەرجیی نوێ",
     editInvoice: "دەستکاریکردنی خەرجی",
-    invoiceNumber: "ژمارەی مرجع",
-    invoiceNumberPlaceholder: "EXP-2026-001",
+    expenseTitle: "ناونیشان",
+    expenseTitlePlaceholder: "ناونیشانی خەرجی...",
     invoiceStatus_label: "دۆخ",
     supplierOption: "دابینکەر",
     projectOption: "پڕۆژە",
@@ -846,7 +844,6 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     viewImage: "بینینی وێنە",
     invoiceImage: "وێنەی خەرجی",
     receiptImage: "وێنەی پسوڵە",
-    reference: "مرجع",
     user: "بەکارهێنەر",
     createdBy: "دروستکراو لەلایەن",
     notFound: "دانەکە نەدۆزرایەوە.",

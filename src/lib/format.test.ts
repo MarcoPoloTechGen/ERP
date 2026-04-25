@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { formatCurrency, formatDate, formatDateInput } from "./format";
+import { formatCurrency, formatCurrencyPair, formatDate, formatDateInput } from "./format";
 
 describe("format helpers", () => {
   it("formats currencies with the correct precision", () => {
     expect(formatCurrency(1234.56, "USD")).toContain("1,234.56");
     expect(formatCurrency(1200, "IQD")).toContain("1,200");
+  });
+
+  it("formats currency pairs without mixing currencies", () => {
+    expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).toContain("/");
+    expect(formatCurrencyPair({ usd: 0, iqd: 1250 }, { hideZero: true })).not.toContain("0.00");
   });
 
   it("formats dates safely", () => {

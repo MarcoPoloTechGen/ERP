@@ -23,6 +23,33 @@ export function formatCurrency(amount: number, currency: Currency = "USD") {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function formatCurrencyNumber(amount: number, currency: Currency) {
+  return new Intl.NumberFormat(getActiveLocale(), {
+    maximumFractionDigits: currency === "IQD" ? 0 : 2,
+    minimumFractionDigits: currency === "IQD" ? 0 : 2,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function isolateLtr(value: string) {
+  return `\u2066${value}\u2069`;
+}
+
+export function formatCurrencyPair(
+  amounts: { usd: number | null | undefined; iqd: number | null | undefined },
+  options: { hideZero?: boolean } = {},
+) {
+  const usd = Number.isFinite(amounts.usd) ? Number(amounts.usd) : 0;
+  const iqd = Number.isFinite(amounts.iqd) ? Number(amounts.iqd) : 0;
+  const parts = [
+    !options.hideZero || usd !== 0 ? `${formatCurrencyNumber(usd, "USD")} USD` : null,
+    !options.hideZero || iqd !== 0 ? `${formatCurrencyNumber(iqd, "IQD")} IQD` : null,
+  ].filter(Boolean);
+
+  return parts.length
+    ? isolateLtr(parts.join(" / "))
+    : isolateLtr(`${formatCurrencyNumber(0, "USD")} USD / ${formatCurrencyNumber(0, "IQD")} IQD`);
+}
+
 export function formatDate(value: string | Date | null | undefined) {
   if (!value) {
     return "-";

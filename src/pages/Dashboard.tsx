@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { AlertTriangle, FolderKanban, Truck, Users } from "lucide-react";
 import { Card, Col, Empty, Progress, Row, Skeleton, Space, Tag, Typography } from "antd";
 import { erpKeys, getDashboardOverview, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyPair } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 function projectStatusColor(status: ProjectStatus) {
@@ -84,8 +84,10 @@ export default function Dashboard() {
     );
   }
 
-  const paymentPercent =
-    data.totalInvoiceAmount > 0 ? Math.round((data.totalPaidAmount / data.totalInvoiceAmount) * 100) : 0;
+  const paymentPercentUsd =
+    data.totalInvoiceAmountUsd > 0 ? Math.round((data.totalPaidAmountUsd / data.totalInvoiceAmountUsd) * 100) : 0;
+  const paymentPercentIqd =
+    data.totalInvoiceAmountIqd > 0 ? Math.round((data.totalPaidAmountIqd / data.totalInvoiceAmountIqd) * 100) : 0;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -117,7 +119,7 @@ export default function Dashboard() {
             <Card size="small">
               <Typography.Text type="secondary">{t.totalInvoiced}</Typography.Text>
               <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                {formatCurrency(data.totalInvoiceAmount)}
+                {formatCurrencyPair({ usd: data.totalInvoiceAmountUsd, iqd: data.totalInvoiceAmountIqd })}
               </Typography.Title>
             </Card>
           </Col>
@@ -125,7 +127,7 @@ export default function Dashboard() {
             <Card size="small">
               <Typography.Text type="success">{t.amountPaid}</Typography.Text>
               <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                {formatCurrency(data.totalPaidAmount)}
+                {formatCurrencyPair({ usd: data.totalPaidAmountUsd, iqd: data.totalPaidAmountIqd })}
               </Typography.Title>
             </Card>
           </Col>
@@ -133,12 +135,15 @@ export default function Dashboard() {
             <Card size="small">
               <Typography.Text type="warning">{t.remaining}</Typography.Text>
               <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                {formatCurrency(data.remainingAmount)}
+                {formatCurrencyPair({ usd: data.remainingAmountUsd, iqd: data.remainingAmountIqd })}
               </Typography.Title>
             </Card>
           </Col>
         </Row>
-        <Progress percent={paymentPercent} style={{ marginTop: 20 }} />
+        <Space direction="vertical" size="small" style={{ width: "100%", marginTop: 20 }}>
+          <Progress percent={paymentPercentUsd} format={(percent) => `USD ${percent}%`} />
+          <Progress percent={paymentPercentIqd} format={(percent) => `IQD ${percent}%`} />
+        </Space>
       </Card>
 
       <Row gutter={[16, 16]}>
@@ -161,7 +166,9 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <Typography.Text strong>{formatCurrency(project.totalInvoiced)}</Typography.Text>
+                          <Typography.Text strong>
+                            {formatCurrencyPair({ usd: project.totalInvoicedUsd, iqd: project.totalInvoicedIqd })}
+                          </Typography.Text>
                           <div>
                             <Typography.Text type="secondary">{project.invoiceCount} invoices</Typography.Text>
                           </div>
@@ -194,12 +201,17 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <Typography.Text strong type={worker.balance >= 0 ? "success" : "danger"}>
-                            {formatCurrency(worker.balance)}
+                          <Typography.Text
+                            strong
+                            type={worker.balanceUsd >= 0 && worker.balanceIqd >= 0 ? "success" : "danger"}
+                          >
+                            {formatCurrencyPair({ usd: worker.balanceUsd, iqd: worker.balanceIqd })}
                           </Typography.Text>
                           <div>
                             <Typography.Text type="secondary">
-                              {formatCurrency(worker.totalCredit)} / {formatCurrency(worker.totalDebit)}
+                              {formatCurrencyPair({ usd: worker.totalCreditUsd, iqd: worker.totalCreditIqd }, { hideZero: true })}
+                              {" / "}
+                              {formatCurrencyPair({ usd: worker.totalDebitUsd, iqd: worker.totalDebitIqd }, { hideZero: true })}
                             </Typography.Text>
                           </div>
                         </div>
@@ -234,9 +246,13 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <Typography.Text strong>{formatCurrency(invoice.totalAmount)}</Typography.Text>
+                          <Typography.Text strong>
+                            {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                          </Typography.Text>
                           <div>
-                            <Typography.Text type="danger">{formatCurrency(invoice.remaining)}</Typography.Text>
+                            <Typography.Text type="danger">
+                              {formatCurrencyPair({ usd: invoice.remainingUsd, iqd: invoice.remainingIqd }, { hideZero: true })}
+                            </Typography.Text>
                           </div>
                         </div>
                       </div>

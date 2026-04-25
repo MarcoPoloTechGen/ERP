@@ -8,10 +8,11 @@ import {
 import type { Database, Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 import {
   assertNonNegativeAmount,
-  assertPositiveAmount,
+  assertPositiveDualCurrencyAmount,
   deriveInvoiceStatus,
+  deriveDualCurrencyInvoiceStatus,
   normalizeOptionalText,
-  validateInvoiceInput,
+  validateDualCurrencyInvoiceInput,
   validateProjectInput as validateProjectPayload,
 } from "@/lib/validation";
 
@@ -46,42 +47,61 @@ type SupplierWritePayload = Pick<
   TableInsertPayload<"suppliers">,
   "name" | "contact" | "phone" | "email" | "address"
 >;
-type ProductWritePayload = Pick<
-  TableInsertPayload<"products">,
-  "name" | "supplier_id" | "project_id" | "building_id" | "unit" | "unit_price" | "currency"
->;
-type InvoiceWritePayload = Required<
-  Pick<
-    TableUpdatePayload<"invoices">,
-    | "number"
-    | "supplier_id"
-    | "project_id"
-    | "building_id"
-    | "product_id"
-    | "total_amount"
-    | "paid_amount"
-    | "currency"
-    | "status"
-    | "invoice_date"
-    | "due_date"
-    | "notes"
-    | "image_path"
-  >
->;
+type ProductWritePayload = {
+  name: string;
+  supplier_id: number | null;
+  project_id: number | null;
+  building_id: number | null;
+  unit: string | null;
+  unit_price: number | null;
+  currency: Currency;
+  unit_price_usd: number;
+  unit_price_iqd: number;
+};
+type InvoiceWritePayload = {
+  number: string;
+  supplier_id: number | null;
+  project_id: number | null;
+  building_id: number | null;
+  product_id: number | null;
+  total_amount: number;
+  paid_amount: number;
+  currency: Currency;
+  total_amount_usd: number;
+  paid_amount_usd: number;
+  total_amount_iqd: number;
+  paid_amount_iqd: number;
+  status: InvoiceStatus;
+  invoice_date: string;
+  due_date: string | null;
+  notes: string | null;
+  image_path: string | null;
+};
 type InvoiceCreatePayload = InvoiceWritePayload & Pick<TableInsertPayload<"invoices">, "created_by">;
 type InvoiceRecordStatusUpdatePayload = Pick<
   TableUpdatePayload<"invoices">,
   "record_status" | "deleted_at" | "deleted_by"
 >;
-type WorkerTransactionWritePayload = Required<
-  Pick<
-    TableInsertPayload<"worker_transactions">,
-    "worker_id" | "type" | "amount" | "currency" | "description" | "date" | "project_id"
-  >
->;
-type IncomeTransactionWritePayload = Required<
-  Pick<TableInsertPayload<"income_transactions">, "project_id" | "amount" | "currency" | "description" | "date">
->;
+type WorkerTransactionWritePayload = {
+  worker_id: number;
+  type: TransactionType;
+  amount: number;
+  currency: Currency;
+  amount_usd: number;
+  amount_iqd: number;
+  description: string | null;
+  date: string;
+  project_id: number | null;
+};
+type IncomeTransactionWritePayload = {
+  project_id: number;
+  amount: number;
+  currency: Currency;
+  amount_usd: number;
+  amount_iqd: number;
+  description: string | null;
+  date: string;
+};
 type IncomeTransactionCreatePayload = IncomeTransactionWritePayload &
   Pick<TableInsertPayload<"income_transactions">, "created_by">;
 type IncomeTransactionRecordStatusUpdatePayload = Pick<
@@ -94,7 +114,13 @@ type AppSettingsUpsertPayload = Pick<
 >;
 type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
-type InvoicePaidUpdatePayload = Pick<TableUpdatePayload<"invoices">, "paid_amount" | "status">;
+type InvoicePaidUpdatePayload = {
+  paid_amount: number;
+  paid_amount_usd: number;
+  paid_amount_iqd: number;
+  currency: Currency;
+  status: InvoiceStatus;
+};
 type ReplaceUserProjectMembershipsArgs = RpcArgs<"replace_user_project_memberships">;
 type DashboardOverviewRpcResult = RpcReturns<"get_dashboard_overview">;
 
@@ -104,6 +130,7 @@ export type InvoiceHistoryAction = "created" | "updated";
 export type IncomeTransactionHistoryAction = "created" | "updated" | "deleted";
 export type TransactionType = "credit" | "debit";
 export type Currency = "USD" | "IQD";
+export const CURRENCIES: Currency[] = ["USD", "IQD"];
 export type UserRole = "admin" | "user";
 export type RecordStatus = "active" | "deleted";
 
@@ -136,6 +163,8 @@ export interface Worker {
   category: string | null;
   phone: string | null;
   balance: number;
+  balanceUsd: number;
+  balanceIqd: number;
   createdAt: string | null;
 }
 
@@ -181,6 +210,8 @@ export interface Product {
   unit: string | null;
   unitPrice: number | null;
   currency: Currency;
+  unitPriceUsd: number;
+  unitPriceIqd: number;
   createdAt: string | null;
 }
 
@@ -201,6 +232,12 @@ export interface Invoice {
   paidAmount: number;
   remainingAmount: number;
   currency: Currency;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  remainingAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
+  remainingAmountIqd: number;
   invoiceDate: string | null;
   dueDate: string | null;
   notes: string | null;
@@ -231,6 +268,12 @@ export interface InvoiceHistoryEntry {
   paidAmount: number;
   remainingAmount: number;
   currency: Currency;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  remainingAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
+  remainingAmountIqd: number;
   invoiceDate: string | null;
   dueDate: string | null;
   notes: string | null;
@@ -247,6 +290,8 @@ export interface WorkerTransaction {
   type: TransactionType;
   amount: number;
   currency: Currency;
+  amountUsd: number;
+  amountIqd: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -260,6 +305,8 @@ export interface IncomeTransaction {
   projectName: string | null;
   amount: number;
   currency: Currency;
+  amountUsd: number;
+  amountIqd: number;
   description: string | null;
   date: string | null;
   recordStatus: RecordStatus;
@@ -278,6 +325,8 @@ export interface IncomeTransactionHistoryEntry {
   projectName: string | null;
   amount: number;
   currency: Currency;
+  amountUsd: number;
+  amountIqd: number;
   description: string | null;
   date: string | null;
   recordStatus: RecordStatus;
@@ -294,6 +343,12 @@ export interface DashboardProjectSummary {
   totalInvoiced: number;
   totalPaid: number;
   remaining: number;
+  totalInvoicedUsd: number;
+  totalPaidUsd: number;
+  remainingUsd: number;
+  totalInvoicedIqd: number;
+  totalPaidIqd: number;
+  remainingIqd: number;
 }
 
 export interface DashboardWorkerSummary {
@@ -303,6 +358,12 @@ export interface DashboardWorkerSummary {
   balance: number;
   totalCredit: number;
   totalDebit: number;
+  balanceUsd: number;
+  balanceIqd: number;
+  totalCreditUsd: number;
+  totalDebitUsd: number;
+  totalCreditIqd: number;
+  totalDebitIqd: number;
 }
 
 export interface DashboardInvoiceSummary {
@@ -314,6 +375,12 @@ export interface DashboardInvoiceSummary {
   totalAmount: number;
   paidAmount: number;
   remaining: number;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  remainingUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
+  remainingIqd: number;
 }
 
 export interface DashboardOverview {
@@ -324,6 +391,12 @@ export interface DashboardOverview {
   totalInvoiceAmount: number;
   totalPaidAmount: number;
   remainingAmount: number;
+  totalInvoiceAmountUsd: number;
+  totalPaidAmountUsd: number;
+  remainingAmountUsd: number;
+  totalInvoiceAmountIqd: number;
+  totalPaidAmountIqd: number;
+  remainingAmountIqd: number;
   projectsSummary: DashboardProjectSummary[];
   workersSummary: DashboardWorkerSummary[];
   invoicesSummary: DashboardInvoiceSummary[];
@@ -361,8 +434,10 @@ export interface ProductInput {
   projectId: number | null;
   buildingId: number | null;
   unit: string | null;
-  unitPrice: number | null;
-  currency: Currency;
+  unitPrice?: number | null;
+  currency?: Currency;
+  unitPriceUsd: number;
+  unitPriceIqd: number;
 }
 
 export interface InvoiceInput {
@@ -371,9 +446,13 @@ export interface InvoiceInput {
   projectId: number | null;
   buildingId: number | null;
   productId: number | null;
-  totalAmount: number;
-  paidAmount: number;
-  currency: Currency;
+  totalAmount?: number;
+  paidAmount?: number;
+  currency?: Currency;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
   status: InvoiceStatus;
   invoiceDate: string | null;
   dueDate: string | null;
@@ -384,8 +463,10 @@ export interface InvoiceInput {
 export interface WorkerTransactionInput {
   workerId: number;
   type: TransactionType;
-  amount: number;
-  currency: Currency;
+  amount?: number;
+  currency?: Currency;
+  amountUsd: number;
+  amountIqd: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -393,8 +474,10 @@ export interface WorkerTransactionInput {
 
 export interface IncomeTransactionInput {
   projectId: number;
-  amount: number;
-  currency: Currency;
+  amount?: number;
+  currency?: Currency;
+  amountUsd: number;
+  amountIqd: number;
   description: string | null;
   date: string | null;
 }
@@ -482,6 +565,20 @@ function toInvoiceStatus(value: unknown, totalAmount = 0, paidAmount = 0): Invoi
   return deriveInvoiceStatus(totalAmount, paidAmount);
 }
 
+function toDualCurrencyInvoiceStatus(
+  value: unknown,
+  totalAmountUsd = 0,
+  paidAmountUsd = 0,
+  totalAmountIqd = 0,
+  paidAmountIqd = 0,
+): InvoiceStatus {
+  if (value === "paid" || value === "partial" || value === "unpaid") {
+    return value;
+  }
+
+  return deriveDualCurrencyInvoiceStatus(totalAmountUsd, paidAmountUsd, totalAmountIqd, paidAmountIqd);
+}
+
 function toInvoiceHistoryAction(value: unknown): InvoiceHistoryAction {
   return value === "updated" ? "updated" : "created";
 }
@@ -504,6 +601,31 @@ function toTransactionType(value: unknown): TransactionType {
 
 function toCurrency(value: unknown): Currency {
   return value === "IQD" ? "IQD" : "USD";
+}
+
+function readDualCurrencyAmount(
+  row: Row,
+  usdKeys: string[],
+  iqdKeys: string[],
+  legacyKeys: string[],
+  legacyCurrency: Currency,
+) {
+  const legacyAmount = readNumber(row, ...legacyKeys) ?? 0;
+  const amountUsd = readNumber(row, ...usdKeys);
+  const amountIqd = readNumber(row, ...iqdKeys);
+
+  return {
+    amountUsd: amountUsd ?? (legacyCurrency === "USD" ? legacyAmount : 0),
+    amountIqd: amountIqd ?? (legacyCurrency === "IQD" ? legacyAmount : 0),
+  };
+}
+
+function pickPrimaryCurrency(amountUsd: number, amountIqd: number): Currency {
+  return amountUsd !== 0 || amountIqd === 0 ? "USD" : "IQD";
+}
+
+function pickPrimaryAmount(amountUsd: number, amountIqd: number) {
+  return pickPrimaryCurrency(amountUsd, amountIqd) === "USD" ? amountUsd : amountIqd;
 }
 
 function toUserRole(value: unknown): UserRole {
@@ -546,13 +668,17 @@ function normalizeProjectMembership(row: ProjectMembershipRow): ProjectMembershi
 }
 
 function normalizeWorker(row: WorkerRow): Worker {
+  const balance = readNumber(row, "balance") ?? 0;
+
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed worker",
     role: readString(row, "role") ?? "-",
     category: readString(row, "category"),
     phone: readString(row, "phone"),
-    balance: readNumber(row, "balance") ?? 0,
+    balance,
+    balanceUsd: readNumber(row, "balance_usd", "balanceUsd") ?? balance,
+    balanceIqd: readNumber(row, "balance_iqd", "balanceIqd") ?? 0,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -594,6 +720,15 @@ function normalizeProjectBuilding(row: ProjectBuildingRow): ProjectBuilding {
 }
 
 function normalizeProduct(row: AppProductRow): Product {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd: unitPriceUsd, amountIqd: unitPriceIqd } = readDualCurrencyAmount(
+    row,
+    ["unit_price_usd", "unitPriceUsd"],
+    ["unit_price_iqd", "unitPriceIqd"],
+    ["unit_price", "unitPrice"],
+    currency,
+  );
+
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed product",
@@ -605,7 +740,9 @@ function normalizeProduct(row: AppProductRow): Product {
     buildingName: readString(row, "building_name", "buildingName"),
     unit: readString(row, "unit"),
     unitPrice: readNumber(row, "unit_price", "unitPrice"),
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    unitPriceUsd,
+    unitPriceIqd,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -621,14 +758,39 @@ function readInvoiceImage(row: Row) {
 }
 
 function normalizeInvoice(row: AppInvoiceRow): Invoice {
+  const currency = toCurrency(readString(row, "currency"));
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
+  const { amountUsd: totalAmountUsd, amountIqd: totalAmountIqd } = readDualCurrencyAmount(
+    row,
+    ["total_amount_usd", "totalAmountUsd"],
+    ["total_amount_iqd", "totalAmountIqd"],
+    ["total_amount", "totalAmount"],
+    currency,
+  );
+  const { amountUsd: paidAmountUsd, amountIqd: paidAmountIqd } = readDualCurrencyAmount(
+    row,
+    ["paid_amount_usd", "paidAmountUsd"],
+    ["paid_amount_iqd", "paidAmountIqd"],
+    ["paid_amount", "paidAmount"],
+    currency,
+  );
+  const remainingAmountUsd =
+    readNumber(row, "remaining_amount_usd", "remainingAmountUsd") ?? Math.max(0, totalAmountUsd - paidAmountUsd);
+  const remainingAmountIqd =
+    readNumber(row, "remaining_amount_iqd", "remainingAmountIqd") ?? Math.max(0, totalAmountIqd - paidAmountIqd);
   const { imagePath, imageUrl } = readInvoiceImage(row);
 
   return {
     id: readId(row, "id"),
     number: readString(row, "number") ?? "INV",
-    status: toInvoiceStatus(readString(row, "status"), totalAmount, paidAmount),
+    status: toDualCurrencyInvoiceStatus(
+      readString(row, "status"),
+      totalAmountUsd,
+      paidAmountUsd,
+      totalAmountIqd,
+      paidAmountIqd,
+    ),
     recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
     supplierId: readNumber(row, "supplier_id", "supplierId"),
     supplierName: readString(row, "supplier_name", "supplierName"),
@@ -642,7 +804,13 @@ function normalizeInvoice(row: AppInvoiceRow): Invoice {
     paidAmount,
     remainingAmount:
       readNumber(row, "remaining_amount", "remainingAmount") ?? Math.max(0, totalAmount - paidAmount),
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    totalAmountUsd,
+    paidAmountUsd,
+    remainingAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
+    remainingAmountIqd,
     invoiceDate: readDate(row, "invoice_date", "invoiceDate"),
     dueDate: readDate(row, "due_date", "dueDate"),
     notes: readString(row, "notes"),
@@ -657,8 +825,27 @@ function normalizeInvoice(row: AppInvoiceRow): Invoice {
 }
 
 function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistoryEntry {
+  const currency = toCurrency(readString(row, "currency"));
   const totalAmount = readNumber(row, "total_amount", "totalAmount") ?? 0;
   const paidAmount = readNumber(row, "paid_amount", "paidAmount") ?? 0;
+  const { amountUsd: totalAmountUsd, amountIqd: totalAmountIqd } = readDualCurrencyAmount(
+    row,
+    ["total_amount_usd", "totalAmountUsd"],
+    ["total_amount_iqd", "totalAmountIqd"],
+    ["total_amount", "totalAmount"],
+    currency,
+  );
+  const { amountUsd: paidAmountUsd, amountIqd: paidAmountIqd } = readDualCurrencyAmount(
+    row,
+    ["paid_amount_usd", "paidAmountUsd"],
+    ["paid_amount_iqd", "paidAmountIqd"],
+    ["paid_amount", "paidAmount"],
+    currency,
+  );
+  const remainingAmountUsd =
+    readNumber(row, "remaining_amount_usd", "remainingAmountUsd") ?? Math.max(0, totalAmountUsd - paidAmountUsd);
+  const remainingAmountIqd =
+    readNumber(row, "remaining_amount_iqd", "remainingAmountIqd") ?? Math.max(0, totalAmountIqd - paidAmountIqd);
   const { imagePath, imageUrl } = readInvoiceImage(row);
 
   return {
@@ -666,7 +853,13 @@ function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistory
     invoiceId: readId(row, "invoice_id", "invoiceId"),
     action: toInvoiceHistoryAction(readString(row, "change_type", "changeType", "action")),
     number: readString(row, "number") ?? "INV",
-    status: toInvoiceStatus(readString(row, "status"), totalAmount, paidAmount),
+    status: toDualCurrencyInvoiceStatus(
+      readString(row, "status"),
+      totalAmountUsd,
+      paidAmountUsd,
+      totalAmountIqd,
+      paidAmountIqd,
+    ),
     supplierId: readNumber(row, "supplier_id", "supplierId"),
     supplierName: readString(row, "supplier_name", "supplierName"),
     projectId: readNumber(row, "project_id", "projectId"),
@@ -679,7 +872,13 @@ function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistory
     paidAmount,
     remainingAmount:
       readNumber(row, "remaining_amount", "remainingAmount") ?? Math.max(0, totalAmount - paidAmount),
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    totalAmountUsd,
+    paidAmountUsd,
+    remainingAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
+    remainingAmountIqd,
     invoiceDate: readDate(row, "invoice_date", "invoiceDate"),
     dueDate: readDate(row, "due_date", "dueDate"),
     notes: readString(row, "notes"),
@@ -692,12 +891,23 @@ function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistory
 }
 
 function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransaction {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd, amountIqd } = readDualCurrencyAmount(
+    row,
+    ["amount_usd", "amountUsd"],
+    ["amount_iqd", "amountIqd"],
+    ["amount"],
+    currency,
+  );
+
   return {
     id: readId(row, "id"),
     workerId: readId(row, "worker_id", "workerId"),
     type: toTransactionType(readString(row, "type")),
     amount: readNumber(row, "amount") ?? 0,
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    amountUsd,
+    amountIqd,
     description: readString(row, "description"),
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
@@ -707,12 +917,23 @@ function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransac
 }
 
 function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransaction {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd, amountIqd } = readDualCurrencyAmount(
+    row,
+    ["amount_usd", "amountUsd"],
+    ["amount_iqd", "amountIqd"],
+    ["amount"],
+    currency,
+  );
+
   return {
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
     amount: readNumber(row, "amount") ?? 0,
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    amountUsd,
+    amountIqd,
     description: readString(row, "description"),
     date: readDate(row, "date"),
     recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
@@ -727,6 +948,15 @@ function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransac
 function normalizeIncomeTransactionHistoryEntry(
   row: AppIncomeTransactionHistoryRow,
 ): IncomeTransactionHistoryEntry {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd, amountIqd } = readDualCurrencyAmount(
+    row,
+    ["amount_usd", "amountUsd"],
+    ["amount_iqd", "amountIqd"],
+    ["amount"],
+    currency,
+  );
+
   return {
     id: readId(row, "id"),
     incomeTransactionId: readId(row, "income_transaction_id", "incomeTransactionId"),
@@ -734,7 +964,9 @@ function normalizeIncomeTransactionHistoryEntry(
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
     amount: readNumber(row, "amount") ?? 0,
-    currency: toCurrency(readString(row, "currency")),
+    currency,
+    amountUsd,
+    amountIqd,
     description: readString(row, "description"),
     date: readDate(row, "date"),
     recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
@@ -756,6 +988,19 @@ function normalizeDashboardOverview(row: Row): DashboardOverview {
           totalInvoiced: readNumber(data, "totalInvoiced", "total_invoiced") ?? 0,
           totalPaid: readNumber(data, "totalPaid", "total_paid") ?? 0,
           remaining: readNumber(data, "remaining") ?? 0,
+          totalInvoicedUsd:
+            readNumber(data, "totalInvoicedUsd", "total_invoiced_usd") ??
+            readNumber(data, "totalInvoiced", "total_invoiced") ??
+            0,
+          totalPaidUsd:
+            readNumber(data, "totalPaidUsd", "total_paid_usd") ??
+            readNumber(data, "totalPaid", "total_paid") ??
+            0,
+          remainingUsd:
+            readNumber(data, "remainingUsd", "remaining_usd") ?? readNumber(data, "remaining") ?? 0,
+          totalInvoicedIqd: readNumber(data, "totalInvoicedIqd", "total_invoiced_iqd") ?? 0,
+          totalPaidIqd: readNumber(data, "totalPaidIqd", "total_paid_iqd") ?? 0,
+          remainingIqd: readNumber(data, "remainingIqd", "remaining_iqd") ?? 0,
         };
       })
     : [];
@@ -769,6 +1014,18 @@ function normalizeDashboardOverview(row: Row): DashboardOverview {
           balance: readNumber(data, "balance") ?? 0,
           totalCredit: readNumber(data, "totalCredit", "total_credit") ?? 0,
           totalDebit: readNumber(data, "totalDebit", "total_debit") ?? 0,
+          balanceUsd: readNumber(data, "balanceUsd", "balance_usd") ?? readNumber(data, "balance") ?? 0,
+          balanceIqd: readNumber(data, "balanceIqd", "balance_iqd") ?? 0,
+          totalCreditUsd:
+            readNumber(data, "totalCreditUsd", "total_credit_usd") ??
+            readNumber(data, "totalCredit", "total_credit") ??
+            0,
+          totalDebitUsd:
+            readNumber(data, "totalDebitUsd", "total_debit_usd") ??
+            readNumber(data, "totalDebit", "total_debit") ??
+            0,
+          totalCreditIqd: readNumber(data, "totalCreditIqd", "total_credit_iqd") ?? 0,
+          totalDebitIqd: readNumber(data, "totalDebitIqd", "total_debit_iqd") ?? 0,
         };
       })
     : [];
@@ -784,6 +1041,18 @@ function normalizeDashboardOverview(row: Row): DashboardOverview {
           totalAmount: readNumber(data, "totalAmount", "total_amount") ?? 0,
           paidAmount: readNumber(data, "paidAmount", "paid_amount") ?? 0,
           remaining: readNumber(data, "remaining") ?? 0,
+          totalAmountUsd:
+            readNumber(data, "totalAmountUsd", "total_amount_usd") ??
+            readNumber(data, "totalAmount", "total_amount") ??
+            0,
+          paidAmountUsd:
+            readNumber(data, "paidAmountUsd", "paid_amount_usd") ??
+            readNumber(data, "paidAmount", "paid_amount") ??
+            0,
+          remainingUsd: readNumber(data, "remainingUsd", "remaining_usd") ?? readNumber(data, "remaining") ?? 0,
+          totalAmountIqd: readNumber(data, "totalAmountIqd", "total_amount_iqd") ?? 0,
+          paidAmountIqd: readNumber(data, "paidAmountIqd", "paid_amount_iqd") ?? 0,
+          remainingIqd: readNumber(data, "remainingIqd", "remaining_iqd") ?? 0,
         };
       })
     : [];
@@ -796,6 +1065,12 @@ function normalizeDashboardOverview(row: Row): DashboardOverview {
     totalInvoiceAmount: readNumber(row, "totalInvoiceAmount") ?? 0,
     totalPaidAmount: readNumber(row, "totalPaidAmount") ?? 0,
     remainingAmount: readNumber(row, "remainingAmount") ?? 0,
+    totalInvoiceAmountUsd: readNumber(row, "totalInvoiceAmountUsd") ?? readNumber(row, "totalInvoiceAmount") ?? 0,
+    totalPaidAmountUsd: readNumber(row, "totalPaidAmountUsd") ?? readNumber(row, "totalPaidAmount") ?? 0,
+    remainingAmountUsd: readNumber(row, "remainingAmountUsd") ?? readNumber(row, "remainingAmount") ?? 0,
+    totalInvoiceAmountIqd: readNumber(row, "totalInvoiceAmountIqd") ?? 0,
+    totalPaidAmountIqd: readNumber(row, "totalPaidAmountIqd") ?? 0,
+    remainingAmountIqd: readNumber(row, "remainingAmountIqd") ?? 0,
     projectsSummary,
     workersSummary,
     invoicesSummary,
@@ -866,12 +1141,22 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
   const totalInvoiceAmount = activeInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
   const totalPaidAmount = activeInvoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
   const remainingAmount = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmount, 0);
+  const totalInvoiceAmountUsd = activeInvoices.reduce((total, invoice) => total + invoice.totalAmountUsd, 0);
+  const totalPaidAmountUsd = activeInvoices.reduce((total, invoice) => total + invoice.paidAmountUsd, 0);
+  const remainingAmountUsd = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmountUsd, 0);
+  const totalInvoiceAmountIqd = activeInvoices.reduce((total, invoice) => total + invoice.totalAmountIqd, 0);
+  const totalPaidAmountIqd = activeInvoices.reduce((total, invoice) => total + invoice.paidAmountIqd, 0);
+  const remainingAmountIqd = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmountIqd, 0);
 
   const projectsSummary = projects
     .map((project) => {
       const relatedInvoices = activeInvoices.filter((invoice) => invoice.projectId === project.id);
       const totalInvoiced = relatedInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
       const totalPaid = relatedInvoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
+      const totalInvoicedUsd = relatedInvoices.reduce((total, invoice) => total + invoice.totalAmountUsd, 0);
+      const totalPaidUsd = relatedInvoices.reduce((total, invoice) => total + invoice.paidAmountUsd, 0);
+      const totalInvoicedIqd = relatedInvoices.reduce((total, invoice) => total + invoice.totalAmountIqd, 0);
+      const totalPaidIqd = relatedInvoices.reduce((total, invoice) => total + invoice.paidAmountIqd, 0);
 
       return {
         id: project.id,
@@ -881,9 +1166,20 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
         totalInvoiced,
         totalPaid,
         remaining: Math.max(0, totalInvoiced - totalPaid),
+        totalInvoicedUsd,
+        totalPaidUsd,
+        remainingUsd: Math.max(0, totalInvoicedUsd - totalPaidUsd),
+        totalInvoicedIqd,
+        totalPaidIqd,
+        remainingIqd: Math.max(0, totalInvoicedIqd - totalPaidIqd),
       };
     })
-    .sort((left, right) => right.remaining - left.remaining || left.name.localeCompare(right.name));
+    .sort(
+      (left, right) =>
+        right.remainingUsd - left.remainingUsd ||
+        right.remainingIqd - left.remainingIqd ||
+        left.name.localeCompare(right.name),
+    );
 
   const workersSummary = workers
     .map((worker) => {
@@ -893,18 +1189,41 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
         name: worker.name,
         role: worker.role,
         balance: worker.balance,
+        balanceUsd: worker.balanceUsd,
+        balanceIqd: worker.balanceIqd,
         totalCredit: relatedTransactions
           .filter((transaction) => transaction.type === "credit")
           .reduce((total, transaction) => total + transaction.amount, 0),
         totalDebit: relatedTransactions
           .filter((transaction) => transaction.type === "debit")
           .reduce((total, transaction) => total + transaction.amount, 0),
+        totalCreditUsd: relatedTransactions
+          .filter((transaction) => transaction.type === "credit")
+          .reduce((total, transaction) => total + transaction.amountUsd, 0),
+        totalDebitUsd: relatedTransactions
+          .filter((transaction) => transaction.type === "debit")
+          .reduce((total, transaction) => total + transaction.amountUsd, 0),
+        totalCreditIqd: relatedTransactions
+          .filter((transaction) => transaction.type === "credit")
+          .reduce((total, transaction) => total + transaction.amountIqd, 0),
+        totalDebitIqd: relatedTransactions
+          .filter((transaction) => transaction.type === "debit")
+          .reduce((total, transaction) => total + transaction.amountIqd, 0),
       };
     })
-    .sort((left, right) => Math.abs(right.balance) - Math.abs(left.balance));
+    .sort(
+      (left, right) =>
+        Math.abs(right.balanceUsd) - Math.abs(left.balanceUsd) ||
+        Math.abs(right.balanceIqd) - Math.abs(left.balanceIqd),
+    );
 
   const invoicesSummary = [...activeInvoices]
-    .sort((left, right) => right.remainingAmount - left.remainingAmount || left.number.localeCompare(right.number))
+    .sort(
+      (left, right) =>
+        right.remainingAmountUsd - left.remainingAmountUsd ||
+        right.remainingAmountIqd - left.remainingAmountIqd ||
+        left.number.localeCompare(right.number),
+    )
     .map((invoice) => ({
       id: invoice.id,
       number: invoice.number,
@@ -914,6 +1233,12 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
       totalAmount: invoice.totalAmount,
       paidAmount: invoice.paidAmount,
       remaining: invoice.remainingAmount,
+      totalAmountUsd: invoice.totalAmountUsd,
+      paidAmountUsd: invoice.paidAmountUsd,
+      remainingUsd: invoice.remainingAmountUsd,
+      totalAmountIqd: invoice.totalAmountIqd,
+      paidAmountIqd: invoice.paidAmountIqd,
+      remainingIqd: invoice.remainingAmountIqd,
     }));
 
   return {
@@ -924,6 +1249,12 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
     totalInvoiceAmount,
     totalPaidAmount,
     remainingAmount,
+    totalInvoiceAmountUsd,
+    totalPaidAmountUsd,
+    remainingAmountUsd,
+    totalInvoiceAmountIqd,
+    totalPaidAmountIqd,
+    remainingAmountIqd,
     projectsSummary,
     workersSummary,
     invoicesSummary,
@@ -969,7 +1300,14 @@ function normalizeProjectInput(input: ProjectInput) {
 }
 
 function normalizeProductInput(input: ProductInput): ProductWritePayload {
-  assertNonNegativeAmount(input.unitPrice, "Unit price");
+  const unitPriceUsd = input.unitPriceUsd ?? 0;
+  const unitPriceIqd = input.unitPriceIqd ?? 0;
+  const currency = pickPrimaryCurrency(unitPriceUsd, unitPriceIqd);
+  const unitPrice =
+    unitPriceUsd === 0 && unitPriceIqd === 0 ? input.unitPrice ?? null : pickPrimaryAmount(unitPriceUsd, unitPriceIqd);
+
+  assertNonNegativeAmount(unitPriceUsd, "Unit price USD");
+  assertNonNegativeAmount(unitPriceIqd, "Unit price IQD");
 
   return {
     name: input.name.trim(),
@@ -977,17 +1315,28 @@ function normalizeProductInput(input: ProductInput): ProductWritePayload {
     project_id: input.projectId,
     building_id: input.buildingId,
     unit: normalizeOptionalText(input.unit),
-    unit_price: input.unitPrice,
-    currency: input.currency,
+    unit_price: unitPrice,
+    currency,
+    unit_price_usd: unitPriceUsd,
+    unit_price_iqd: unitPriceIqd,
   };
 }
 
 function normalizeInvoiceInput(input: InvoiceInput) {
   const invoiceDate = input.invoiceDate ?? new Date().toISOString().slice(0, 10);
+  const totalAmountUsd = input.totalAmountUsd ?? 0;
+  const paidAmountUsd = input.paidAmountUsd ?? 0;
+  const totalAmountIqd = input.totalAmountIqd ?? 0;
+  const paidAmountIqd = input.paidAmountIqd ?? 0;
+  const currency = pickPrimaryCurrency(totalAmountUsd, totalAmountIqd);
+  const totalAmount = pickPrimaryAmount(totalAmountUsd, totalAmountIqd);
+  const paidAmount = currency === "USD" ? paidAmountUsd : paidAmountIqd;
 
-  validateInvoiceInput({
-    totalAmount: input.totalAmount,
-    paidAmount: input.paidAmount,
+  validateDualCurrencyInvoiceInput({
+    totalAmountUsd,
+    paidAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
     invoiceDate,
     dueDate: input.dueDate,
   });
@@ -998,10 +1347,20 @@ function normalizeInvoiceInput(input: InvoiceInput) {
     project_id: input.projectId,
     building_id: input.buildingId,
     product_id: input.productId,
-    total_amount: input.totalAmount,
-    paid_amount: input.paidAmount,
-    currency: input.currency,
-    status: deriveInvoiceStatus(input.totalAmount, input.paidAmount, input.status),
+    total_amount: totalAmount,
+    paid_amount: paidAmount,
+    currency,
+    total_amount_usd: totalAmountUsd,
+    paid_amount_usd: paidAmountUsd,
+    total_amount_iqd: totalAmountIqd,
+    paid_amount_iqd: paidAmountIqd,
+    status: deriveDualCurrencyInvoiceStatus(
+      totalAmountUsd,
+      paidAmountUsd,
+      totalAmountIqd,
+      paidAmountIqd,
+      input.status,
+    ),
     invoice_date: invoiceDate,
     due_date: input.dueDate,
     notes: normalizeOptionalText(input.notes),
@@ -1012,15 +1371,21 @@ function normalizeInvoiceInput(input: InvoiceInput) {
 }
 
 function normalizeWorkerTransactionInput(input: WorkerTransactionInput) {
-  assertPositiveAmount(input.amount, "Transaction amount");
+  const amountUsd = input.amountUsd ?? 0;
+  const amountIqd = input.amountIqd ?? 0;
+  const currency = pickPrimaryCurrency(amountUsd, amountIqd);
+
+  assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Transaction amount");
 
   const payload: WorkerTransactionWritePayload = {
     worker_id: input.workerId,
     type: input.type,
-    amount: input.amount,
-    currency: input.currency,
+    amount: pickPrimaryAmount(amountUsd, amountIqd),
+    currency,
+    amount_usd: amountUsd,
+    amount_iqd: amountIqd,
     description: normalizeOptionalText(input.description),
-    date: input.date,
+    date: input.date ?? new Date().toISOString().slice(0, 10),
     project_id: input.projectId,
   };
 
@@ -1028,12 +1393,18 @@ function normalizeWorkerTransactionInput(input: WorkerTransactionInput) {
 }
 
 function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
-  assertPositiveAmount(input.amount, "Income amount");
+  const amountUsd = input.amountUsd ?? 0;
+  const amountIqd = input.amountIqd ?? 0;
+  const currency = pickPrimaryCurrency(amountUsd, amountIqd);
+
+  assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Income amount");
 
   const payload: IncomeTransactionWritePayload = {
     project_id: input.projectId,
-    amount: input.amount,
-    currency: input.currency,
+    amount: pickPrimaryAmount(amountUsd, amountIqd),
+    currency,
+    amount_usd: amountUsd,
+    amount_iqd: amountIqd,
     description: normalizeOptionalText(input.description),
     date: input.date ?? new Date().toISOString().slice(0, 10),
   };
@@ -1396,8 +1767,15 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
   }
 }
 
-export async function markInvoicePaid(id: number, totalAmount: number) {
-  const payload: InvoicePaidUpdatePayload = { paid_amount: totalAmount, status: "paid" };
+export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: number; totalAmountIqd: number }) {
+  const currency = pickPrimaryCurrency(amounts.totalAmountUsd, amounts.totalAmountIqd);
+  const payload: InvoicePaidUpdatePayload = {
+    paid_amount: pickPrimaryAmount(amounts.totalAmountUsd, amounts.totalAmountIqd),
+    paid_amount_usd: amounts.totalAmountUsd,
+    paid_amount_iqd: amounts.totalAmountIqd,
+    currency,
+    status: "paid",
+  };
   const { error } = await supabase
     .from("invoices")
     .update(payload)

@@ -151,11 +151,11 @@ export async function createSignedInvoiceImageUrl(pathOrUrl: string | null | und
 
 export async function uploadInvoiceImage(
   file: File,
-  invoiceNumber?: string,
+  expenseTitle?: string,
   projectId?: number | null,
 ) {
   const extension = getFileExtension(file);
-  const fileNameBase = sanitizeSegment(invoiceNumber || "invoice") || "invoice";
+  const fileNameBase = sanitizeSegment(expenseTitle || "expense") || "expense";
   const scopePrefix = projectId != null ? `project-${projectId}` : "shared";
   const path = `${scopePrefix}/${new Date().getUTCFullYear()}/${Date.now()}-${fileNameBase}.${extension}`;
 

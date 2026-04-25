@@ -25,17 +25,16 @@ import {
   getWorker,
   listProjects,
   listWorkerTransactions,
-  type Currency,
   type TransactionType,
 } from "@/lib/erp";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 
 type TransactionFormValues = {
   type: TransactionType;
-  amount: number;
-  currency: Currency;
+  amountUsd?: number;
+  amountIqd?: number;
   description?: string;
   date?: string;
   projectId?: number;
@@ -59,8 +58,8 @@ function TransactionModal({
       createWorkerTransaction({
         workerId,
         type: values.type,
-        amount: values.amount,
-        currency: values.currency,
+        amountUsd: Number(values.amountUsd || 0),
+        amountIqd: Number(values.amountIqd || 0),
         description: values.description?.trim() || null,
         date: values.date || null,
         projectId: values.projectId ?? null,
@@ -90,7 +89,7 @@ function TransactionModal({
       <Form<TransactionFormValues>
         form={form}
         layout="vertical"
-        initialValues={{ type: "credit", currency: "USD", date: new Date().toISOString().slice(0, 10) }}
+        initialValues={{ type: "credit", amountUsd: 0, amountIqd: 0, date: new Date().toISOString().slice(0, 10) }}
         onFinish={(values) => createMutation.mutate(values)}
       >
         <Row gutter={16}>
@@ -105,13 +104,13 @@ function TransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="amount" label={t.amount} rules={[{ required: true, message: t.amountRequired }]}>
-              <InputNumber min={0.01} step={0.01} style={{ width: "100%" }} />
+            <Form.Item name="amountUsd" label={`${t.amount} USD`}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="currency" label={t.currency}>
-              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
+              <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -182,11 +181,15 @@ export default function WorkerDetail() {
         </Col>
         <Col>
           <div className="text-right">
-            <Typography.Title level={3} type={worker.balance >= 0 ? "success" : "danger"} style={{ margin: 0 }}>
-              {formatCurrency(worker.balance)}
+            <Typography.Title
+              level={3}
+              type={worker.balanceUsd >= 0 && worker.balanceIqd >= 0 ? "success" : "danger"}
+              style={{ margin: 0 }}
+            >
+              {formatCurrencyPair({ usd: worker.balanceUsd, iqd: worker.balanceIqd })}
             </Typography.Title>
             <Typography.Text type="secondary">
-              {worker.balance >= 0 ? t.positiveBalance : t.negativeBalance}
+              {worker.balanceUsd >= 0 && worker.balanceIqd >= 0 ? t.positiveBalance : t.negativeBalance}
             </Typography.Text>
           </div>
         </Col>
@@ -231,7 +234,7 @@ export default function WorkerDetail() {
                 </Space>
                 <Typography.Text strong type={transaction.type === "credit" ? "success" : "danger"}>
                   {transaction.type === "credit" ? "+" : "-"}
-                  {formatCurrency(transaction.amount, transaction.currency)}
+                  {formatCurrencyPair({ usd: transaction.amountUsd, iqd: transaction.amountIqd }, { hideZero: true })}
                 </Typography.Text>
               </div>
             </Card>

@@ -4,7 +4,7 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Button, Card, Col, Empty, Image, Progress, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
 import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid, type InvoiceStatus } from "@/lib/erp";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
+import { formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 function invoiceStatusColor(status: InvoiceStatus) {
@@ -40,7 +40,10 @@ export default function InvoiceDetail() {
       if (!invoice) {
         return;
       }
-      await markInvoicePaid(invoice.id, invoice.totalAmount);
+      await markInvoicePaid(invoice.id, {
+        totalAmountUsd: invoice.totalAmountUsd,
+        totalAmountIqd: invoice.totalAmountIqd,
+      });
     },
     onSuccess: async () => {
       await Promise.all([
@@ -56,8 +59,10 @@ export default function InvoiceDetail() {
     return isLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : <Empty description={t.notFound} />;
   }
 
-  const remaining = Math.max(0, invoice.totalAmount - invoice.paidAmount);
-  const progress = invoice.totalAmount > 0 ? Math.min(100, Math.round((invoice.paidAmount / invoice.totalAmount) * 100)) : 0;
+  const progressUsd =
+    invoice.totalAmountUsd > 0 ? Math.min(100, Math.round((invoice.paidAmountUsd / invoice.totalAmountUsd) * 100)) : 0;
+  const progressIqd =
+    invoice.totalAmountIqd > 0 ? Math.min(100, Math.round((invoice.paidAmountIqd / invoice.totalAmountIqd) * 100)) : 0;
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -143,23 +148,38 @@ export default function InvoiceDetail() {
             <Col xs={24} md={8}>
               <Card size="small">
                 <Typography.Text type="secondary">{t.totalAmount}</Typography.Text>
-                <div><Typography.Text strong>{formatCurrency(invoice.totalAmount, invoice.currency)}</Typography.Text></div>
+                <div>
+                  <Typography.Text strong>
+                    {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                  </Typography.Text>
+                </div>
               </Card>
             </Col>
             <Col xs={24} md={8}>
               <Card size="small">
                 <Typography.Text type="success">{t.alreadyPaid}</Typography.Text>
-                <div><Typography.Text strong>{formatCurrency(invoice.paidAmount, invoice.currency)}</Typography.Text></div>
+                <div>
+                  <Typography.Text strong>
+                    {formatCurrencyPair({ usd: invoice.paidAmountUsd, iqd: invoice.paidAmountIqd })}
+                  </Typography.Text>
+                </div>
               </Card>
             </Col>
             <Col xs={24} md={8}>
               <Card size="small">
                 <Typography.Text type="warning">{t.remaining_label}</Typography.Text>
-                <div><Typography.Text strong>{formatCurrency(remaining, invoice.currency)}</Typography.Text></div>
+                <div>
+                  <Typography.Text strong>
+                    {formatCurrencyPair({ usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd })}
+                  </Typography.Text>
+                </div>
               </Card>
             </Col>
           </Row>
-          <Progress percent={progress} />
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            <Progress percent={progressUsd} format={(percent) => `USD ${percent}%`} />
+            <Progress percent={progressIqd} format={(percent) => `IQD ${percent}%`} />
+          </Space>
         </Space>
       </Card>
 
@@ -183,7 +203,7 @@ export default function InvoiceDetail() {
                 dataIndex: "action",
                 render: (value) => (value === "updated" ? t.changeUpdated : t.changeCreated),
               },
-              { title: t.reference, dataIndex: "number" },
+              { title: t.expenseTitle, dataIndex: "number" },
               {
                 title: t.status,
                 dataIndex: "status",
@@ -195,21 +215,21 @@ export default function InvoiceDetail() {
               { title: t.products, dataIndex: "productName", render: (value) => value ?? "-" },
               {
                 title: t.totalAmount,
-                dataIndex: "totalAmount",
+                dataIndex: "totalAmountUsd",
                 align: "right",
-                render: (value, row) => formatCurrency(value, row.currency),
+                render: (_value, row) => formatCurrencyPair({ usd: row.totalAmountUsd, iqd: row.totalAmountIqd }),
               },
               {
                 title: t.paidAmount,
-                dataIndex: "paidAmount",
+                dataIndex: "paidAmountUsd",
                 align: "right",
-                render: (value, row) => formatCurrency(value, row.currency),
+                render: (_value, row) => formatCurrencyPair({ usd: row.paidAmountUsd, iqd: row.paidAmountIqd }),
               },
               {
                 title: t.remaining_label,
-                dataIndex: "remainingAmount",
+                dataIndex: "remainingAmountUsd",
                 align: "right",
-                render: (value, row) => formatCurrency(value, row.currency),
+                render: (_value, row) => formatCurrencyPair({ usd: row.remainingAmountUsd, iqd: row.remainingAmountIqd }),
               },
               { title: t.invoiceDate, dataIndex: "invoiceDate", render: (value) => formatDate(value) },
               { title: t.dueDate, dataIndex: "dueDate", render: (value) => formatDate(value) },

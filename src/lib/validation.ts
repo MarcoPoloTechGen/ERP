@@ -7,6 +7,15 @@ export type InvoiceValidationInput = {
   dueDate: string | null;
 };
 
+export type DualCurrencyInvoiceValidationInput = {
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
+  invoiceDate: string | null;
+  dueDate: string | null;
+};
+
 export type ProjectValidationInput = {
   budget: number | null;
   startDate: string | null;
@@ -105,6 +114,23 @@ export function assertPositiveAmount(value: number | null | undefined, label: st
   }
 }
 
+export function assertPositiveDualCurrencyAmount(
+  amountUsd: number | null | undefined,
+  amountIqd: number | null | undefined,
+  label: string,
+) {
+  assertNonNegativeAmount(amountUsd, `${label} USD`);
+  assertNonNegativeAmount(amountIqd, `${label} IQD`);
+
+  const resolvedUsd = Number.isFinite(amountUsd) ? Number(amountUsd) : 0;
+  const resolvedIqd = Number.isFinite(amountIqd) ? Number(amountIqd) : 0;
+
+  if (resolvedUsd <= 0 && resolvedIqd <= 0) {
+    const resolvedLabel = translateValidationLabel(label);
+    throw new Error(`${resolvedLabel} must include a positive USD or IQD amount.`);
+  }
+}
+
 export function assertDateOrder(
   startDate: string | null | undefined,
   endDate: string | null | undefined,
@@ -149,6 +175,31 @@ export function deriveInvoiceStatus(
   return fallback === "unpaid" ? fallback : "unpaid";
 }
 
+export function deriveDualCurrencyInvoiceStatus(
+  totalAmountUsd: number,
+  paidAmountUsd: number,
+  totalAmountIqd: number,
+  paidAmountIqd: number,
+  fallback: "unpaid" | "partial" | "paid" = "unpaid",
+) {
+  const hasUsdTotal = totalAmountUsd > 0;
+  const hasIqdTotal = totalAmountIqd > 0;
+  const hasAnyTotal = hasUsdTotal || hasIqdTotal;
+  const paidAnyAmount = paidAmountUsd > 0 || paidAmountIqd > 0;
+  const usdPaid = !hasUsdTotal || paidAmountUsd >= totalAmountUsd;
+  const iqdPaid = !hasIqdTotal || paidAmountIqd >= totalAmountIqd;
+
+  if (hasAnyTotal && usdPaid && iqdPaid) {
+    return "paid" as const;
+  }
+
+  if (paidAnyAmount) {
+    return "partial" as const;
+  }
+
+  return fallback === "unpaid" ? fallback : "unpaid";
+}
+
 export function validateInvoiceInput(input: InvoiceValidationInput) {
   assertNonNegativeAmount(input.totalAmount, "Total amount");
   assertNonNegativeAmount(input.paidAmount, "Paid amount");
@@ -159,6 +210,22 @@ export function validateInvoiceInput(input: InvoiceValidationInput) {
         ? "بڕی دراو نابێت لە کۆی بڕ زیاتر بێت."
         : "Paid amount cannot be greater than total amount.",
     );
+  }
+
+  assertDateOrder(input.invoiceDate, input.dueDate, "invoice date", "due date");
+}
+
+export function validateDualCurrencyInvoiceInput(input: DualCurrencyInvoiceValidationInput) {
+  assertPositiveDualCurrencyAmount(input.totalAmountUsd, input.totalAmountIqd, "Total amount");
+  assertNonNegativeAmount(input.paidAmountUsd, "Paid amount USD");
+  assertNonNegativeAmount(input.paidAmountIqd, "Paid amount IQD");
+
+  if (input.paidAmountUsd > input.totalAmountUsd) {
+    throw new Error("Paid USD amount cannot be greater than total USD amount.");
+  }
+
+  if (input.paidAmountIqd > input.totalAmountIqd) {
+    throw new Error("Paid IQD amount cannot be greater than total IQD amount.");
   }
 
   assertDateOrder(input.invoiceDate, input.dueDate, "invoice date", "due date");

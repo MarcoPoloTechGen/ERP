@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  deriveDualCurrencyInvoiceStatus,
   deriveInvoiceStatus,
   normalizeOptionalText,
   parseNumericInput,
+  validateDualCurrencyInvoiceInput,
   validateInvoiceInput,
   validateProjectInput,
 } from "./validation";
@@ -48,6 +50,38 @@ describe("validation helpers", () => {
     expect(deriveInvoiceStatus(100, 0)).toBe("unpaid");
     expect(deriveInvoiceStatus(100, 20)).toBe("partial");
     expect(deriveInvoiceStatus(100, 100)).toBe("paid");
+  });
+
+  it("derives invoice status from both currencies", () => {
+    expect(deriveDualCurrencyInvoiceStatus(100, 0, 250000, 0)).toBe("unpaid");
+    expect(deriveDualCurrencyInvoiceStatus(100, 100, 250000, 0)).toBe("partial");
+    expect(deriveDualCurrencyInvoiceStatus(100, 100, 250000, 250000)).toBe("paid");
+  });
+
+  it("rejects invalid dual-currency invoice values", () => {
+    window.localStorage.setItem("btp-lang", "en");
+
+    expect(() =>
+      validateDualCurrencyInvoiceInput({
+        totalAmountUsd: 0,
+        paidAmountUsd: 0,
+        totalAmountIqd: 0,
+        paidAmountIqd: 0,
+        invoiceDate: "2026-04-01",
+        dueDate: "2026-04-10",
+      }),
+    ).toThrow("Total amount must include a positive USD or IQD amount.");
+
+    expect(() =>
+      validateDualCurrencyInvoiceInput({
+        totalAmountUsd: 100,
+        paidAmountUsd: 120,
+        totalAmountIqd: 0,
+        paidAmountIqd: 0,
+        invoiceDate: "2026-04-01",
+        dueDate: "2026-04-10",
+      }),
+    ).toThrow("Paid USD amount cannot be greater than total USD amount.");
   });
 
   it("rejects invalid invoice values", () => {

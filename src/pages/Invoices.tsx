@@ -40,13 +40,19 @@ import {
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
+import {
+  buildExpenseAssignmentOptions,
+  expenseAssignmentKeyFromRecord,
+  parseExpenseAssignmentKey,
+} from "@/lib/expense-assignment";
+import { formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
 import {
   addContainsSearchFilter,
+  addCurrencyAmountFilter,
   addDateRangeFilter,
   addEqualFilter,
   asCurrency,
-  asInvoiceStatus,
+  asDualCurrencyInvoiceStatus,
   asNumber,
   asRecordStatus,
   STANDARD_PAGE_SIZE,
@@ -78,6 +84,12 @@ type InvoiceRow = {
   paid_amount: number | null;
   remaining_amount: number | null;
   currency: string | null;
+  total_amount_usd: number | null;
+  paid_amount_usd: number | null;
+  remaining_amount_usd: number | null;
+  total_amount_iqd: number | null;
+  paid_amount_iqd: number | null;
+  remaining_amount_iqd: number | null;
   invoice_date: string | null;
   due_date: string | null;
   notes: string | null;
@@ -89,13 +101,12 @@ type InvoiceRow = {
 type InvoiceFormValues = {
   number: string;
   supplierId?: number;
-  projectId?: number;
-  assignmentScope: "project" | "building";
-  buildingId?: number;
+  assignmentKey?: string;
   productId?: number;
-  totalAmount: number;
-  paidAmount?: number;
-  currency: Currency;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
   status: InvoiceStatus;
   invoiceDate?: string;
   dueDate?: string;
@@ -144,7 +155,7 @@ function buildFilters({
   addEqualFilter(filters, "status", status);
   addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
   addEqualFilter(filters, "supplier_id", supplierId === "all" ? "all" : Number(supplierId));
-  addEqualFilter(filters, "currency", currency);
+  addCurrencyAmountFilter(filters, currency, { USD: "total_amount_usd", IQD: "total_amount_iqd" });
   addDateRangeFilter(filters, "invoice_date", dateFrom, dateTo);
   return filters;
 }
@@ -200,9 +211,7 @@ function InvoiceModal({
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<InvoiceFormValues>();
-  const projectId = Form.useWatch("projectId", form);
-  const assignmentScope = Form.useWatch("assignmentScope", form);
-  const selectedProjectId = typeof projectId === "number" ? projectId : undefined;
+  const assignmentKey = Form.useWatch("assignmentKey", form);
   const [storedImagePath, setStoredImagePath] = useState<string | null>(invoice?.image_path ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -212,10 +221,11 @@ function InvoiceModal({
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
   const { data: projectBuildings } = useQuery({
-    queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
-    queryFn: () => listProjectBuildings(selectedProjectId),
-    enabled: selectedProjectId != null,
+    queryKey: erpKeys.projectBuildings(0),
+    queryFn: () => listProjectBuildings(),
   });
+  const selectedAssignment = parseExpenseAssignmentKey(assignmentKey, projectBuildings);
+  const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -262,10 +272,23 @@ function InvoiceModal({
     });
   }, [products, selectedProjectId]);
 
+  const assignmentOptions = useMemo(
+    () =>
+      buildExpenseAssignmentOptions({
+        projects,
+        buildings: projectBuildings,
+        projectWideLabel: t.projectGlobalCost,
+      }),
+    [projectBuildings, projects, t.projectGlobalCost],
+  );
+
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
-      const totalAmount = Number(values.totalAmount || 0);
-      const paidAmount = Number(values.paidAmount || 0);
+      const assignment = parseExpenseAssignmentKey(values.assignmentKey, projectBuildings);
+      const totalAmountUsd = Number(values.totalAmountUsd || 0);
+      const paidAmountUsd = Number(values.paidAmountUsd || 0);
+      const totalAmountIqd = Number(values.totalAmountIqd || 0);
+      const paidAmountIqd = Number(values.paidAmountIqd || 0);
       let nextImagePath = storedImagePath;
       let uploadedPath: string | null = null;
       const previousImagePath = invoice?.image_path ?? null;
@@ -274,7 +297,7 @@ function InvoiceModal({
         const uploaded = await uploadInvoiceImage(
           selectedImageFile,
           values.number || "expense",
-          values.projectId ?? null,
+          assignment.projectId,
         );
         uploadedPath = uploaded.path;
         nextImagePath = uploaded.path;
@@ -283,12 +306,13 @@ function InvoiceModal({
       const payload = {
         number: values.number.trim(),
         supplierId: values.supplierId ?? null,
-        projectId: values.projectId ?? null,
-        buildingId: values.projectId && values.assignmentScope === "building" ? values.buildingId ?? null : null,
+        projectId: assignment.projectId,
+        buildingId: assignment.buildingId,
         productId: values.productId ?? null,
-        totalAmount,
-        paidAmount,
-        currency: values.currency,
+        totalAmountUsd,
+        paidAmountUsd,
+        totalAmountIqd,
+        paidAmountIqd,
         status: values.status,
         invoiceDate: values.invoiceDate || null,
         dueDate: values.dueDate || null,
@@ -347,14 +371,21 @@ function InvoiceModal({
         initialValues={{
           number: invoice?.number ?? "",
           supplierId: invoice?.supplier_id ?? undefined,
-          projectId: invoice?.project_id ?? undefined,
-          assignmentScope: invoice?.building_id != null ? "building" : "project",
-          buildingId: invoice?.building_id ?? undefined,
+          assignmentKey: expenseAssignmentKeyFromRecord(invoice?.project_id, invoice?.building_id),
           productId: invoice?.product_id ?? undefined,
-          totalAmount: invoice?.total_amount ?? undefined,
-          paidAmount: invoice?.paid_amount ?? 0,
-          currency: asCurrency(invoice?.currency),
-          status: asInvoiceStatus(invoice?.status, invoice?.total_amount ?? 0, invoice?.paid_amount ?? 0),
+          totalAmountUsd:
+            invoice?.total_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.total_amount ?? undefined : undefined),
+          paidAmountUsd: invoice?.paid_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.paid_amount ?? 0 : 0),
+          totalAmountIqd:
+            invoice?.total_amount_iqd ?? (asCurrency(invoice?.currency) === "IQD" ? invoice?.total_amount ?? undefined : undefined),
+          paidAmountIqd: invoice?.paid_amount_iqd ?? (asCurrency(invoice?.currency) === "IQD" ? invoice?.paid_amount ?? 0 : 0),
+          status: asDualCurrencyInvoiceStatus(
+            invoice?.status,
+            invoice?.total_amount_usd ?? 0,
+            invoice?.paid_amount_usd ?? 0,
+            invoice?.total_amount_iqd ?? 0,
+            invoice?.paid_amount_iqd ?? 0,
+          ),
           invoiceDate: formatDateInput(invoice?.invoice_date) || new Date().toISOString().slice(0, 10),
           dueDate: formatDateInput(invoice?.due_date),
           notes: invoice?.notes ?? "",
@@ -363,8 +394,8 @@ function InvoiceModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="number" label={t.invoiceNumber} rules={[{ required: true, message: t.nameRequired }]}>
-              <Input placeholder={t.invoiceNumberPlaceholder} />
+            <Form.Item name="number" label={t.expenseTitle} rules={[{ required: true, message: t.nameRequired }]}>
+              <Input placeholder={t.expenseTitlePlaceholder} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -395,48 +426,16 @@ function InvoiceModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="projectId" label={t.projectOption}>
+            <Form.Item name="assignmentKey" label={t.invoiceAssignment} rules={[{ required: true, message: t.requiredField }]}>
               <Select
-                allowClear
                 showSearch
                 optionFilterProp="label"
                 placeholder={t.noneOption}
-                onChange={() =>
-                  form.setFieldsValue({ assignmentScope: "project", buildingId: undefined, productId: undefined })
-                }
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                onChange={() => form.setFieldValue("productId", undefined)}
+                options={assignmentOptions}
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="assignmentScope" label={t.invoiceAssignment}>
-              <Select
-                disabled={!projectId}
-                onChange={(value) => {
-                  if (value !== "building") {
-                    form.setFieldValue("buildingId", undefined);
-                  }
-                }}
-                options={[
-                  { label: t.projectGlobalCost, value: "project" },
-                  { label: t.projectBuildingCost, value: "building", disabled: !projectBuildings?.length },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-          {projectId && assignmentScope === "building" ? (
-            <Col xs={24} md={12}>
-              <Form.Item name="buildingId" label={t.buildingLabel}>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder={t.noneOption}
-                  options={projectBuildings?.map((building) => ({ label: building.name, value: building.id }))}
-                />
-              </Form.Item>
-            </Col>
-          ) : null}
           <Col xs={24} md={12}>
             <Form.Item name="productId" label={t.products}>
               <Select
@@ -452,18 +451,23 @@ function InvoiceModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="totalAmount" label={t.totalAmount} rules={[{ required: true, message: t.amountRequired }]}>
+            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} USD`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="paidAmount" label={t.paidAmount}>
+            <Form.Item name="paidAmountUsd" label={`${t.paidAmount} USD`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="currency" label={t.currency}>
-              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`}>
+              <InputNumber min={0} step={1} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
+              <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -608,7 +612,7 @@ export default function Invoices() {
 
   const columns: TableProps<InvoiceRow>["columns"] = [
     {
-      title: t.reference,
+      title: t.expenseTitle,
       dataIndex: "number",
       render: (value: string, invoice) => {
         const imageUrl = imageUrlFor(invoice);
@@ -626,8 +630,29 @@ export default function Invoices() {
             <Space direction="vertical" size={0}>
               <Space size="small" wrap>
                 <Typography.Text strong>{value ?? "-"}</Typography.Text>
-                <Tag color={invoiceStatusColor[asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0)]}>
-                  {invoiceStatusLabel(asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0), t)}
+                <Tag
+                  color={
+                    invoiceStatusColor[
+                      asDualCurrencyInvoiceStatus(
+                        invoice.status,
+                        asNumber(invoice.total_amount_usd),
+                        asNumber(invoice.paid_amount_usd),
+                        asNumber(invoice.total_amount_iqd),
+                        asNumber(invoice.paid_amount_iqd),
+                      )
+                    ]
+                  }
+                >
+                  {invoiceStatusLabel(
+                    asDualCurrencyInvoiceStatus(
+                      invoice.status,
+                      asNumber(invoice.total_amount_usd),
+                      asNumber(invoice.paid_amount_usd),
+                      asNumber(invoice.total_amount_iqd),
+                      asNumber(invoice.paid_amount_iqd),
+                    ),
+                    t,
+                  )}
                 </Tag>
                 {asRecordStatus(invoice.record_status) === "deleted" ? <Tag>{t.deleted}</Tag> : null}
               </Space>
@@ -648,15 +673,17 @@ export default function Invoices() {
     { title: t.user, dataIndex: "created_by_name", render: (value: string | null) => value ?? "-" },
     {
       title: t.totalAmount,
-      dataIndex: "total_amount",
+      dataIndex: "total_amount_usd",
       align: "right",
-      render: (value: number | null, invoice) => formatCurrency(value ?? 0, asCurrency(invoice.currency)),
+      render: (_value: number | null, invoice) =>
+        formatCurrencyPair({ usd: invoice.total_amount_usd, iqd: invoice.total_amount_iqd }),
     },
     {
       title: t.remaining_label,
-      dataIndex: "remaining_amount",
+      dataIndex: "remaining_amount_usd",
       align: "right",
-      render: (value: number | null, invoice) => formatCurrency(value ?? 0, asCurrency(invoice.currency)),
+      render: (_value: number | null, invoice) =>
+        formatCurrencyPair({ usd: invoice.remaining_amount_usd, iqd: invoice.remaining_amount_iqd }),
     },
     { title: t.invoiceDate, dataIndex: "invoice_date", render: (value: string | null) => formatDate(value) },
     {
@@ -685,18 +712,29 @@ export default function Invoices() {
   function exportInvoices(format: "csv" | "xlsx") {
     const fileBase = t.invoicesTitle;
     const exportRows = rows.map((invoice) => ({
-      [t.reference]: invoice.number ?? "",
-      [t.status]: invoiceStatusLabel(asInvoiceStatus(invoice.status, invoice.total_amount ?? 0, invoice.paid_amount ?? 0), t),
+      [t.expenseTitle]: invoice.number ?? "",
+      [t.status]: invoiceStatusLabel(
+        asDualCurrencyInvoiceStatus(
+          invoice.status,
+          asNumber(invoice.total_amount_usd),
+          asNumber(invoice.paid_amount_usd),
+          asNumber(invoice.total_amount_iqd),
+          asNumber(invoice.paid_amount_iqd),
+        ),
+        t,
+      ),
       [t.invoiceAssignment]: invoice.building_name ? t.projectBuildingCost : t.projectGlobalCost,
       [t.buildingLabel]: invoice.building_name ?? "",
       [t.supplierOption]: invoice.supplier_name ?? "",
       [t.products]: invoice.product_name ?? "",
       [t.projectOption]: invoice.project_name ?? "",
       [t.createdBy]: invoice.created_by_name ?? "",
-      [t.totalAmount]: asNumber(invoice.total_amount),
-      [t.paidAmount]: asNumber(invoice.paid_amount),
-      [t.currency]: asCurrency(invoice.currency),
-      [t.remaining_label]: asNumber(invoice.remaining_amount),
+      [`${t.totalAmount} USD`]: asNumber(invoice.total_amount_usd),
+      [`${t.paidAmount} USD`]: asNumber(invoice.paid_amount_usd),
+      [`${t.remaining_label} USD`]: asNumber(invoice.remaining_amount_usd),
+      [`${t.totalAmount} IQD`]: asNumber(invoice.total_amount_iqd),
+      [`${t.paidAmount} IQD`]: asNumber(invoice.paid_amount_iqd),
+      [`${t.remaining_label} IQD`]: asNumber(invoice.remaining_amount_iqd),
       [t.invoiceDate]: formatDateInput(invoice.invoice_date),
       [t.dueDate]: formatDateInput(invoice.due_date),
       [t.notes]: invoice.notes ?? "",

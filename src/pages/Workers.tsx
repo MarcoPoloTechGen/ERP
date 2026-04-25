@@ -24,7 +24,7 @@ import {
 import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { createWorker, deleteWorker, erpKeys, listWorkers, updateWorker } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addEqualFilter,
@@ -40,6 +40,8 @@ type WorkerRow = {
   category: string | null;
   phone: string | null;
   balance: number | null;
+  balance_usd: number | null;
+  balance_iqd: number | null;
   created_at: string | null;
 };
 
@@ -185,7 +187,8 @@ export default function Workers() {
   });
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
-  const balanceValue = (worker: WorkerRow) => worker.balance ?? 0;
+  const balanceUsdValue = (worker: WorkerRow) => worker.balance_usd ?? worker.balance ?? 0;
+  const balanceIqdValue = (worker: WorkerRow) => worker.balance_iqd ?? 0;
   const hasFilters = Boolean(searchInput || categoryFilter !== "all");
   const columns: TableProps<WorkerRow>["columns"] = [
     {
@@ -206,11 +209,14 @@ export default function Workers() {
       align: "right",
       render: (_value: number | null, worker) => (
         <Space direction="vertical" size={0}>
-          <Typography.Text strong type={balanceValue(worker) >= 0 ? "success" : "danger"}>
-            {formatCurrency(balanceValue(worker))}
+          <Typography.Text
+            strong
+            type={balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? "success" : "danger"}
+          >
+            {formatCurrencyPair({ usd: balanceUsdValue(worker), iqd: balanceIqdValue(worker) })}
           </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {balanceValue(worker) >= 0 ? t.toReceive : t.owes}
+            {balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes}
           </Typography.Text>
         </Space>
       ),
@@ -253,8 +259,9 @@ export default function Workers() {
       [t.role]: worker.role ?? "",
       [t.category]: worker.category ?? "",
       [t.phone]: worker.phone ?? "",
-      [t.balance]: balanceValue(worker),
-      [t.status]: balanceValue(worker) >= 0 ? t.toReceive : t.owes,
+      [`${t.balance} USD`]: balanceUsdValue(worker),
+      [`${t.balance} IQD`]: balanceIqdValue(worker),
+      [t.status]: balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes,
     }));
 
     if (format === "csv") {

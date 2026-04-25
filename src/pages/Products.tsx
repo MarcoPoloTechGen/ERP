@@ -33,11 +33,11 @@ import {
   updateProduct,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
+  addCurrencyAmountFilter,
   addEqualFilter,
-  asCurrency,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
@@ -55,6 +55,8 @@ type ProductRow = {
   unit: string | null;
   unit_price: number | null;
   currency: string | null;
+  unit_price_usd: number | null;
+  unit_price_iqd: number | null;
   created_at: string | null;
 };
 
@@ -64,8 +66,8 @@ type ProductFormValues = {
   projectId?: number;
   buildingId?: number;
   unit?: string;
-  unitPrice?: number;
-  currency: Currency;
+  unitPriceUsd?: number;
+  unitPriceIqd?: number;
 };
 
 function buildFilters({
@@ -83,7 +85,7 @@ function buildFilters({
   addContainsSearchFilter(filters, ["name", "supplier_name", "project_name", "building_name", "unit"], search);
   addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
   addEqualFilter(filters, "supplier_id", supplierId === "all" ? "all" : Number(supplierId));
-  addEqualFilter(filters, "currency", currency);
+  addCurrencyAmountFilter(filters, currency, { USD: "unit_price_usd", IQD: "unit_price_iqd" });
   return filters;
 }
 
@@ -119,8 +121,8 @@ function ProductModal({
         projectId: values.projectId ?? null,
         buildingId: values.buildingId ?? null,
         unit: values.unit?.trim() || null,
-        unitPrice: values.unitPrice ?? null,
-        currency: values.currency,
+        unitPriceUsd: Number(values.unitPriceUsd || 0),
+        unitPriceIqd: Number(values.unitPriceIqd || 0),
       };
 
       if (product) {
@@ -164,8 +166,10 @@ function ProductModal({
           projectId: product?.project_id ?? undefined,
           buildingId: product?.building_id ?? undefined,
           unit: product?.unit ?? "",
-          unitPrice: product?.unit_price ?? undefined,
-          currency: asCurrency(product?.currency),
+          unitPriceUsd:
+            product?.unit_price_usd ?? (product?.currency === "USD" ? product?.unit_price ?? undefined : undefined),
+          unitPriceIqd:
+            product?.unit_price_iqd ?? (product?.currency === "IQD" ? product?.unit_price ?? undefined : undefined),
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -215,13 +219,13 @@ function ProductModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="unitPrice" label={t.unitPrice}>
+            <Form.Item name="unitPriceUsd" label={`${t.unitPrice} USD`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="currency" label={t.currency}>
-              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            <Form.Item name="unitPriceIqd" label={`${t.unitPrice} IQD`}>
+              <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
         </Row>
@@ -280,7 +284,8 @@ export default function Products() {
         <Space direction="vertical" size={0}>
           <Space size="small" wrap>
             <Typography.Text strong>{value ?? "-"}</Typography.Text>
-            <Tag>{asCurrency(product.currency)}</Tag>
+            {product.unit_price_usd ? <Tag>USD</Tag> : null}
+            {product.unit_price_iqd ? <Tag>IQD</Tag> : null}
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {product.unit ?? t.noDetail}
@@ -293,10 +298,13 @@ export default function Products() {
     { title: t.buildingLabel, dataIndex: "building_name", render: (value: string | null) => value ?? "-" },
     {
       title: t.unitPrice,
-      dataIndex: "unit_price",
+      dataIndex: "unit_price_usd",
       align: "right",
-      render: (value: number | null, product) =>
-        value != null ? <Typography.Text strong>{formatCurrency(value, asCurrency(product.currency))}</Typography.Text> : "-",
+      render: (_value: number | null, product) => (
+        <Typography.Text strong>
+          {formatCurrencyPair({ usd: product.unit_price_usd, iqd: product.unit_price_iqd }, { hideZero: true })}
+        </Typography.Text>
+      ),
     },
     {
       title: "",
@@ -336,8 +344,8 @@ export default function Products() {
       [t.projectOption]: product.project_name ?? "",
       [t.buildingLabel]: product.building_name ?? "",
       [t.unit]: product.unit ?? "",
-      [t.unitPrice]: product.unit_price ?? "",
-      [t.currency]: asCurrency(product.currency),
+      [`${t.unitPrice} USD`]: product.unit_price_usd ?? 0,
+      [`${t.unitPrice} IQD`]: product.unit_price_iqd ?? 0,
     }));
 
     if (format === "csv") {

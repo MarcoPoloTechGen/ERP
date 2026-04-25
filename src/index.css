@@ -305,4 +305,9 @@
   .erp-calendar .fc .fc-list-event {
     cursor: pointer;
   }
+
+  .erp-calendar .fc .fc-daygrid-day-frame,
+  .erp-calendar .fc .fc-timegrid-slot {
+    cursor: pointer;
+  }
 }

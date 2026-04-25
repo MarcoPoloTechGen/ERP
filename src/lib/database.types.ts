@@ -46,6 +46,8 @@ export type Database = {
       income_transaction_history: {
         Row: {
           amount: number
+          amount_iqd: number
+          amount_usd: number
           change_type: string
           changed_at: string
           changed_by: string | null
@@ -61,6 +63,8 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          amount_iqd?: number
+          amount_usd?: number
           change_type: string
           changed_at?: string
           changed_by?: string | null
@@ -76,6 +80,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_iqd?: number
+          amount_usd?: number
           change_type?: string
           changed_at?: string
           changed_by?: string | null
@@ -130,6 +136,8 @@ export type Database = {
       income_transactions: {
         Row: {
           amount: number
+          amount_iqd: number
+          amount_usd: number
           created_at: string
           created_by: string | null
           currency: string
@@ -144,6 +152,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          amount_iqd?: number
+          amount_usd?: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -158,6 +168,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_iqd?: number
+          amount_usd?: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -218,6 +230,8 @@ export type Database = {
           notes: string | null
           number: string
           paid_amount: number
+          paid_amount_iqd: number
+          paid_amount_usd: number
           product_id: number | null
           product_name: string | null
           project_id: number | null
@@ -226,6 +240,8 @@ export type Database = {
           supplier_id: number | null
           supplier_name: string | null
           total_amount: number
+          total_amount_iqd: number
+          total_amount_usd: number
         }
         Insert: {
           building_id?: number | null
@@ -243,6 +259,8 @@ export type Database = {
           notes?: string | null
           number: string
           paid_amount?: number
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           product_id?: number | null
           product_name?: string | null
           project_id?: number | null
@@ -251,6 +269,8 @@ export type Database = {
           supplier_id?: number | null
           supplier_name?: string | null
           total_amount?: number
+          total_amount_iqd?: number
+          total_amount_usd?: number
         }
         Update: {
           building_id?: number | null
@@ -268,6 +288,8 @@ export type Database = {
           notes?: string | null
           number?: string
           paid_amount?: number
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           product_id?: number | null
           product_name?: string | null
           project_id?: number | null
@@ -276,6 +298,8 @@ export type Database = {
           supplier_id?: number | null
           supplier_name?: string | null
           total_amount?: number
+          total_amount_iqd?: number
+          total_amount_usd?: number
         }
         Relationships: [
           {
@@ -359,12 +383,16 @@ export type Database = {
           notes: string | null
           number: string
           paid_amount: number
+          paid_amount_iqd: number
+          paid_amount_usd: number
           product_id: number | null
           project_id: number | null
           record_status: string
           status: string
           supplier_id: number | null
           total_amount: number
+          total_amount_iqd: number
+          total_amount_usd: number
         }
         Insert: {
           building_id?: number | null
@@ -381,12 +409,16 @@ export type Database = {
           notes?: string | null
           number: string
           paid_amount?: number
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           product_id?: number | null
           project_id?: number | null
           record_status?: string
           status?: string
           supplier_id?: number | null
           total_amount: number
+          total_amount_iqd?: number
+          total_amount_usd?: number
         }
         Update: {
           building_id?: number | null
@@ -403,12 +435,16 @@ export type Database = {
           notes?: string | null
           number?: string
           paid_amount?: number
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           product_id?: number | null
           project_id?: number | null
           record_status?: string
           status?: string
           supplier_id?: number | null
           total_amount?: number
+          total_amount_iqd?: number
+          total_amount_usd?: number
         }
         Relationships: [
           {
@@ -452,6 +488,8 @@ export type Database = {
           supplier_id: number | null
           unit: string | null
           unit_price: number | null
+          unit_price_iqd: number
+          unit_price_usd: number
         }
         Insert: {
           building_id?: number | null
@@ -463,6 +501,8 @@ export type Database = {
           supplier_id?: number | null
           unit?: string | null
           unit_price?: number | null
+          unit_price_iqd?: number
+          unit_price_usd?: number
         }
         Update: {
           building_id?: number | null
@@ -474,6 +514,8 @@ export type Database = {
           supplier_id?: number | null
           unit?: string | null
           unit_price?: number | null
+          unit_price_iqd?: number
+          unit_price_usd?: number
         }
         Relationships: [
           {
@@ -657,6 +699,8 @@ export type Database = {
       worker_transactions: {
         Row: {
           amount: number
+          amount_iqd: number
+          amount_usd: number
           created_at: string
           currency: string
           date: string
@@ -668,6 +712,8 @@ export type Database = {
         }
         Insert: {
           amount: number
+          amount_iqd?: number
+          amount_usd?: number
           created_at?: string
           currency?: string
           date: string
@@ -679,6 +725,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          amount_iqd?: number
+          amount_usd?: number
           created_at?: string
           currency?: string
           date?: string
@@ -715,6 +763,8 @@ export type Database = {
       workers: {
         Row: {
           balance: number
+          balance_iqd: number
+          balance_usd: number
           category: string | null
           created_at: string
           id: number
@@ -724,6 +774,8 @@ export type Database = {
         }
         Insert: {
           balance?: number
+          balance_iqd?: number
+          balance_usd?: number
           category?: string | null
           created_at?: string
           id?: number
@@ -733,6 +785,8 @@ export type Database = {
         }
         Update: {
           balance?: number
+          balance_iqd?: number
+          balance_usd?: number
           category?: string | null
           created_at?: string
           id?: number
@@ -747,6 +801,8 @@ export type Database = {
       app_income_transaction_history: {
         Row: {
           amount: number | null
+          amount_iqd: number | null
+          amount_usd: number | null
           change_type: string | null
           changed_at: string | null
           changed_by: string | null
@@ -762,6 +818,8 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          amount_iqd?: number | null
+          amount_usd?: number | null
           change_type?: string | null
           changed_at?: string | null
           changed_by?: string | null
@@ -777,6 +835,8 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          amount_iqd?: number | null
+          amount_usd?: number | null
           change_type?: string | null
           changed_at?: string | null
           changed_by?: string | null
@@ -831,6 +891,8 @@ export type Database = {
       app_income_transactions: {
         Row: {
           amount: number | null
+          amount_iqd: number | null
+          amount_usd: number | null
           created_at: string | null
           created_by: string | null
           created_by_name: string | null
@@ -892,15 +954,21 @@ export type Database = {
           notes: string | null
           number: string | null
           paid_amount: number | null
+          paid_amount_iqd: number | null
+          paid_amount_usd: number | null
           product_id: number | null
           product_name: string | null
           project_id: number | null
           project_name: string | null
           remaining_amount: number | null
+          remaining_amount_iqd: number | null
+          remaining_amount_usd: number | null
           status: string | null
           supplier_id: number | null
           supplier_name: string | null
           total_amount: number | null
+          total_amount_iqd: number | null
+          total_amount_usd: number | null
         }
         Insert: {
           building_id?: number | null
@@ -918,15 +986,21 @@ export type Database = {
           notes?: string | null
           number?: string | null
           paid_amount?: number | null
+          paid_amount_iqd?: number | null
+          paid_amount_usd?: number | null
           product_id?: number | null
           product_name?: string | null
           project_id?: number | null
           project_name?: string | null
           remaining_amount?: never
+          remaining_amount_iqd?: never
+          remaining_amount_usd?: never
           status?: string | null
           supplier_id?: number | null
           supplier_name?: string | null
           total_amount?: number | null
+          total_amount_iqd?: number | null
+          total_amount_usd?: number | null
         }
         Update: {
           building_id?: number | null
@@ -944,15 +1018,21 @@ export type Database = {
           notes?: string | null
           number?: string | null
           paid_amount?: number | null
+          paid_amount_iqd?: number | null
+          paid_amount_usd?: number | null
           product_id?: number | null
           product_name?: string | null
           project_id?: number | null
           project_name?: string | null
           remaining_amount?: never
+          remaining_amount_iqd?: never
+          remaining_amount_usd?: never
           status?: string | null
           supplier_id?: number | null
           supplier_name?: string | null
           total_amount?: number | null
+          total_amount_iqd?: number | null
+          total_amount_usd?: number | null
         }
         Relationships: [
           {
@@ -1037,16 +1117,22 @@ export type Database = {
           notes: string | null
           number: string | null
           paid_amount: number | null
+          paid_amount_iqd: number | null
+          paid_amount_usd: number | null
           product_id: number | null
           product_name: string | null
           project_id: number | null
           project_name: string | null
           record_status: string | null
           remaining_amount: number | null
+          remaining_amount_iqd: number | null
+          remaining_amount_usd: number | null
           status: string | null
           supplier_id: number | null
           supplier_name: string | null
           total_amount: number | null
+          total_amount_iqd: number | null
+          total_amount_usd: number | null
         }
         Relationships: [
           {
@@ -1093,6 +1179,8 @@ export type Database = {
           supplier_name: string | null
           unit: string | null
           unit_price: number | null
+          unit_price_iqd: number | null
+          unit_price_usd: number | null
         }
         Relationships: [
           {
@@ -1122,6 +1210,8 @@ export type Database = {
       app_worker_transactions: {
         Row: {
           amount: number | null
+          amount_iqd: number | null
+          amount_usd: number | null
           created_at: string | null
           currency: string | null
           date: string | null

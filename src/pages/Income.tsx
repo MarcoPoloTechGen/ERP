@@ -37,12 +37,12 @@ import {
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
+import { formatCurrencyPair, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
 import {
   addContainsSearchFilter,
+  addCurrencyAmountFilter,
   addDateRangeFilter,
   addEqualFilter,
-  asCurrency,
   asNumber,
   asRecordStatus,
   STANDARD_PAGE_SIZE,
@@ -56,6 +56,8 @@ type IncomeRow = {
   project_name: string | null;
   amount: number | null;
   currency: string | null;
+  amount_usd: number | null;
+  amount_iqd: number | null;
   description: string | null;
   date: string | null;
   record_status: string | null;
@@ -64,8 +66,8 @@ type IncomeRow = {
 
 type IncomeFormValues = {
   projectId: number;
-  amount: number;
-  currency: Currency;
+  amountUsd?: number;
+  amountIqd?: number;
   description?: string;
   date?: string;
 };
@@ -86,7 +88,7 @@ function buildFilters({
   const filters: CrudFilters = [];
   addContainsSearchFilter(filters, ["project_name", "description", "created_by_name"], search);
   addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
-  addEqualFilter(filters, "currency", currency);
+  addCurrencyAmountFilter(filters, currency, { USD: "amount_usd", IQD: "amount_iqd" });
   addDateRangeFilter(filters, "date", dateFrom, dateTo);
   return filters;
 }
@@ -112,8 +114,8 @@ function IncomeModal({
     mutationFn: (values: IncomeFormValues) => {
       const payload = {
         projectId: values.projectId,
-        amount: values.amount,
-        currency: values.currency,
+        amountUsd: Number(values.amountUsd || 0),
+        amountIqd: Number(values.amountIqd || 0),
         description: values.description?.trim() || null,
         date: values.date || null,
       };
@@ -144,8 +146,8 @@ function IncomeModal({
 
     form.setFieldsValue({
       projectId: income?.project_id ?? undefined,
-      amount: income?.amount ?? undefined,
-      currency: asCurrency(income?.currency),
+      amountUsd: income?.amount_usd ?? (income?.currency === "USD" ? income?.amount ?? undefined : undefined),
+      amountIqd: income?.amount_iqd ?? (income?.currency === "IQD" ? income?.amount ?? undefined : undefined),
       description: income?.description ?? "",
       date: formatDateInput(income?.date) || new Date().toISOString().slice(0, 10),
     });
@@ -164,7 +166,7 @@ function IncomeModal({
       <Form<IncomeFormValues>
         form={form}
         layout="vertical"
-        initialValues={{ currency: "USD", date: new Date().toISOString().slice(0, 10) }}
+        initialValues={{ amountUsd: 0, amountIqd: 0, date: new Date().toISOString().slice(0, 10) }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
         <Row gutter={16}>
@@ -182,13 +184,13 @@ function IncomeModal({
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="amount" label={t.amount} rules={[{ required: true, message: t.amountRequired }]}>
-              <InputNumber min={0.01} step={0.01} style={{ width: "100%" }} />
+            <Form.Item name="amountUsd" label={`${t.amount} USD`}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="currency" label={t.currency}>
-              <Select options={["USD", "IQD"].map((value) => ({ label: value, value }))} />
+            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
+              <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -274,15 +276,14 @@ export default function Income() {
       },
       {
         title: t.amount,
-        dataIndex: "amount",
+        dataIndex: "amount_usd",
         align: "right",
-        render: (value: number | null, row) => (
+        render: (_value: number | null, row) => (
           <Typography.Text strong type="success">
-            {formatCurrency(asNumber(value), asCurrency(row.currency))}
+            {formatCurrencyPair({ usd: row.amount_usd, iqd: row.amount_iqd })}
           </Typography.Text>
         ),
       },
-      { title: t.currency, dataIndex: "currency", width: 100, render: (value: string | null) => asCurrency(value) },
       { title: t.user, dataIndex: "created_by_name", render: (value: string | null) => value ?? "-" },
       { title: t.description, dataIndex: "description", render: (value: string | null) => value ?? "-" },
       { title: t.date, dataIndex: "date", render: (value: string | null) => formatDate(value) },
@@ -328,11 +329,10 @@ export default function Income() {
       { title: t.projectOption, dataIndex: "projectName", render: (value: string | null) => value ?? "-" },
       {
         title: t.amount,
-        dataIndex: "amount",
+        dataIndex: "amountUsd",
         align: "right",
-        render: (value: number, row) => formatCurrency(value, row.currency),
+        render: (_value: number, row) => formatCurrencyPair({ usd: row.amountUsd, iqd: row.amountIqd }),
       },
-      { title: t.currency, dataIndex: "currency" },
       { title: t.date, dataIndex: "date", render: (value: string | null) => formatDate(value) },
       { title: t.description, dataIndex: "description", render: (value: string | null) => value ?? "-" },
     ],
@@ -343,8 +343,8 @@ export default function Income() {
     const fileBase = t.incomeTitle;
     const exportRows = rows.map((income) => ({
       [t.projectOption]: income.project_name ?? "",
-      [t.amount]: asNumber(income.amount),
-      [t.currency]: asCurrency(income.currency),
+      [`${t.amount} USD`]: asNumber(income.amount_usd),
+      [`${t.amount} IQD`]: asNumber(income.amount_iqd),
       [t.user]: income.created_by_name ?? "",
       [t.description]: income.description ?? "",
       [t.date]: income.date ?? "",

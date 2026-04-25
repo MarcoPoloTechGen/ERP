@@ -3,7 +3,7 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, FileText } from "lucide-react";
 import { Button, Card, Col, Empty, Row, Skeleton, Space, Tag, Typography } from "antd";
 import { erpKeys, getProject, listInvoices, listProjectBuildings, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 function projectStatusColor(status: ProjectStatus) {
@@ -108,7 +108,8 @@ export default function ProjectDetail() {
           <Space direction="vertical" size="middle" style={{ width: "100%" }}>
             {buildings.map((building) => {
               const buildingInvoices = relatedInvoices.filter((invoice) => invoice.buildingId === building.id);
-              const total = buildingInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);
+              const totalUsd = buildingInvoices.reduce((sum, invoice) => sum + invoice.totalAmountUsd, 0);
+              const totalIqd = buildingInvoices.reduce((sum, invoice) => sum + invoice.totalAmountIqd, 0);
 
               return (
                 <Card key={building.id} size="small">
@@ -119,7 +120,7 @@ export default function ProjectDetail() {
                         <Typography.Text type="secondary">{t.relatedInvoices_count(buildingInvoices.length)}</Typography.Text>
                       </div>
                     </div>
-                    <Typography.Text strong>{formatCurrency(total)}</Typography.Text>
+                    <Typography.Text strong>{formatCurrencyPair({ usd: totalUsd, iqd: totalIqd })}</Typography.Text>
                   </div>
                 </Card>
               );
@@ -156,7 +157,9 @@ export default function ProjectDetail() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <Typography.Text strong>{formatCurrency(invoice.totalAmount, invoice.currency)}</Typography.Text>
+                      <Typography.Text strong>
+                        {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                      </Typography.Text>
                       <div style={{ marginTop: 4 }}>
                         <Tag color={invoiceStatusColor(invoice.status)}>{t[invoice.status]}</Tag>
                         {invoice.recordStatus === "deleted" ? <Tag>{t.deleted}</Tag> : null}
