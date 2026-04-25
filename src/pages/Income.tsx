@@ -1,19 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   App,
   Alert,
   Button,
   Card,
-  Col,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Row,
-  Select,
   Space,
   Table,
   Tag,
@@ -24,20 +17,16 @@ import FinanceFilters from "@/components/finance/FinanceFilters";
 import FinancePageHeader from "@/components/finance/FinancePageHeader";
 import FinanceRowActions from "@/components/finance/FinanceRowActions";
 import { standardPagination } from "@/components/finance/table";
+import { IncomeModal } from "@/components/income/IncomeModal";
+import type { IncomeRow } from "@/components/income/income-shared";
 import {
-  createIncomeTransaction,
   deleteIncomeTransaction,
-  erpKeys,
-  listIncomeTransactionHistory,
-  listProjects,
-  updateIncomeTransaction,
   type Currency,
   type IncomeTransactionHistoryAction,
   type IncomeTransactionHistoryEntry,
 } from "@/lib/erp";
-import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addCurrencyAmountFilter,
@@ -50,28 +39,9 @@ import {
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
-
-type IncomeRow = {
-  id: number | null;
-  project_id: number | null;
-  project_name: string | null;
-  amount: number | null;
-  currency: string | null;
-  amount_usd: number | null;
-  amount_iqd: number | null;
-  description: string | null;
-  date: string | null;
-  record_status: string | null;
-  created_by_name: string | null;
-};
-
-type IncomeFormValues = {
-  projectId: number;
-  amountUsd?: number;
-  amountIqd?: number;
-  description?: string;
-  date?: string;
-};
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
+import { useIncomeTransactionHistory } from "@/hooks/use-income";
+import { useProjects } from "@/hooks/use-projects";
 
 function buildFilters({
   search,
@@ -94,126 +64,11 @@ function buildFilters({
   return filters;
 }
 
-function IncomeModal({
-  income,
-  open,
-  onClose,
-  onSaved,
-}: {
-  income: IncomeRow | null;
-  open: boolean;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { t } = useLang();
-  const { selectedProjectId: scopedProjectId } = useProjectScope();
-  const { profile } = useAuth();
-  const { message } = App.useApp();
-  const [form] = Form.useForm<IncomeFormValues>();
-  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
-
-  const saveMutation = useMutation({
-    mutationFn: (values: IncomeFormValues) => {
-      const payload = {
-        projectId: values.projectId,
-        amountUsd: Number(values.amountUsd || 0),
-        amountIqd: Number(values.amountIqd || 0),
-        description: values.description?.trim() || null,
-        date: values.date || null,
-      };
-
-      if (income) {
-        if (income.id == null) {
-          throw new Error(t.notFound);
-        }
-
-        return updateIncomeTransaction(income.id, payload);
-      }
-
-      return createIncomeTransaction(payload);
-    },
-    onSuccess: () => {
-      form.resetFields();
-      onSaved();
-      onClose();
-    },
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
-
-  useEffect(() => {
-    if (!open) {
-      form.resetFields();
-      return;
-    }
-
-    form.setFieldsValue({
-      projectId: scopedProjectId ?? income?.project_id ?? undefined,
-      amountUsd: income?.amount_usd ?? (income?.currency === "USD" ? income?.amount ?? undefined : undefined),
-      amountIqd: income?.amount_iqd ?? (income?.currency === "IQD" ? income?.amount ?? undefined : undefined),
-      description: income?.description ?? "",
-      date: formatDateInput(income?.date) || new Date().toISOString().slice(0, 10),
-    });
-  }, [form, income, open, scopedProjectId]);
-
-  return (
-    <Modal
-      open={open}
-      title={income ? t.editIncomeEntry : t.newIncomeEntry}
-      okText={income ? t.save : t.create}
-      cancelText={t.cancel}
-      confirmLoading={saveMutation.isPending}
-      onCancel={onClose}
-      onOk={() => form.submit()}
-    >
-      <Form<IncomeFormValues>
-        form={form}
-        layout="vertical"
-        initialValues={{ amountUsd: 0, amountIqd: 0, date: new Date().toISOString().slice(0, 10) }}
-        onFinish={(values) => saveMutation.mutate(values)}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item label={t.user}>
-              <Input readOnly value={profile?.fullName ?? profile?.email ?? ""} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="projectId" label={t.projectOption} rules={[{ required: true, message: t.requiredField }]}>
-              <Select
-                disabled={scopedProjectId != null}
-                placeholder={t.noneOption}
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item name="date" label={t.date}>
-              <Input type="date" />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Form.Item name="description" label={t.description}>
-          <Input.TextArea rows={3} />
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-}
-
 export default function Income() {
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedIncome, setSelectedIncome] = useState<IncomeRow | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -223,7 +78,7 @@ export default function Income() {
   const [dateTo, setDateTo] = useState("");
   const search = useDeferredValue(searchInput.trim());
   const effectiveProjectFilter = scopedProjectId == null ? projectFilter : String(scopedProjectId);
-  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: projects } = useProjects();
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<IncomeRow>({
     resource: "app_income_transactions",
@@ -242,12 +97,10 @@ export default function Income() {
     setFilters(buildFilters({ search, projectId: effectiveProjectFilter, currency: currencyFilter, dateFrom, dateTo }), "replace");
   }, [currencyFilter, dateFrom, dateTo, effectiveProjectFilter, search, setCurrentPage, setFilters]);
 
-  const historyQuery = useQuery({
-    queryKey: erpKeys.incomeHistory,
-    queryFn: listIncomeTransactionHistory,
-  });
+  const historyQuery = useIncomeTransactionHistory();
 
   function refetchIncomeData() {
+    void erpInvalidation.income();
     void tableQuery.refetch();
     void historyQuery.refetch();
   }

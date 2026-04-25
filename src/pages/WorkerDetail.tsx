@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, TrendingDown, TrendingUp } from "lucide-react";
 import {
@@ -27,10 +27,12 @@ import {
   listWorkerTransactions,
   type TransactionType,
 } from "@/lib/erp";
+import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 type TransactionFormValues = {
   type: TransactionType;
@@ -51,7 +53,7 @@ function TransactionModal({
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<TransactionFormValues>();
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
 
@@ -67,12 +69,7 @@ function TransactionModal({
         projectId: scopedProjectId ?? values.projectId ?? null,
       }),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.worker(workerId) }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactions(workerId) }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
+      await erpInvalidation.workerDetail(workerId);
       onClose();
     },
     onError: (error) => void message.error(toErrorMessage(error)),
@@ -170,6 +167,35 @@ export default function WorkerDetail() {
     scopedProjectId == null
       ? transactions
       : transactions?.filter((transaction) => transaction.projectId === scopedProjectId);
+  const transactionRows = visibleTransactions ?? [];
+  const chartEntries = transactionRows.map((transaction) => ({
+    id: transaction.id,
+    date: transaction.date,
+    creditUsd: transaction.type === "credit" ? transaction.amountUsd : 0,
+    creditIqd: transaction.type === "credit" ? transaction.amountIqd : 0,
+    debitUsd: transaction.type === "debit" ? transaction.amountUsd : 0,
+    debitIqd: transaction.type === "debit" ? transaction.amountIqd : 0,
+  }));
+  const creditTotals = transactionRows.reduce(
+    (totals, transaction) =>
+      transaction.type === "credit"
+        ? {
+            usd: totals.usd + transaction.amountUsd,
+            iqd: totals.iqd + transaction.amountIqd,
+          }
+        : totals,
+    { usd: 0, iqd: 0 },
+  );
+  const debitTotals = transactionRows.reduce(
+    (totals, transaction) =>
+      transaction.type === "debit"
+        ? {
+            usd: totals.usd + transaction.amountUsd,
+            iqd: totals.iqd + transaction.amountIqd,
+          }
+        : totals,
+    { usd: 0, iqd: 0 },
+  );
 
   if (workerLoading || !worker) {
     return workerLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : <Empty description={t.notFound} />;
@@ -209,6 +235,26 @@ export default function WorkerDetail() {
           </div>
         </Col>
       </Row>
+
+      {transactionsLoading ? (
+        <Skeleton active paragraph={{ rows: 2 }} />
+      ) : (
+        <AccountFlowChart
+          amountLabel={t.amount}
+          balance={{ usd: worker.balanceUsd, iqd: worker.balanceIqd }}
+          balanceLabel={t.balance}
+          countLabel={t.transactionsCount(transactionRows.length)}
+          credit={creditTotals}
+          creditLabel={t.credit}
+          dateLabel={t.date}
+          debit={debitTotals}
+          debitLabel={t.debit}
+          empty={!transactionRows.length}
+          emptyDescription={t.noTransactions}
+          entries={chartEntries}
+          title={t.debitCredit}
+        />
+      )}
 
       <Card
         title={t.transactions}

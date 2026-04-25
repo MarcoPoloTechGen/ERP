@@ -1,17 +1,14 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   App,
   Alert,
   Button,
   Card,
   Col,
-  Form,
   Input,
-  InputNumber,
-  Modal,
   Popconfirm,
   Row,
   Select,
@@ -22,15 +19,11 @@ import {
   type TableProps,
 } from "antd";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { ProductModal } from "@/components/products/ProductModal";
+import type { ProductRow } from "@/components/products/product-shared";
 import {
-  createProduct,
   deleteProduct,
-  erpKeys,
-  listProjectBuildings,
-  listProjects,
-  listSuppliers,
   type Currency,
-  updateProduct,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
@@ -43,33 +36,9 @@ import {
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
-
-type ProductRow = {
-  id: number | null;
-  name: string | null;
-  supplier_id: number | null;
-  supplier_name: string | null;
-  project_id: number | null;
-  project_name: string | null;
-  building_id: number | null;
-  building_name: string | null;
-  unit: string | null;
-  unit_price: number | null;
-  currency: string | null;
-  unit_price_usd: number | null;
-  unit_price_iqd: number | null;
-  created_at: string | null;
-};
-
-type ProductFormValues = {
-  name: string;
-  supplierId?: number;
-  projectId?: number;
-  buildingId?: number;
-  unit?: string;
-  unitPriceUsd?: number;
-  unitPriceIqd?: number;
-};
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
+import { useProjects } from "@/hooks/use-projects";
+import { useSuppliers } from "@/hooks/use-suppliers";
 
 function buildFilters({
   search,
@@ -90,157 +59,11 @@ function buildFilters({
   return filters;
 }
 
-function ProductModal({
-  product,
-  onClose,
-  onSaved,
-}: {
-  product?: ProductRow;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { t } = useLang();
-  const { selectedProjectId: scopedProjectId } = useProjectScope();
-  const { message } = App.useApp();
-  const queryClient = useQueryClient();
-  const [form] = Form.useForm<ProductFormValues>();
-  const projectId = Form.useWatch("projectId", form);
-  const selectedProjectId = typeof projectId === "number" ? projectId : undefined;
-
-  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
-  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
-  const { data: buildings } = useQuery({
-    queryKey: erpKeys.projectBuildings(selectedProjectId ?? 0),
-    queryFn: () => listProjectBuildings(selectedProjectId),
-    enabled: selectedProjectId != null,
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: ProductFormValues) => {
-      const payload = {
-        name: values.name.trim(),
-        supplierId: values.supplierId ?? null,
-        projectId: scopedProjectId ?? values.projectId ?? null,
-        buildingId: values.buildingId ?? null,
-        unit: values.unit?.trim() || null,
-        unitPriceUsd: Number(values.unitPriceUsd || 0),
-        unitPriceIqd: Number(values.unitPriceIqd || 0),
-      };
-
-      if (product) {
-        if (product.id == null) {
-          throw new Error(t.notFound);
-        }
-
-        await updateProduct(product.id, payload);
-        return;
-      }
-
-      await createProduct(payload);
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.products }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
-      onSaved();
-      onClose();
-    },
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
-
-  return (
-    <Modal
-      open
-      title={product ? t.editProduct : t.newProduct}
-      okText={product ? t.save : t.create}
-      cancelText={t.cancel}
-      confirmLoading={saveMutation.isPending}
-      onCancel={onClose}
-      onOk={() => form.submit()}
-    >
-      <Form<ProductFormValues>
-        form={form}
-        layout="vertical"
-        initialValues={{
-          name: product?.name ?? "",
-          supplierId: product?.supplier_id ?? undefined,
-          projectId: scopedProjectId ?? product?.project_id ?? undefined,
-          buildingId: product?.building_id ?? undefined,
-          unit: product?.unit ?? "",
-          unitPriceUsd:
-            product?.unit_price_usd ?? (product?.currency === "USD" ? product?.unit_price ?? undefined : undefined),
-          unitPriceIqd:
-            product?.unit_price_iqd ?? (product?.currency === "IQD" ? product?.unit_price ?? undefined : undefined),
-        }}
-        onFinish={(values) => saveMutation.mutate(values)}
-      >
-        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
-          <Input placeholder={t.namePlaceholder} />
-        </Form.Item>
-
-        <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="supplierId" label={t.supplierLabel}>
-              <Select
-                disabled={scopedProjectId != null}
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="projectId" label={t.projectOption}>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                onChange={() => form.setFieldValue("buildingId", undefined)}
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="buildingId" label={t.buildingLabel}>
-              <Select
-                allowClear
-                showSearch
-                disabled={!selectedProjectId}
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                options={buildings?.map((building) => ({ label: building.name, value: building.id }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="unit" label={t.unit}>
-              <Input placeholder={t.unitPlaceholder} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="unitPriceUsd" label={`${t.unitPrice} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="unitPriceIqd" label={`${t.unitPrice} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-        </Row>
-      </Form>
-    </Modal>
-  );
-}
-
 export default function Products() {
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
   const [selectedProduct, setSelectedProduct] = useState<ProductRow | undefined>();
   const [open, setOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
@@ -250,8 +73,8 @@ export default function Products() {
   const search = useDeferredValue(searchInput.trim());
   const effectiveProjectFilter = scopedProjectId == null ? projectFilter : String(scopedProjectId);
 
-  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
-  const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+  const { data: projects } = useProjects();
+  const { data: suppliers } = useSuppliers();
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<ProductRow>({
     resource: "app_products",
@@ -273,7 +96,10 @@ export default function Products() {
 
       return deleteProduct(product.id);
     },
-    onSuccess: () => void tableQuery.refetch(),
+    onSuccess: () => {
+      void erpInvalidation.products();
+      void tableQuery.refetch();
+    },
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 

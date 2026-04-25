@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Button, Card, Col, Empty, Image, Progress, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
@@ -7,6 +7,7 @@ import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid, type InvoiceS
 import type { ExpenseType } from "@/lib/expense-types";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 function invoiceStatusColor(status: InvoiceStatus) {
   if (status === "paid") {
@@ -32,7 +33,7 @@ export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const invoiceId = Number(id);
   const { t } = useLang();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
@@ -57,14 +58,7 @@ export default function InvoiceDetail() {
       });
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoice(invoiceId) }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoiceHistory(invoiceId) }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactionsList }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
+      await erpInvalidation.invoiceDetail(invoiceId);
     },
   });
 

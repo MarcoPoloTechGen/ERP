@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import {
   App,
   Alert,
@@ -18,7 +19,7 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { createSupplier, deleteSupplier, erpKeys, listSupplierBalances, updateSupplier } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
@@ -28,6 +29,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 type SupplierRow = {
   id: number;
@@ -64,7 +66,7 @@ function SupplierModal({
 }) {
   const { t } = useLang();
   const { message } = App.useApp();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<SupplierFormValues>();
 
   const saveMutation = useMutation({
@@ -85,10 +87,7 @@ function SupplierModal({
       await createSupplier(payload);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.suppliers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
+      await erpInvalidation.suppliers();
       onSaved();
       onClose();
     },
@@ -223,7 +222,7 @@ export default function Suppliers() {
       title: "",
       key: "actions",
       align: "right",
-      width: 96,
+      width: 144,
       render: (_, supplier) => (
         <Space size="small">
           <Button
@@ -242,6 +241,9 @@ export default function Suppliers() {
           >
             <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
           </Popconfirm>
+          <Link href={`/suppliers/${supplier.id}`}>
+            <Button type="text" icon={<ChevronRight size={16} />} />
+          </Link>
         </Space>
       ),
     },

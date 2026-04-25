@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button, Card, Empty, Typography } from "antd";
 import {
   erpKeys,
@@ -15,7 +15,9 @@ import {
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
+import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { deleteCompanyLogo, uploadCompanyLogo } from "@/lib/supabase";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 const selectClassName =
   "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -23,7 +25,9 @@ const selectClassName =
 export default function Admin() {
   const { t } = useLang();
   const { profile, refreshProfile } = useAuth();
-  const queryClient = useQueryClient();
+  const canAccessAdmin = hasAdminAccess(profile?.role);
+  const currentUserIsSuperAdmin = isSuperAdmin(profile?.role);
+  const erpInvalidation = useErpInvalidation();
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
@@ -40,22 +44,22 @@ export default function Admin() {
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
     queryFn: getAppSettings,
-    enabled: profile?.role === "admin",
+    enabled: canAccessAdmin,
   });
   const { data: profiles } = useQuery({
     queryKey: erpKeys.users,
     queryFn: listProfiles,
-    enabled: profile?.role === "admin",
+    enabled: canAccessAdmin,
   });
   const { data: projects } = useQuery({
     queryKey: erpKeys.projects,
     queryFn: listProjects,
-    enabled: profile?.role === "admin",
+    enabled: canAccessAdmin,
   });
   const { data: memberships } = useQuery({
     queryKey: erpKeys.projectMemberships,
     queryFn: listProjectMemberships,
-    enabled: profile?.role === "admin",
+    enabled: canAccessAdmin,
   });
 
   const membershipMap = useMemo(() => {
@@ -67,11 +71,11 @@ export default function Admin() {
   }, [memberships]);
 
   const roleMutation = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: "admin" | "user" }) => {
+    mutationFn: async ({ userId, role }: { userId: string; role: "super_admin" | "admin" | "user" }) => {
       await updateProfileRole(userId, role);
     },
     onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.users });
+      await erpInvalidation.users();
       if (variables.userId === profile?.id) {
         await refreshProfile();
       }
@@ -83,7 +87,7 @@ export default function Admin() {
       await updateProfileName(userId, fullName);
     },
     onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.users });
+      await erpInvalidation.users();
       if (variables.userId === profile?.id) {
         await refreshProfile();
       }
@@ -100,7 +104,7 @@ export default function Admin() {
       await replaceUserProjectMemberships(userId, projectIds);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.projectMemberships });
+      await erpInvalidation.users();
     },
   });
 
@@ -136,7 +140,7 @@ export default function Admin() {
       }
     },
     onSuccess: async (_data, variables) => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.appSettings });
+      await erpInvalidation.appSettings();
       setSelectedLogoFile(null);
       if (logoPreviewUrl) {
         URL.revokeObjectURL(logoPreviewUrl);
@@ -146,7 +150,7 @@ export default function Admin() {
     },
   });
 
-  if (profile?.role !== "admin") {
+  if (!canAccessAdmin) {
     return <Empty description={t.adminRestricted} />;
   }
 
@@ -246,6 +250,8 @@ export default function Admin() {
               normalizedDraftName.length > 0 && normalizedDraftName !== (user.fullName ?? "").trim();
             const isSavingName = nameMutation.isPending && nameMutation.variables?.userId === user.id;
             const isUpdatingRole = roleMutation.isPending && roleMutation.variables?.userId === user.id;
+            const canUpdateThisRole = currentUserIsSuperAdmin || !isSuperAdmin(user.role);
+            const userHasAllProjects = hasAdminAccess(user.role);
 
             return (
               <Card key={user.id} className="p-5">
@@ -265,6 +271,7 @@ export default function Admin() {
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <input
                           value={draftName}
+                          disabled={!canUpdateThisRole || isSavingName}
                           onChange={(event) =>
                             setDraftNames((current) => ({
                               ...current,
@@ -282,7 +289,7 @@ export default function Admin() {
                               fullName: normalizedDraftName,
                             })
                           }
-                          disabled={!canSaveName || isSavingName}
+                          disabled={!canUpdateThisRole || !canSaveName || isSavingName}
                         >
                           {t.save}
                         </Button>
@@ -296,14 +303,17 @@ export default function Admin() {
                       <select
                         className={selectClassName}
                         value={user.role}
-                        disabled={isUpdatingRole}
+                        disabled={!canUpdateThisRole || isUpdatingRole}
                         onChange={(event) =>
                           roleMutation.mutate({
                             userId: user.id,
-                            role: event.target.value as "admin" | "user",
+                            role: event.target.value as "super_admin" | "admin" | "user",
                           })
                         }
                       >
+                        <option value="super_admin" disabled={!currentUserIsSuperAdmin}>
+                          {t.superAdminTitle}
+                        </option>
                         <option value="admin">{t.adminTitle}</option>
                         <option value="user">{t.user}</option>
                       </select>
@@ -316,18 +326,18 @@ export default function Admin() {
                     </p>
                     <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {(projects ?? []).map((project) => {
-                        const checked = user.role === "admin" ? true : allowedProjectIds.includes(project.id);
+                        const checked = userHasAllProjects ? true : allowedProjectIds.includes(project.id);
                         return (
                           <label
                             key={project.id}
                             className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
                               checked ? "border-primary/30 bg-primary/5" : "border-border bg-background"
-                            } ${user.role === "admin" ? "opacity-70" : ""}`}
+                            } ${userHasAllProjects ? "opacity-70" : ""}`}
                           >
                             <input
                               type="checkbox"
                               checked={checked}
-                              disabled={user.role === "admin"}
+                              disabled={userHasAllProjects}
                               onChange={(event) => {
                                 const nextIds = event.target.checked
                                   ? [...allowedProjectIds, project.id]

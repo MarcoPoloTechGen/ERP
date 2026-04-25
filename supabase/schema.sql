@@ -4,7 +4,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   full_name text,
-  role text not null default 'user' check (role in ('admin', 'user')),
+  role text not null default 'user' check (role in ('super_admin', 'admin', 'user')),
   created_at timestamptz not null default now()
 );
 
@@ -165,7 +165,7 @@ declare
   assigned_role text := 'user';
 begin
   if not exists (select 1 from public.profiles) then
-    assigned_role := 'admin';
+    assigned_role := 'super_admin';
   end if;
 
   insert into public.profiles (id, email, full_name, role)
@@ -203,7 +203,17 @@ stable
 security definer
 set search_path = public
 as $$
-  select auth.role() = 'authenticated' and public.current_user_role() = 'admin';
+  select auth.role() = 'authenticated' and public.current_user_role() in ('super_admin', 'admin');
+$$;
+
+create or replace function public.is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.role() = 'authenticated' and public.current_user_role() = 'super_admin';
 $$;
 
 create or replace function public.can_access_project(target_project_id bigint)
@@ -739,7 +749,7 @@ select
   users.email,
   coalesce(users.raw_user_meta_data->>'full_name', ''),
   case
-    when row_number() over (order by users.created_at asc, users.id asc) = 1 then 'admin'
+    when row_number() over (order by users.created_at asc, users.id asc) = 1 then 'super_admin'
     else 'user'
   end
 from auth.users as users
@@ -747,7 +757,10 @@ on conflict (id) do update
 set
   email = excluded.email,
   full_name = coalesce(excluded.full_name, public.profiles.full_name),
-  role = case when public.profiles.role = 'admin' then 'admin' else excluded.role end;
+  role = case
+    when public.profiles.role in ('super_admin', 'admin') then public.profiles.role
+    else excluded.role
+  end;
 
 insert into storage.buckets (id, name, public)
 values ('invoice-images', 'invoice-images', false)
@@ -788,7 +801,7 @@ create policy "profiles insert self"
 on public.profiles
 for insert
 to authenticated
-with check (auth.uid() = id);
+with check (auth.uid() = id and role = 'user');
 
 drop policy if exists "app settings public read" on public.app_settings;
 create policy "app settings public read"
@@ -806,17 +819,29 @@ using (public.is_admin())
 with check (public.is_admin());
 
 drop policy if exists "profiles update own or admin" on public.profiles;
-create policy "profiles update own or admin"
+drop policy if exists "profiles update own" on public.profiles;
+create policy "profiles update own"
 on public.profiles
 for update
 to authenticated
-using (auth.uid() = id or public.is_admin())
-with check (
+using (auth.uid() = id)
+with check (auth.uid() = id and role = public.current_user_role());
+
+drop policy if exists "profiles admin update" on public.profiles;
+create policy "profiles admin update"
+on public.profiles
+for update
+to authenticated
+using (
   public.is_admin()
-  or (
-    auth.uid() = id
-    and role = public.current_user_role()
+  and (
+    public.is_super_admin()
+    or role <> 'super_admin'
   )
+)
+with check (
+  public.is_super_admin()
+  or role in ('admin', 'user')
 );
 
 drop policy if exists "workers authenticated access" on public.workers;
@@ -843,12 +868,27 @@ to authenticated
 using (public.can_access_project(id));
 
 drop policy if exists "projects admin write" on public.projects;
-create policy "projects admin write"
+drop policy if exists "projects admin insert" on public.projects;
+create policy "projects admin insert"
 on public.projects
-for all
+for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "projects admin update" on public.projects;
+create policy "projects admin update"
+on public.projects
+for update
 to authenticated
 using (public.is_admin())
 with check (public.is_admin());
+
+drop policy if exists "projects super admin delete" on public.projects;
+create policy "projects super admin delete"
+on public.projects
+for delete
+to authenticated
+using (public.is_super_admin());
 
 drop policy if exists "project buildings readable by membership" on public.project_buildings;
 create policy "project buildings readable by membership"
@@ -874,12 +914,34 @@ using (public.can_access_project(project_id))
 with check (public.can_access_project(project_id));
 
 drop policy if exists "invoices scoped access" on public.invoices;
-create policy "invoices scoped access"
+drop policy if exists "invoices scoped select" on public.invoices;
+create policy "invoices scoped select"
 on public.invoices
-for all
+for select
+to authenticated
+using (public.can_access_project(project_id));
+
+drop policy if exists "invoices scoped insert" on public.invoices;
+create policy "invoices scoped insert"
+on public.invoices
+for insert
+to authenticated
+with check (public.can_access_project(project_id));
+
+drop policy if exists "invoices scoped update" on public.invoices;
+create policy "invoices scoped update"
+on public.invoices
+for update
 to authenticated
 using (public.can_access_project(project_id))
 with check (public.can_access_project(project_id));
+
+drop policy if exists "invoices super admin delete" on public.invoices;
+create policy "invoices super admin delete"
+on public.invoices
+for delete
+to authenticated
+using (public.is_super_admin());
 
 drop policy if exists "worker transactions authenticated read" on public.worker_transactions;
 create policy "worker transactions authenticated read"
@@ -919,12 +981,34 @@ using (public.is_admin())
 with check (public.is_admin());
 
 drop policy if exists "income transactions scoped access" on public.income_transactions;
-create policy "income transactions scoped access"
+drop policy if exists "income transactions scoped select" on public.income_transactions;
+create policy "income transactions scoped select"
 on public.income_transactions
-for all
+for select
+to authenticated
+using (public.can_access_project(project_id));
+
+drop policy if exists "income transactions scoped insert" on public.income_transactions;
+create policy "income transactions scoped insert"
+on public.income_transactions
+for insert
+to authenticated
+with check (public.can_access_project(project_id));
+
+drop policy if exists "income transactions scoped update" on public.income_transactions;
+create policy "income transactions scoped update"
+on public.income_transactions
+for update
 to authenticated
 using (public.can_access_project(project_id))
 with check (public.can_access_project(project_id));
+
+drop policy if exists "income transactions super admin delete" on public.income_transactions;
+create policy "income transactions super admin delete"
+on public.income_transactions
+for delete
+to authenticated
+using (public.is_super_admin());
 
 drop policy if exists "invoice images authenticated read" on storage.objects;
 create policy "invoice images authenticated read"
@@ -1015,6 +1099,7 @@ grant select on public.app_income_transactions to authenticated;
 grant select on public.app_invoices to authenticated;
 grant execute on function public.current_user_role() to authenticated;
 grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_super_admin() to authenticated;
 grant execute on function public.can_access_project(bigint) to authenticated;
 grant execute on function public.can_access_invoice_object(text) to authenticated;
 grant execute on function public.replace_project_buildings(bigint, text[]) to authenticated;

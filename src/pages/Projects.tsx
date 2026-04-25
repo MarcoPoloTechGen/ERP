@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   App,
@@ -34,6 +34,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
+import { canDeleteProjects, hasAdminAccess } from "@/lib/permissions";
 import {
   addContainsSearchFilter,
   addEqualFilter,
@@ -42,6 +43,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 type ProjectRow = {
   id: number | null;
@@ -101,7 +103,7 @@ function ProjectModal({
 }) {
   const { t } = useLang();
   const { message } = App.useApp();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<ProjectFormValues>();
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(project?.id ?? 0),
@@ -146,10 +148,7 @@ function ProjectModal({
       await createProject(payload);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.projects }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
+      await erpInvalidation.projects();
       onSaved();
       onClose();
     },
@@ -266,7 +265,8 @@ export default function Projects() {
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
   const search = useDeferredValue(searchInput.trim());
-  const isAdmin = profile?.role === "admin";
+  const canManageProjects = hasAdminAccess(profile?.role);
+  const canRemoveProjects = canDeleteProjects(profile?.role);
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<ProjectRow>({
     resource: "app_projects",
@@ -333,7 +333,7 @@ export default function Projects() {
       width: 144,
       render: (_, project) => (
         <Space size="small">
-          {isAdmin ? (
+          {canManageProjects ? (
             <>
               <Button
                 type="text"
@@ -343,7 +343,7 @@ export default function Projects() {
                   setOpen(true);
                 }}
               />
-              {project.id != null ? (
+              {canRemoveProjects && project.id != null ? (
                 <Popconfirm
                   title={t.deleteProjectConfirm}
                   okText={t.remove}
@@ -403,7 +403,7 @@ export default function Projects() {
             <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportProjects("xlsx")}>
               {t.excel}
             </Button>
-            {isAdmin ? (
+            {canManageProjects ? (
               <Button
                 type="primary"
                 icon={<Plus size={16} />}

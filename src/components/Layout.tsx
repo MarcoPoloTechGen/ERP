@@ -20,6 +20,7 @@ import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
+import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { useProjectScope } from "@/lib/project-scope";
 
 const languages: Array<{ value: Lang; label: string }> = [
@@ -129,7 +130,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {...item}
               />
             ))}
-            {profile?.role === "admin" ? (
+            {hasAdminAccess(profile?.role) ? (
               <NavLink
                 href="/admin"
                 label={t.adminTitle}
@@ -165,7 +166,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {profile?.fullName ?? profile?.email ?? t.user}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {profile?.role === "admin" ? t.adminTitle : t.user}
+                {isSuperAdmin(profile?.role)
+                  ? t.superAdminTitle
+                  : profile?.role === "admin"
+                    ? t.adminTitle
+                    : t.user}
               </p>
             </div>
 

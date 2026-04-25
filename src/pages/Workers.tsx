@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   App,
@@ -32,6 +32,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 type WorkerRow = {
   id: number;
@@ -70,7 +71,7 @@ function WorkerModal({
 }) {
   const { t } = useLang();
   const { message } = App.useApp();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<WorkerFormValues>();
 
   const saveMutation = useMutation({
@@ -90,10 +91,7 @@ function WorkerModal({
       await createWorker(payload);
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-      ]);
+      await erpInvalidation.workers();
       onSaved();
       onClose();
     },

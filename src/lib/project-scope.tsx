@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { erpKeys, listProjects, updateMySelectedProjectId, type Project } from "@/lib/erp";
+import { useMutation } from "@tanstack/react-query";
+import { updateMySelectedProjectId, type Project } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
+import { useProjects } from "@/hooks/use-projects";
 
 type ProjectScopeContextValue = {
   projects: Project[];
@@ -21,11 +23,11 @@ const ProjectScopeContext = createContext<ProjectScopeContextValue>({
 
 export function ProjectScopeProvider({ children }: { children: React.ReactNode }) {
   const { profile, refreshProfile } = useAuth();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [selectedProjectId, setSelectedProjectIdState] = useState<number | null>(
     profile?.selectedProjectId ?? null,
   );
-  const projectsQuery = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const projectsQuery = useProjects();
   const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 
   const persistMutation = useMutation({
@@ -33,10 +35,7 @@ export function ProjectScopeProvider({ children }: { children: React.ReactNode }
     onSuccess: async () => {
       await Promise.all([
         refreshProfile(),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.incomes }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.products }),
+        erpInvalidation.projectScope(),
       ]);
     },
   });

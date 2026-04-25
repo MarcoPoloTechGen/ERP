@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -52,6 +52,7 @@ import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/forma
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 type CalendarEventKind = "income" | "expense" | "due" | "worker";
 type CalendarEventType = "income" | "expense" | "due" | "worker_credit" | "worker_debit";
@@ -162,12 +163,14 @@ function expenseTypeLabel(expenseType: ExpenseType, t: ReturnType<typeof useLang
 function buildGeneratedExpenseTitle({
   assignment,
   buildings,
+  detailName,
   expenseType,
   projects,
   t,
 }: {
   assignment: { projectId: number | null; buildingId: number | null };
   buildings: Array<{ id: number; name: string; projectId: number }>;
+  detailName?: string | null;
   expenseType: ExpenseType;
   projects: Array<{ id: number; name: string }>;
   t: ReturnType<typeof useLang>["t"];
@@ -178,7 +181,7 @@ function buildGeneratedExpenseTitle({
       ? t.projectGlobalCost
       : buildings.find((building) => building.id === assignment.buildingId)?.name ?? t.buildingLabel;
 
-  return [projectName, buildingName, expenseTypeLabel(expenseType, t)].join(" : ");
+  return [projectName, buildingName, expenseTypeLabel(expenseType, t), detailName].filter(Boolean).join(" - ");
 }
 
 function CalendarEntryModal({
@@ -194,7 +197,7 @@ function CalendarEntryModal({
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { profile } = useAuth();
   const { message } = App.useApp();
-  const queryClient = useQueryClient();
+  const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<CalendarEntryFormValues>();
   const entryType = Form.useWatch("type", form) ?? "income";
   const expenseType = Form.useWatch("expenseType", form) ?? "products";
@@ -234,6 +237,9 @@ function CalendarEntryModal({
   const workerNameById = useMemo(() => {
     return new Map((workers ?? []).map((worker) => [worker.id, worker.name]));
   }, [workers]);
+  const productNameById = useMemo(() => {
+    return new Map((products ?? []).map((product) => [product.id, product.name]));
+  }, [products]);
 
   const assignmentOptions = useMemo(() => {
     const options = buildExpenseAssignmentOptions({
@@ -319,10 +325,19 @@ function CalendarEntryModal({
         values.expenseType === "labor" && values.laborWorkerId != null
           ? workerNameById.get(values.laborWorkerId) ?? null
           : null;
+      const effectiveProductId =
+        values.expenseType === "products"
+          ? values.productId ?? (supplierProducts.length === 1 ? supplierProducts[0].id : undefined)
+          : undefined;
+      const productName =
+        values.expenseType === "products" && effectiveProductId != null
+          ? productNameById.get(effectiveProductId) ?? null
+          : null;
       return createInvoice({
         number: buildGeneratedExpenseTitle({
           assignment: effectiveAssignment,
           buildings: projectBuildings ?? [],
+          detailName: values.expenseType === "labor" ? laborWorkerName : productName,
           expenseType: values.expenseType,
           projects: projects ?? [],
           t,
@@ -333,7 +348,7 @@ function CalendarEntryModal({
         supplierId: values.expenseType === "products" ? values.supplierId ?? null : null,
         projectId: effectiveAssignment.projectId,
         buildingId: effectiveAssignment.buildingId,
-        productId: values.expenseType === "products" ? values.productId ?? null : null,
+        productId: values.expenseType === "products" ? effectiveProductId ?? null : null,
         totalAmountUsd: paidAmountUsd + remainingAmountUsd,
         paidAmountUsd,
         totalAmountIqd: paidAmountIqd + remainingAmountIqd,
@@ -346,15 +361,7 @@ function CalendarEntryModal({
       });
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: calendarEventsKey }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.incomes }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.incomeHistory }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
-        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactionsList }),
-      ]);
+      await erpInvalidation.calendar(calendarEventsKey);
       form.resetFields();
       onSaved();
       onClose();

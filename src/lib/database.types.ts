@@ -1363,6 +1363,7 @@ export type Database = {
       current_user_role: { Args: never; Returns: string }
       get_dashboard_overview: { Args: never; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
+      is_super_admin: { Args: never; Returns: boolean }
       replace_project_buildings: {
         Args: { p_building_names: string[]; p_project_id: number }
         Returns: undefined

@@ -39,6 +39,7 @@ const Products = lazy(() => import("@/pages/Products"));
 const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
 const Projects = lazy(() => import("@/pages/Projects"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const SupplierDetail = lazy(() => import("@/pages/SupplierDetail"));
 const Suppliers = lazy(() => import("@/pages/Suppliers"));
 const WorkerDetail = lazy(() => import("@/pages/WorkerDetail"));
 const Workers = lazy(() => import("@/pages/Workers"));
@@ -219,6 +220,7 @@ function AppRouter() {
             <Route path="/projects" component={Projects} />
             <Route path="/projects/:id" component={ProjectDetail} />
             <Route path="/suppliers" component={Suppliers} />
+            <Route path="/suppliers/:id" component={SupplierDetail} />
             <Route path="/products" component={Products} />
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/income" component={Income} />
