@@ -178,9 +178,9 @@ declare
   target_worker_id bigint;
 begin
   if tg_op in ('UPDATE', 'DELETE') then
-    delete from public.party_transactions
-    where source_invoice_id = old.id
-      and source_kind in ('labor_expense', 'supplier_expense');
+    delete from public.party_transactions as pt
+    where pt.source_invoice_id = old.id
+      and pt.source_kind in ('labor_expense', 'supplier_expense');
   end if;
 
   if tg_op = 'DELETE' then
