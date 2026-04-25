@@ -16,6 +16,7 @@ type FinanceFiltersProps<TStatus extends string> = {
   dateTo: string;
   hasFilters: boolean;
   projectValue: string;
+  projectDisabled?: boolean;
   projects?: NamedOption[];
   searchPlaceholder: string;
   searchValue: string;
@@ -46,6 +47,7 @@ export default function FinanceFilters<TStatus extends string>({
   dateTo,
   hasFilters,
   projectValue,
+  projectDisabled = false,
   projects,
   searchPlaceholder,
   searchValue,
@@ -89,6 +91,7 @@ export default function FinanceFilters<TStatus extends string>({
         <Col xs={24} md={12} lg={4}>
           <Select
             value={projectValue}
+            disabled={projectDisabled}
             style={{ width: "100%" }}
             onChange={onProjectChange}
             options={[

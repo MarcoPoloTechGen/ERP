@@ -42,6 +42,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 
 type ProductRow = {
   id: number | null;
@@ -99,6 +100,7 @@ function ProductModal({
   onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<ProductFormValues>();
@@ -118,7 +120,7 @@ function ProductModal({
       const payload = {
         name: values.name.trim(),
         supplierId: values.supplierId ?? null,
-        projectId: values.projectId ?? null,
+        projectId: scopedProjectId ?? values.projectId ?? null,
         buildingId: values.buildingId ?? null,
         unit: values.unit?.trim() || null,
         unitPriceUsd: Number(values.unitPriceUsd || 0),
@@ -163,7 +165,7 @@ function ProductModal({
         initialValues={{
           name: product?.name ?? "",
           supplierId: product?.supplier_id ?? undefined,
-          projectId: product?.project_id ?? undefined,
+          projectId: scopedProjectId ?? product?.project_id ?? undefined,
           buildingId: product?.building_id ?? undefined,
           unit: product?.unit ?? "",
           unitPriceUsd:
@@ -181,6 +183,7 @@ function ProductModal({
           <Col xs={24} md={12}>
             <Form.Item name="supplierId" label={t.supplierLabel}>
               <Select
+                disabled={scopedProjectId != null}
                 allowClear
                 showSearch
                 optionFilterProp="label"
@@ -236,6 +239,7 @@ function ProductModal({
 
 export default function Products() {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const [selectedProduct, setSelectedProduct] = useState<ProductRow | undefined>();
   const [open, setOpen] = useState(false);
@@ -244,6 +248,7 @@ export default function Products() {
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
   const search = useDeferredValue(searchInput.trim());
+  const effectiveProjectFilter = scopedProjectId == null ? projectFilter : String(scopedProjectId);
 
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
@@ -257,8 +262,8 @@ export default function Products() {
 
   useEffect(() => {
     setCurrentPage(1);
-    setFilters(buildFilters({ search, projectId: projectFilter, supplierId: supplierFilter, currency: currencyFilter }), "replace");
-  }, [currencyFilter, projectFilter, search, setCurrentPage, setFilters, supplierFilter]);
+    setFilters(buildFilters({ search, projectId: effectiveProjectFilter, supplierId: supplierFilter, currency: currencyFilter }), "replace");
+  }, [currencyFilter, effectiveProjectFilter, search, setCurrentPage, setFilters, supplierFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: (product: ProductRow) => {
@@ -274,7 +279,7 @@ export default function Products() {
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
   const hasFilters = Boolean(
-    searchInput || projectFilter !== "all" || supplierFilter !== "all" || currencyFilter !== "all",
+    searchInput || (scopedProjectId == null && projectFilter !== "all") || supplierFilter !== "all" || currencyFilter !== "all",
   );
   const columns: TableProps<ProductRow>["columns"] = [
     {
@@ -399,7 +404,8 @@ export default function Products() {
           </Col>
           <Col xs={24} md={12} lg={4}>
             <Select
-              value={projectFilter}
+              value={effectiveProjectFilter}
+              disabled={scopedProjectId != null}
               style={{ width: "100%" }}
               onChange={setProjectFilter}
               options={[
@@ -437,7 +443,7 @@ export default function Products() {
               disabled={!hasFilters}
               onClick={() => {
                 setSearchInput("");
-                setProjectFilter("all");
+                setProjectFilter(scopedProjectId == null ? "all" : String(scopedProjectId));
                 setSupplierFilter("all");
                 setCurrencyFilter("all");
               }}

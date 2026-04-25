@@ -30,6 +30,7 @@ import {
 import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 
 type TransactionFormValues = {
   type: TransactionType;
@@ -48,6 +49,7 @@ function TransactionModal({
   onClose: () => void;
 }) {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<TransactionFormValues>();
@@ -62,7 +64,7 @@ function TransactionModal({
         amountIqd: Number(values.amountIqd || 0),
         description: values.description?.trim() || null,
         date: values.date || null,
-        projectId: values.projectId ?? null,
+        projectId: scopedProjectId ?? values.projectId ?? null,
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -89,7 +91,13 @@ function TransactionModal({
       <Form<TransactionFormValues>
         form={form}
         layout="vertical"
-        initialValues={{ type: "credit", amountUsd: 0, amountIqd: 0, date: new Date().toISOString().slice(0, 10) }}
+        initialValues={{
+          type: "credit",
+          amountUsd: 0,
+          amountIqd: 0,
+          date: new Date().toISOString().slice(0, 10),
+          projectId: scopedProjectId ?? undefined,
+        }}
         onFinish={(values) => createMutation.mutate(values)}
       >
         <Row gutter={16}>
@@ -116,6 +124,7 @@ function TransactionModal({
           <Col xs={24} md={12}>
             <Form.Item name="projectId" label={t.txProject}>
               <Select
+                disabled={scopedProjectId != null}
                 allowClear
                 showSearch
                 optionFilterProp="label"
@@ -142,6 +151,7 @@ export default function WorkerDetail() {
   const { id } = useParams<{ id: string }>();
   const workerId = Number(id);
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const [showModal, setShowModal] = useState(false);
 
   const { data: worker, isLoading: workerLoading } = useQuery({
@@ -155,6 +165,11 @@ export default function WorkerDetail() {
     queryFn: () => listWorkerTransactions(workerId),
     enabled: Number.isFinite(workerId),
   });
+
+  const visibleTransactions =
+    scopedProjectId == null
+      ? transactions
+      : transactions?.filter((transaction) => transaction.projectId === scopedProjectId);
 
   if (workerLoading || !worker) {
     return workerLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : <Empty description={t.notFound} />;
@@ -203,16 +218,16 @@ export default function WorkerDetail() {
           </Button>
         }
       >
-        <Typography.Text type="secondary">{t.transactionsCount(transactions?.length ?? 0)}</Typography.Text>
+        <Typography.Text type="secondary">{t.transactionsCount(visibleTransactions?.length ?? 0)}</Typography.Text>
       </Card>
 
       {transactionsLoading ? (
         <Skeleton active paragraph={{ rows: 5 }} />
-      ) : !transactions?.length ? (
+      ) : !visibleTransactions?.length ? (
         <Empty description={t.noTransactions} />
       ) : (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-          {transactions.map((transaction) => (
+          {visibleTransactions.map((transaction) => (
             <Card key={transaction.id} size="small">
               <div className="flex items-center justify-between gap-4">
                 <Space>

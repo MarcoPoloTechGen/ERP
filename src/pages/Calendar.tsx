@@ -49,6 +49,7 @@ import {
 } from "@/lib/expense-assignment";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
 
 type CalendarEventKind = "income" | "expense" | "due" | "worker";
@@ -84,6 +85,7 @@ type CalendarEventDetails = {
   amountUsd: number;
   amountIqd: number;
   date: string;
+  projectId?: number | null;
   projectName?: string | null;
   counterparty?: string | null;
   description?: string | null;
@@ -156,6 +158,7 @@ function CalendarEntryModal({
   onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { profile } = useAuth();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -171,7 +174,8 @@ function CalendarEntryModal({
     queryFn: () => listProjectBuildings(),
     enabled: entryType === "expense",
   });
-  const selectedAssignment = parseExpenseAssignmentKey(assignmentKey, projectBuildings);
+  const effectiveAssignmentKey = assignmentKey ?? (scopedProjectId != null ? `project:${scopedProjectId}` : undefined);
+  const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
   const projectProducts = useMemo(() => {
@@ -184,21 +188,38 @@ function CalendarEntryModal({
     });
   }, [products, selectedProjectId]);
 
-  const assignmentOptions = useMemo(
-    () =>
-      buildExpenseAssignmentOptions({
+  const assignmentOptions = useMemo(() => {
+    const options = buildExpenseAssignmentOptions({
         projects,
         buildings: projectBuildings,
         projectWideLabel: t.projectGlobalCost,
-      }),
-    [projectBuildings, projects, t.projectGlobalCost],
-  );
+      });
+
+    if (scopedProjectId == null) {
+      return options;
+    }
+
+    const projectPrefix = `project:${scopedProjectId}`;
+    const scopedBuildingIds = new Set(
+      (projectBuildings ?? [])
+        .filter((building) => building.projectId === scopedProjectId)
+        .map((building) => `building:${building.projectId}:${building.id}`),
+    );
+    return options
+      .map((group) => ({
+        ...group,
+        options: group.options.filter(
+          (option) => option.value === projectPrefix || scopedBuildingIds.has(option.value),
+        ),
+      }))
+      .filter((group) => group.options.length > 0);
+  }, [projectBuildings, projects, scopedProjectId, t.projectGlobalCost]);
 
   const saveMutation = useMutation({
     mutationFn: (values: CalendarEntryFormValues) => {
       if (values.type === "income") {
         return createIncomeTransaction({
-          projectId: values.projectId as number,
+          projectId: scopedProjectId ?? (values.projectId as number),
           amountUsd: Number(values.amountUsd ?? 0),
           amountIqd: Number(values.amountIqd ?? 0),
           description: values.description?.trim() || null,
@@ -210,7 +231,7 @@ function CalendarEntryModal({
       return createInvoice({
         number: values.number?.trim() || t.newInvoice,
         supplierId: values.supplierId ?? null,
-        projectId: assignment.projectId,
+          projectId: scopedProjectId ?? assignment.projectId,
         buildingId: assignment.buildingId,
         productId: values.productId ?? null,
         totalAmountUsd: Number(values.totalAmountUsd ?? 0),
@@ -259,6 +280,7 @@ function CalendarEntryModal({
           type: "income",
           amountUsd: 0,
           amountIqd: 0,
+          projectId: scopedProjectId ?? undefined,
           date: selectedDate,
           number: "",
           totalAmountUsd: 0,
@@ -267,6 +289,7 @@ function CalendarEntryModal({
           paidAmountIqd: 0,
           status: "unpaid",
           invoiceDate: selectedDate,
+          assignmentKey: scopedProjectId != null ? `project:${scopedProjectId}` : undefined,
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -297,6 +320,7 @@ function CalendarEntryModal({
                   rules={[{ required: true, message: t.requiredField }]}
                 >
                   <Select
+                    disabled={scopedProjectId != null}
                     showSearch
                     optionFilterProp="label"
                     placeholder={t.noneOption}
@@ -424,6 +448,7 @@ function CalendarEntryModal({
 
 export default function CalendarPage() {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const [filter, setFilter] = useState<CalendarFilter>("all");
   const [selectedEvent, setSelectedEvent] = useState<SelectedEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -463,6 +488,7 @@ export default function CalendarPage() {
             amountUsd: income.amountUsd,
             amountIqd: income.amountIqd,
             date,
+            projectId: income.projectId,
             projectName: income.projectName,
             counterparty: income.createdByName,
             description: income.description,
@@ -491,6 +517,7 @@ export default function CalendarPage() {
               amountUsd: invoice.totalAmountUsd,
               amountIqd: invoice.totalAmountIqd,
               date: invoiceDate,
+              projectId: invoice.projectId,
               projectName: invoice.projectName,
               counterparty: invoice.supplierName,
               description: invoice.notes,
@@ -516,6 +543,7 @@ export default function CalendarPage() {
               amountUsd: invoice.remainingAmountUsd,
               amountIqd: invoice.remainingAmountIqd,
               date: dueDate,
+              projectId: invoice.projectId,
               projectName: invoice.projectName,
               counterparty: invoice.supplierName,
               description: invoice.notes,
@@ -549,6 +577,7 @@ export default function CalendarPage() {
             amountUsd: transaction.amountUsd,
             amountIqd: transaction.amountIqd,
             date,
+            projectId: transaction.projectId,
             projectName: transaction.projectName,
             counterparty: workerName,
             description: transaction.description,
@@ -562,15 +591,15 @@ export default function CalendarPage() {
   }, [data, t]);
 
   const visibleEvents = useMemo(() => {
-    if (filter === "all") {
-      return events;
-    }
-
-    return events.filter((event) => event.extendedProps.kind === filter);
-  }, [events, filter]);
+    return events.filter((event) => {
+      const matchesProject = scopedProjectId == null || event.extendedProps.projectId === scopedProjectId;
+      const matchesType = filter === "all" || event.extendedProps.kind === filter;
+      return matchesProject && matchesType;
+    });
+  }, [events, filter, scopedProjectId]);
 
   const counts = useMemo(() => {
-    return events.reduce(
+    return visibleEvents.reduce(
       (total, event) => {
         total.all += 1;
         total[event.extendedProps.kind] += 1;
@@ -578,7 +607,7 @@ export default function CalendarPage() {
       },
       { all: 0, income: 0, expense: 0, due: 0, worker: 0 } as Record<CalendarFilter, number>,
     );
-  }, [events]);
+  }, [visibleEvents]);
 
   function handleEventClick(info: EventClickArg) {
     const details = info.event.extendedProps as CalendarEventDetails;

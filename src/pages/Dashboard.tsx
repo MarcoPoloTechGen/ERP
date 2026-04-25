@@ -6,6 +6,7 @@ import { Card, Col, Empty, Progress, Row, Skeleton, Space, Tag, Typography } fro
 import { erpKeys, getDashboardOverview, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 
 function projectStatusColor(status: ProjectStatus) {
   if (status === "completed") {
@@ -57,9 +58,10 @@ function StatCard({
 
 export default function Dashboard() {
   const { t } = useLang();
+  const { selectedProjectId } = useProjectScope();
   const { data, isLoading } = useQuery({
-    queryKey: erpKeys.dashboard,
-    queryFn: getDashboardOverview,
+    queryKey: [...erpKeys.dashboard, selectedProjectId],
+    queryFn: () => getDashboardOverview(selectedProjectId),
   });
 
   if (isLoading || !data) {

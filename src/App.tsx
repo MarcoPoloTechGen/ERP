@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import AuthPage from "@/pages/Auth";
 import { refineResources } from "@/lib/refine";
 import { LangProvider, getStoredLang, getTranslationsForLang, useLang } from "@/lib/i18n";
+import { ProjectScopeProvider } from "@/lib/project-scope";
 import { supabase, supabaseConfigError } from "@/lib/supabase";
 
 // AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
@@ -208,27 +209,29 @@ function AppRouter() {
   }
 
   return (
-    <Layout>
-      <Suspense fallback={<RouteLoading />}>
-        <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/workers" component={Workers} />
-          <Route path="/workers/:id" component={WorkerDetail} />
-          <Route path="/projects" component={Projects} />
-          <Route path="/projects/:id" component={ProjectDetail} />
-          <Route path="/suppliers" component={Suppliers} />
-          <Route path="/products" component={Products} />
-          <Route path="/calendar" component={CalendarPage} />
-          <Route path="/income" component={Income} />
-          <Route path="/expenses" component={Invoices} />
-          <Route path="/expenses/:id" component={InvoiceDetail} />
-          <Route path="/admin" component={Admin} />
-          <Route path="/invoices" component={Invoices} />
-          <Route path="/invoices/:id" component={InvoiceDetail} />
-          <Route component={NotFound} />
-        </Switch>
-      </Suspense>
-    </Layout>
+    <ProjectScopeProvider>
+      <Layout>
+        <Suspense fallback={<RouteLoading />}>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/workers" component={Workers} />
+            <Route path="/workers/:id" component={WorkerDetail} />
+            <Route path="/projects" component={Projects} />
+            <Route path="/projects/:id" component={ProjectDetail} />
+            <Route path="/suppliers" component={Suppliers} />
+            <Route path="/products" component={Products} />
+            <Route path="/calendar" component={CalendarPage} />
+            <Route path="/income" component={Income} />
+            <Route path="/expenses" component={Invoices} />
+            <Route path="/expenses/:id" component={InvoiceDetail} />
+            <Route path="/admin" component={Admin} />
+            <Route path="/invoices" component={Invoices} />
+            <Route path="/invoices/:id" component={InvoiceDetail} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
+      </Layout>
+    </ProjectScopeProvider>
   );
 }
 

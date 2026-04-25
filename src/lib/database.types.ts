@@ -534,6 +534,7 @@ export type Database = {
           full_name: string | null
           id: string
           role: string
+          selected_project_id: number | null
         }
         Insert: {
           created_at?: string
@@ -541,6 +542,7 @@ export type Database = {
           full_name?: string | null
           id: string
           role?: string
+          selected_project_id?: number | null
         }
         Update: {
           created_at?: string
@@ -548,6 +550,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           role?: string
+          selected_project_id?: number | null
         }
         Relationships: []
       }

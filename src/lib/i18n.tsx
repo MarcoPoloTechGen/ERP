@@ -92,6 +92,7 @@ type TranslationShape = {
   filter: string;
   all: string;
   allProjects: string;
+  projectScope: string;
   allSuppliers: string;
   allStatuses: string;
   allCurrencies: string;
@@ -391,6 +392,7 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     filter: "Filter",
     all: "All",
     allProjects: "All projects",
+    projectScope: "Project scope",
     allSuppliers: "All suppliers",
     allStatuses: "All statuses",
     allCurrencies: "All currencies",
@@ -692,6 +694,7 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     filter: "فلتەر",
     all: "هەموو",
     allProjects: "هەموو پڕۆژەکان",
+    projectScope: "سنوری پڕۆژە",
     allSuppliers: "هەموو دابینکەرەکان",
     allStatuses: "هەموو دۆخەکان",
     allCurrencies: "هەموو دراوەکان",

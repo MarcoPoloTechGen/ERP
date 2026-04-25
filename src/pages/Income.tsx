@@ -49,6 +49,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 
 type IncomeRow = {
   id: number | null;
@@ -105,6 +106,7 @@ function IncomeModal({
   onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { profile } = useAuth();
   const { message } = App.useApp();
   const [form] = Form.useForm<IncomeFormValues>();
@@ -145,13 +147,13 @@ function IncomeModal({
     }
 
     form.setFieldsValue({
-      projectId: income?.project_id ?? undefined,
+      projectId: scopedProjectId ?? income?.project_id ?? undefined,
       amountUsd: income?.amount_usd ?? (income?.currency === "USD" ? income?.amount ?? undefined : undefined),
       amountIqd: income?.amount_iqd ?? (income?.currency === "IQD" ? income?.amount ?? undefined : undefined),
       description: income?.description ?? "",
       date: formatDateInput(income?.date) || new Date().toISOString().slice(0, 10),
     });
-  }, [form, income, open]);
+  }, [form, income, open, scopedProjectId]);
 
   return (
     <Modal
@@ -178,6 +180,7 @@ function IncomeModal({
           <Col span={12}>
             <Form.Item name="projectId" label={t.projectOption} rules={[{ required: true, message: t.requiredField }]}>
               <Select
+                disabled={scopedProjectId != null}
                 placeholder={t.noneOption}
                 options={projects?.map((project) => ({ label: project.name, value: project.id }))}
               />
@@ -209,6 +212,7 @@ function IncomeModal({
 
 export default function Income() {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedIncome, setSelectedIncome] = useState<IncomeRow | null>(null);
@@ -218,6 +222,7 @@ export default function Income() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const search = useDeferredValue(searchInput.trim());
+  const effectiveProjectFilter = scopedProjectId == null ? projectFilter : String(scopedProjectId);
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<IncomeRow>({
@@ -234,8 +239,8 @@ export default function Income() {
 
   useEffect(() => {
     setCurrentPage(1);
-    setFilters(buildFilters({ search, projectId: projectFilter, currency: currencyFilter, dateFrom, dateTo }), "replace");
-  }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters]);
+    setFilters(buildFilters({ search, projectId: effectiveProjectFilter, currency: currencyFilter, dateFrom, dateTo }), "replace");
+  }, [currencyFilter, dateFrom, dateTo, effectiveProjectFilter, search, setCurrentPage, setFilters]);
 
   const historyQuery = useQuery({
     queryKey: erpKeys.incomeHistory,
@@ -260,7 +265,16 @@ export default function Income() {
   });
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
-  const hasFilters = Boolean(searchInput || dateFrom || dateTo || projectFilter !== "all" || currencyFilter !== "all");
+  const historyRows = useMemo(
+    () =>
+      scopedProjectId == null
+        ? (historyQuery.data ?? [])
+        : (historyQuery.data ?? []).filter((entry) => entry.projectId === scopedProjectId),
+    [historyQuery.data, scopedProjectId],
+  );
+  const hasFilters = Boolean(
+    searchInput || dateFrom || dateTo || (scopedProjectId == null && projectFilter !== "all") || currencyFilter !== "all",
+  );
 
   const columns = useMemo<TableProps<IncomeRow>["columns"]>(
     () => [
@@ -382,13 +396,14 @@ export default function Income() {
         dateFrom={dateFrom}
         dateTo={dateTo}
         hasFilters={hasFilters}
-        projectValue={projectFilter}
+        projectDisabled={scopedProjectId != null}
+        projectValue={effectiveProjectFilter}
         projects={projects}
         searchPlaceholder={`${t.search} ${t.income.toLowerCase()}`}
         searchValue={searchInput}
         onClear={() => {
           setSearchInput("");
-          setProjectFilter("all");
+          setProjectFilter(scopedProjectId == null ? "all" : String(scopedProjectId));
           setCurrencyFilter("all");
           setDateFrom("");
           setDateTo("");
@@ -431,7 +446,7 @@ export default function Income() {
             rowKey="id"
             size="small"
             loading={historyQuery.isLoading}
-            dataSource={historyQuery.data ?? []}
+            dataSource={historyRows}
             columns={historyColumns}
             scroll={{ x: 1000 }}
             locale={{ emptyText: t.noIncomeLog }}

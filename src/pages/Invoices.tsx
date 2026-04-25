@@ -61,6 +61,7 @@ import {
   toErrorMessage,
 } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 import {
   createSignedInvoiceImageUrl,
   createSignedInvoiceImageUrls,
@@ -209,6 +210,7 @@ function InvoiceModal({
   onSaved: () => void;
 }) {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { profile } = useAuth();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -226,7 +228,8 @@ function InvoiceModal({
     queryKey: erpKeys.projectBuildings(0),
     queryFn: () => listProjectBuildings(),
   });
-  const selectedAssignment = parseExpenseAssignmentKey(assignmentKey, projectBuildings);
+  const effectiveAssignmentKey = assignmentKey ?? (scopedProjectId != null ? `project:${scopedProjectId}` : undefined);
+  const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
   useEffect(() => {
@@ -274,15 +277,44 @@ function InvoiceModal({
     });
   }, [products, selectedProjectId]);
 
-  const assignmentOptions = useMemo(
-    () =>
-      buildExpenseAssignmentOptions({
+  const assignmentOptions = useMemo(() => {
+    const options = buildExpenseAssignmentOptions({
         projects,
         buildings: projectBuildings,
         projectWideLabel: t.projectGlobalCost,
-      }),
-    [projectBuildings, projects, t.projectGlobalCost],
-  );
+      });
+
+    if (scopedProjectId == null) {
+      return options;
+    }
+
+    const projectPrefix = `project:${scopedProjectId}`;
+    const scopedBuildingIds = new Set(
+      (projectBuildings ?? [])
+        .filter((building) => building.projectId === scopedProjectId)
+        .map((building) => `building:${building.projectId}:${building.id}`),
+    );
+    return options
+      .map((group) => ({
+        ...group,
+        options: group.options.filter(
+          (option) => option.value === projectPrefix || scopedBuildingIds.has(option.value),
+        ),
+      }))
+      .filter((group) => group.options.length > 0);
+  }, [projectBuildings, projects, scopedProjectId, t.projectGlobalCost]);
+
+  useEffect(() => {
+    if (scopedProjectId == null) {
+      return;
+    }
+
+    const currentAssignment = parseExpenseAssignmentKey(form.getFieldValue("assignmentKey"), projectBuildings);
+    if (currentAssignment.projectId !== scopedProjectId) {
+      form.setFieldValue("assignmentKey", `project:${scopedProjectId}`);
+      form.setFieldValue("productId", undefined);
+    }
+  }, [form, projectBuildings, scopedProjectId]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
@@ -373,7 +405,10 @@ function InvoiceModal({
         initialValues={{
           number: invoice?.number ?? "",
           supplierId: invoice?.supplier_id ?? undefined,
-          assignmentKey: expenseAssignmentKeyFromRecord(invoice?.project_id, invoice?.building_id),
+          assignmentKey:
+            scopedProjectId != null && !invoice
+              ? `project:${scopedProjectId}`
+              : expenseAssignmentKeyFromRecord(invoice?.project_id, invoice?.building_id),
           productId: invoice?.product_id ?? undefined,
           totalAmountUsd:
             invoice?.total_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.total_amount ?? undefined : undefined),
@@ -516,6 +551,7 @@ function InvoiceModal({
 
 export default function Invoices() {
   const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
@@ -530,6 +566,7 @@ export default function Invoices() {
   const [dateTo, setDateTo] = useState("");
   const [imageUrlsByPath, setImageUrlsByPath] = useState(new Map<string, string>());
   const search = useDeferredValue(searchInput.trim());
+  const effectiveProjectFilter = scopedProjectId == null ? projectFilter : String(scopedProjectId);
 
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
@@ -541,10 +578,15 @@ export default function Invoices() {
       return;
     }
 
+    if (scopedProjectId != null) {
+      setVisualizationProjectId(scopedProjectId);
+      return;
+    }
+
     if (visualizationProjectId == null || !projects.some((project) => project.id === visualizationProjectId)) {
       setVisualizationProjectId(projects[0].id);
     }
-  }, [projects, visualizationProjectId]);
+  }, [projects, scopedProjectId, visualizationProjectId]);
 
   const selectedVisualizationProjectId = visualizationProjectId;
   const visualizationBuildingsQuery = useQuery({
@@ -571,7 +613,7 @@ export default function Invoices() {
       buildFilters({
         search,
         status: statusFilter,
-        projectId: projectFilter,
+        projectId: effectiveProjectFilter,
         supplierId: supplierFilter,
         currency: currencyFilter,
         dateFrom,
@@ -579,7 +621,7 @@ export default function Invoices() {
       }),
       "replace",
     );
-  }, [currencyFilter, dateFrom, dateTo, projectFilter, search, setCurrentPage, setFilters, statusFilter, supplierFilter]);
+  }, [currencyFilter, dateFrom, dateTo, effectiveProjectFilter, search, setCurrentPage, setFilters, statusFilter, supplierFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: (invoice: InvoiceRow) => {
@@ -624,7 +666,7 @@ export default function Invoices() {
   const hasFilters = Boolean(
     searchInput ||
       statusFilter !== "all" ||
-      projectFilter !== "all" ||
+      (scopedProjectId == null && projectFilter !== "all") ||
       supplierFilter !== "all" ||
       currencyFilter !== "all" ||
       dateFrom ||
@@ -814,6 +856,7 @@ export default function Invoices() {
         invoices={allInvoicesQuery.data}
         loading={allInvoicesQuery.isLoading || visualizationBuildingsQuery.isLoading}
         projects={projects}
+        projectLocked={scopedProjectId != null}
         selectedProjectId={selectedVisualizationProjectId}
         onProjectChange={setVisualizationProjectId}
       />
@@ -828,7 +871,8 @@ export default function Invoices() {
         dateFrom={dateFrom}
         dateTo={dateTo}
         hasFilters={hasFilters}
-        projectValue={projectFilter}
+        projectDisabled={scopedProjectId != null}
+        projectValue={effectiveProjectFilter}
         projects={projects}
         searchPlaceholder={`${t.search} ${t.expenses.toLowerCase()}`}
         searchValue={searchInput}
@@ -843,7 +887,7 @@ export default function Invoices() {
         onClear={() => {
           setSearchInput("");
           setStatusFilter("all");
-          setProjectFilter("all");
+          setProjectFilter(scopedProjectId == null ? "all" : String(scopedProjectId));
           setSupplierFilter("all");
           setCurrencyFilter("all");
           setDateFrom("");

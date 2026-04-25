@@ -114,6 +114,7 @@ type AppSettingsUpsertPayload = Pick<
 >;
 type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
+type ProfileSelectedProjectUpdatePayload = Pick<TableUpdatePayload<"profiles">, "selected_project_id">;
 type InvoicePaidUpdatePayload = {
   paid_amount: number;
   paid_amount_usd: number;
@@ -139,6 +140,7 @@ export interface AppUserProfile {
   email: string | null;
   fullName: string | null;
   role: UserRole;
+  selectedProjectId: number | null;
   createdAt: string | null;
 }
 
@@ -645,6 +647,7 @@ function normalizeProfile(row: ProfileRow): AppUserProfile {
     email: readString(row, "email"),
     fullName: readString(row, "full_name", "fullName"),
     role: toUserRole(readString(row, "role")),
+    selectedProjectId: readNumber(row, "selected_project_id", "selectedProjectId"),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -1135,7 +1138,7 @@ async function hydrateInvoiceHistory(entries: InvoiceHistoryEntry[]) {
   }));
 }
 
-async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
+async function getDashboardOverviewFallback(projectId?: number | null): Promise<DashboardOverview> {
   const [workers, projects, suppliers, invoices, transactions] = await Promise.all([
     listWorkers(),
     listProjects(),
@@ -1144,7 +1147,13 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
     listWorkerTransactions(),
   ]);
 
-  const activeInvoices = invoices.filter((invoice) => invoice.recordStatus === "active");
+  const visibleProjects = projectId == null ? projects : projects.filter((project) => project.id === projectId);
+  const activeInvoices = invoices.filter(
+    (invoice) => invoice.recordStatus === "active" && (projectId == null || invoice.projectId === projectId),
+  );
+  const visibleTransactions = transactions.filter(
+    (transaction) => projectId == null || transaction.projectId === projectId,
+  );
   const totalInvoiceAmount = activeInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
   const totalPaidAmount = activeInvoices.reduce((total, invoice) => total + invoice.paidAmount, 0);
   const remainingAmount = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmount, 0);
@@ -1155,7 +1164,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
   const totalPaidAmountIqd = activeInvoices.reduce((total, invoice) => total + invoice.paidAmountIqd, 0);
   const remainingAmountIqd = activeInvoices.reduce((total, invoice) => total + invoice.remainingAmountIqd, 0);
 
-  const projectsSummary = projects
+  const projectsSummary = visibleProjects
     .map((project) => {
       const relatedInvoices = activeInvoices.filter((invoice) => invoice.projectId === project.id);
       const totalInvoiced = relatedInvoices.reduce((total, invoice) => total + invoice.totalAmount, 0);
@@ -1190,7 +1199,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
 
   const workersSummary = workers
     .map((worker) => {
-      const relatedTransactions = transactions.filter((transaction) => transaction.workerId === worker.id);
+      const relatedTransactions = visibleTransactions.filter((transaction) => transaction.workerId === worker.id);
       return {
         id: worker.id,
         name: worker.name,
@@ -1250,7 +1259,7 @@ async function getDashboardOverviewFallback(): Promise<DashboardOverview> {
 
   return {
     totalWorkers: workers.length,
-    activeProjects: projects.filter((project) => project.status === "active").length,
+    activeProjects: visibleProjects.filter((project) => project.status === "active").length,
     totalSuppliers: suppliers.length,
     invoicesUnpaid: activeInvoices.filter((invoice) => invoice.status !== "paid").length,
     totalInvoiceAmount,
@@ -1494,6 +1503,19 @@ export async function updateProfileName(id: string, fullName: string) {
 
   const payload: ProfileNameUpdatePayload = { full_name: trimmedFullName };
   const { error } = await supabase.from("profiles").update(payload).eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateMySelectedProjectId(projectId: number | null) {
+  const currentUserId = await getCurrentUserId();
+  if (!currentUserId) {
+    throw new Error("User is not authenticated.");
+  }
+
+  const payload: ProfileSelectedProjectUpdatePayload = { selected_project_id: projectId };
+  const { error } = await supabase.from("profiles").update(payload).eq("id", currentUserId);
   if (error) {
     throw new Error(error.message);
   }
@@ -1912,7 +1934,11 @@ export async function deleteIncomeTransaction(id: number) {
   }
 }
 
-export async function getDashboardOverview(): Promise<DashboardOverview> {
+export async function getDashboardOverview(projectId?: number | null): Promise<DashboardOverview> {
+  if (projectId != null) {
+    return getDashboardOverviewFallback(projectId);
+  }
+
   const { data, error } = await supabase.rpc("get_dashboard_overview");
 
   if (error) {

@@ -15,11 +15,12 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Button } from "antd";
+import { Button, Select } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
+import { useProjectScope } from "@/lib/project-scope";
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "en", label: "EN" },
@@ -62,6 +63,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { t, lang, setLang } = useLang();
   const { profile, signOut } = useAuth();
+  const { forcedProjectId, loading: projectScopeLoading, projects, selectedProjectId, setSelectedProjectId } =
+    useProjectScope();
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
     queryFn: getAppSettings,
@@ -138,6 +141,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="space-y-3 border-t border-sidebar-border pt-4">
+            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
+                {t.projectScope}
+              </p>
+              <Select<string>
+                value={selectedProjectId == null ? "all" : String(selectedProjectId)}
+                loading={projectScopeLoading}
+                disabled={projects.length <= 1 || forcedProjectId != null}
+                optionFilterProp="label"
+                showSearch
+                style={{ width: "100%" }}
+                onChange={(value) => setSelectedProjectId(value === "all" ? null : Number(value))}
+                options={[
+                  { label: t.allProjects, value: "all", disabled: forcedProjectId != null },
+                  ...projects.map((project) => ({ label: project.name, value: String(project.id) })),
+                ]}
+              />
+            </div>
+
             <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
               <p className="truncate text-sm font-medium text-sidebar-foreground">
                 {profile?.fullName ?? profile?.email ?? t.user}

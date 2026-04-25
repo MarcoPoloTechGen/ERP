@@ -16,6 +16,7 @@ type ProjectExpenseVisualizationProps = {
   invoices?: Invoice[];
   loading?: boolean;
   projects?: Project[];
+  projectLocked?: boolean;
   selectedProjectId: number | null;
   onProjectChange: (projectId: number) => void;
 };
@@ -131,6 +132,7 @@ export default function ProjectExpenseVisualization({
   invoices = [],
   loading = false,
   projects = [],
+  projectLocked = false,
   selectedProjectId,
   onProjectChange,
 }: ProjectExpenseVisualizationProps) {
@@ -175,7 +177,7 @@ export default function ProjectExpenseVisualization({
         <Space direction="vertical" size={6} style={{ width: "100%" }}>
           <Typography.Text strong>{t.projectOption}</Typography.Text>
           <Select<number>
-            disabled={!projects.length}
+            disabled={projectLocked || !projects.length}
             options={projects.map((project) => ({ label: project.name, value: project.id }))}
             placeholder={t.allProjects}
             showSearch
