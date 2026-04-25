@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { AlertTriangle, FolderKanban, Truck, Users } from "lucide-react";
 import { Card, Col, Empty, Progress, Row, Skeleton, Space, Tag, Typography } from "antd";
 import { erpKeys, getDashboardOverview, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
-import { formatCurrencyPair } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 function projectStatusColor(status: ProjectStatus) {
@@ -141,7 +141,7 @@ export default function Dashboard() {
           </Col>
         </Row>
         <Space direction="vertical" size="small" style={{ width: "100%", marginTop: 20 }}>
-          <Progress percent={paymentPercentUsd} format={(percent) => `USD ${percent}%`} />
+          <Progress percent={paymentPercentUsd} format={(percent) => `${formatCurrencyLabel("USD")} ${percent}%`} />
           <Progress percent={paymentPercentIqd} format={(percent) => `IQD ${percent}%`} />
         </Space>
       </Card>

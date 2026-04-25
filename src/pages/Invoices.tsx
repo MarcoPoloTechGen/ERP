@@ -25,11 +25,13 @@ import { Image as ImageIcon } from "lucide-react";
 import FinanceFilters from "@/components/finance/FinanceFilters";
 import FinancePageHeader from "@/components/finance/FinancePageHeader";
 import FinanceRowActions from "@/components/finance/FinanceRowActions";
+import ProjectExpenseVisualization from "@/components/finance/ProjectExpenseVisualization";
 import { standardPagination } from "@/components/finance/table";
 import {
   createInvoice,
   deleteInvoice,
   erpKeys,
+  listInvoices,
   listProducts,
   listProjectBuildings,
   listProjects,
@@ -45,7 +47,7 @@ import {
   expenseAssignmentKeyFromRecord,
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
-import { formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addCurrencyAmountFilter,
@@ -451,12 +453,12 @@ function InvoiceModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} USD`}>
+            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="paidAmountUsd" label={`${t.paidAmount} USD`}>
+            <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -515,11 +517,13 @@ function InvoiceModal({
 export default function Invoices() {
   const { t } = useLang();
   const { message } = App.useApp();
+  const queryClient = useQueryClient();
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
+  const [visualizationProjectId, setVisualizationProjectId] = useState<number | null>(null);
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -529,6 +533,25 @@ export default function Invoices() {
 
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
+  const allInvoicesQuery = useQuery({ queryKey: erpKeys.invoices, queryFn: listInvoices });
+
+  useEffect(() => {
+    if (!projects?.length) {
+      setVisualizationProjectId(null);
+      return;
+    }
+
+    if (visualizationProjectId == null || !projects.some((project) => project.id === visualizationProjectId)) {
+      setVisualizationProjectId(projects[0].id);
+    }
+  }, [projects, visualizationProjectId]);
+
+  const selectedVisualizationProjectId = visualizationProjectId;
+  const visualizationBuildingsQuery = useQuery({
+    queryKey: erpKeys.projectBuildings(selectedVisualizationProjectId ?? 0),
+    queryFn: () => listProjectBuildings(selectedVisualizationProjectId ?? undefined),
+    enabled: selectedVisualizationProjectId != null,
+  });
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<InvoiceRow>({
     resource: "app_invoices",
@@ -566,7 +589,10 @@ export default function Invoices() {
 
       return deleteInvoice(invoice.id);
     },
-    onSuccess: () => void tableQuery.refetch(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: erpKeys.invoices });
+      void tableQuery.refetch();
+    },
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 
@@ -729,9 +755,9 @@ export default function Invoices() {
       [t.products]: invoice.product_name ?? "",
       [t.projectOption]: invoice.project_name ?? "",
       [t.createdBy]: invoice.created_by_name ?? "",
-      [`${t.totalAmount} USD`]: asNumber(invoice.total_amount_usd),
-      [`${t.paidAmount} USD`]: asNumber(invoice.paid_amount_usd),
-      [`${t.remaining_label} USD`]: asNumber(invoice.remaining_amount_usd),
+      [`${t.totalAmount} ${formatCurrencyLabel("USD")}`]: asNumber(invoice.total_amount_usd),
+      [`${t.paidAmount} ${formatCurrencyLabel("USD")}`]: asNumber(invoice.paid_amount_usd),
+      [`${t.remaining_label} ${formatCurrencyLabel("USD")}`]: asNumber(invoice.remaining_amount_usd),
       [`${t.totalAmount} IQD`]: asNumber(invoice.total_amount_iqd),
       [`${t.paidAmount} IQD`]: asNumber(invoice.paid_amount_iqd),
       [`${t.remaining_label} IQD`]: asNumber(invoice.remaining_amount_iqd),
@@ -762,6 +788,34 @@ export default function Invoices() {
         }}
         onExportCsv={() => exportInvoices("csv")}
         onExportExcel={() => exportInvoices("xlsx")}
+      />
+
+      {allInvoicesQuery.isError || visualizationBuildingsQuery.isError ? (
+        <Alert
+          showIcon
+          type="error"
+          message={t.invoicesTitle}
+          description={toErrorMessage(allInvoicesQuery.error ?? visualizationBuildingsQuery.error)}
+          action={
+            <Button
+              onClick={() => {
+                void allInvoicesQuery.refetch();
+                void visualizationBuildingsQuery.refetch();
+              }}
+            >
+              {t.retry}
+            </Button>
+          }
+        />
+      ) : null}
+
+      <ProjectExpenseVisualization
+        buildings={visualizationBuildingsQuery.data}
+        invoices={allInvoicesQuery.data}
+        loading={allInvoicesQuery.isLoading || visualizationBuildingsQuery.isLoading}
+        projects={projects}
+        selectedProjectId={selectedVisualizationProjectId}
+        onProjectChange={setVisualizationProjectId}
       />
 
       <FinanceFilters<InvoiceStatus>

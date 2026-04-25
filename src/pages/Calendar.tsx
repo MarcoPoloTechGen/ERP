@@ -47,7 +47,7 @@ import {
   buildExpenseAssignmentOptions,
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
-import { formatCurrencyPair, formatDate } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import { toErrorMessage } from "@/lib/refine-helpers";
 
@@ -305,7 +305,7 @@ function CalendarEntryModal({
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="amountUsd" label={`${t.amount} USD`}>
+                <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
                   <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
@@ -380,12 +380,12 @@ function CalendarEntryModal({
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="totalAmountUsd" label={`${t.totalAmount} USD`}>
+                <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`}>
                   <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
-                <Form.Item name="paidAmountUsd" label={`${t.paidAmount} USD`}>
+                <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`}>
                   <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
                 </Form.Item>
               </Col>

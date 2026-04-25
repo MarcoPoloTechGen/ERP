@@ -33,7 +33,7 @@ import {
   updateProduct,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrencyPair } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addCurrencyAmountFilter,
@@ -219,7 +219,7 @@ function ProductModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="unitPriceUsd" label={`${t.unitPrice} USD`}>
+            <Form.Item name="unitPriceUsd" label={`${t.unitPrice} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -284,7 +284,7 @@ export default function Products() {
         <Space direction="vertical" size={0}>
           <Space size="small" wrap>
             <Typography.Text strong>{value ?? "-"}</Typography.Text>
-            {product.unit_price_usd ? <Tag>USD</Tag> : null}
+            {product.unit_price_usd ? <Tag>{formatCurrencyLabel("USD")}</Tag> : null}
             {product.unit_price_iqd ? <Tag>IQD</Tag> : null}
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -344,7 +344,7 @@ export default function Products() {
       [t.projectOption]: product.project_name ?? "",
       [t.buildingLabel]: product.building_name ?? "",
       [t.unit]: product.unit ?? "",
-      [`${t.unitPrice} USD`]: product.unit_price_usd ?? 0,
+      [`${t.unitPrice} ${formatCurrencyLabel("USD")}`]: product.unit_price_usd ?? 0,
       [`${t.unitPrice} IQD`]: product.unit_price_iqd ?? 0,
     }));
 
@@ -426,8 +426,8 @@ export default function Products() {
               onChange={setCurrencyFilter}
               options={[
                 { label: t.allCurrencies, value: "all" },
-                { label: "USD", value: "USD" },
-                { label: "IQD", value: "IQD" },
+                { label: formatCurrencyLabel("USD"), value: "USD" },
+                { label: formatCurrencyLabel("IQD"), value: "IQD" },
               ]}
             />
           </Col>

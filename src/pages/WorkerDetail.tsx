@@ -27,7 +27,7 @@ import {
   listWorkerTransactions,
   type TransactionType,
 } from "@/lib/erp";
-import { formatCurrencyPair, formatDate } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 
@@ -104,7 +104,7 @@ function TransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} USD`}>
+            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>

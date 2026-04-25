@@ -37,7 +37,7 @@ import {
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrencyPair, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput, formatDateTime } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addCurrencyAmountFilter,
@@ -184,7 +184,7 @@ function IncomeModal({
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} USD`}>
+            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -343,7 +343,7 @@ export default function Income() {
     const fileBase = t.incomeTitle;
     const exportRows = rows.map((income) => ({
       [t.projectOption]: income.project_name ?? "",
-      [`${t.amount} USD`]: asNumber(income.amount_usd),
+      [`${t.amount} ${formatCurrencyLabel("USD")}`]: asNumber(income.amount_usd),
       [`${t.amount} IQD`]: asNumber(income.amount_iqd),
       [t.user]: income.created_by_name ?? "",
       [t.description]: income.description ?? "",

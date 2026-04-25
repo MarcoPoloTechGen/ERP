@@ -1,5 +1,6 @@
 import { Button, Card, Col, Input, Row, Select } from "antd";
 import type { Currency } from "@/lib/erp";
+import { formatCurrencyLabel } from "@/lib/format";
 
 type NamedOption = {
   id: number;
@@ -116,8 +117,8 @@ export default function FinanceFilters<TStatus extends string>({
             onChange={onCurrencyChange}
             options={[
               { label: allCurrenciesLabel, value: "all" },
-              { label: "USD", value: "USD" },
-              { label: "IQD", value: "IQD" },
+              { label: formatCurrencyLabel("USD"), value: "USD" },
+              { label: formatCurrencyLabel("IQD"), value: "IQD" },
             ]}
           />
         </Col>

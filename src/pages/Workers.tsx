@@ -24,7 +24,7 @@ import {
 import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { createWorker, deleteWorker, erpKeys, listWorkers, updateWorker } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrencyPair } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addEqualFilter,
@@ -259,7 +259,7 @@ export default function Workers() {
       [t.role]: worker.role ?? "",
       [t.category]: worker.category ?? "",
       [t.phone]: worker.phone ?? "",
-      [`${t.balance} USD`]: balanceUsdValue(worker),
+      [`${t.balance} ${formatCurrencyLabel("USD")}`]: balanceUsdValue(worker),
       [`${t.balance} IQD`]: balanceIqdValue(worker),
       [t.status]: balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes,
     }));

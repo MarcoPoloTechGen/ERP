@@ -4,7 +4,7 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Button, Card, Col, Empty, Image, Progress, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
 import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid, type InvoiceStatus } from "@/lib/erp";
-import { formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 function invoiceStatusColor(status: InvoiceStatus) {
@@ -177,7 +177,7 @@ export default function InvoiceDetail() {
             </Col>
           </Row>
           <Space direction="vertical" size="small" style={{ width: "100%" }}>
-            <Progress percent={progressUsd} format={(percent) => `USD ${percent}%`} />
+            <Progress percent={progressUsd} format={(percent) => `${formatCurrencyLabel("USD")} ${percent}%`} />
             <Progress percent={progressIqd} format={(percent) => `IQD ${percent}%`} />
           </Space>
         </Space>

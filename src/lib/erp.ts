@@ -178,6 +178,12 @@ export interface Supplier {
   createdAt: string | null;
 }
 
+export interface SupplierBalance {
+  supplierId: number;
+  balanceUsd: number;
+  balanceIqd: number;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -492,6 +498,7 @@ export const erpKeys = {
   worker: (id: number) => ["worker", id] as const,
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,
   suppliers: ["suppliers"] as const,
+  supplierBalances: ["invoices", "supplierBalances"] as const,
   projects: ["projects"] as const,
   project: (id: number) => ["project", id] as const,
   projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
@@ -1549,6 +1556,41 @@ export async function listSuppliers() {
     supabase.from("suppliers").select("*").order("created_at", { ascending: false }),
     normalizeSupplier,
   );
+}
+
+export async function listSupplierBalances(): Promise<SupplierBalance[]> {
+  const invoiceBalances = await executeSelect(
+    supabase
+      .from("app_invoices")
+      .select("supplier_id,total_amount_usd,paid_amount_usd,total_amount_iqd,paid_amount_iqd,record_status")
+      .eq("record_status", "active"),
+    (row: Row) => ({
+      supplierId: readNumber(row, "supplier_id", "supplierId"),
+      balanceUsd: (readNumber(row, "total_amount_usd", "totalAmountUsd") ?? 0) -
+        (readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? 0),
+      balanceIqd: (readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? 0) -
+        (readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? 0),
+    }),
+  );
+  const balancesBySupplier = new Map<number, { balanceUsd: number; balanceIqd: number }>();
+
+  for (const balance of invoiceBalances) {
+    if (balance.supplierId == null) {
+      continue;
+    }
+
+    const current = balancesBySupplier.get(balance.supplierId) ?? { balanceUsd: 0, balanceIqd: 0 };
+    balancesBySupplier.set(balance.supplierId, {
+      balanceUsd: current.balanceUsd + balance.balanceUsd,
+      balanceIqd: current.balanceIqd + balance.balanceIqd,
+    });
+  }
+
+  return Array.from(balancesBySupplier, ([supplierId, balance]) => ({
+    supplierId,
+    balanceUsd: balance.balanceUsd,
+    balanceIqd: balance.balanceIqd,
+  }));
 }
 
 export async function createSupplier(input: SupplierInput) {

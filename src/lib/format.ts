@@ -1,5 +1,10 @@
 import type { Currency } from "@/lib/erp";
 
+const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
+  USD: "$",
+  IQD: "IQD",
+};
+
 function getActiveLocale() {
   if (
     typeof document !== "undefined" &&
@@ -19,8 +24,13 @@ export function formatCurrency(amount: number, currency: Currency = "USD") {
   return new Intl.NumberFormat(getActiveLocale(), {
     style: "currency",
     currency,
+    currencyDisplay: currency === "USD" ? "narrowSymbol" : "code",
     maximumFractionDigits: currency === "IQD" ? 0 : 2,
   }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+export function formatCurrencyLabel(currency: Currency) {
+  return CURRENCY_DISPLAY_LABELS[currency];
 }
 
 function formatCurrencyNumber(amount: number, currency: Currency) {
@@ -41,13 +51,15 @@ export function formatCurrencyPair(
   const usd = Number.isFinite(amounts.usd) ? Number(amounts.usd) : 0;
   const iqd = Number.isFinite(amounts.iqd) ? Number(amounts.iqd) : 0;
   const parts = [
-    !options.hideZero || usd !== 0 ? `${formatCurrencyNumber(usd, "USD")} USD` : null,
-    !options.hideZero || iqd !== 0 ? `${formatCurrencyNumber(iqd, "IQD")} IQD` : null,
+    !options.hideZero || usd !== 0 ? `${formatCurrencyNumber(usd, "USD")} ${formatCurrencyLabel("USD")}` : null,
+    !options.hideZero || iqd !== 0 ? `${formatCurrencyNumber(iqd, "IQD")} ${formatCurrencyLabel("IQD")}` : null,
   ].filter(Boolean);
 
   return parts.length
     ? isolateLtr(parts.join(" / "))
-    : isolateLtr(`${formatCurrencyNumber(0, "USD")} USD / ${formatCurrencyNumber(0, "IQD")} IQD`);
+    : isolateLtr(
+        `${formatCurrencyNumber(0, "USD")} ${formatCurrencyLabel("USD")} / ${formatCurrencyNumber(0, "IQD")} ${formatCurrencyLabel("IQD")}`,
+      );
 }
 
 export function formatDate(value: string | Date | null | undefined) {

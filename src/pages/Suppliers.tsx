@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { CrudFilters } from "@refinedev/core";
 import { useTable } from "@refinedev/antd";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   App,
   Alert,
@@ -19,8 +19,9 @@ import {
   type TableProps,
 } from "antd";
 import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
-import { createSupplier, deleteSupplier, erpKeys, updateSupplier } from "@/lib/erp";
+import { createSupplier, deleteSupplier, erpKeys, listSupplierBalances, updateSupplier } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
   STANDARD_PAGE_SIZE,
@@ -161,6 +162,10 @@ export default function Suppliers() {
     sorters: { initial: [{ field: "created_at", order: "desc" }] },
     syncWithLocation: false,
   });
+  const { data: supplierBalanceRows } = useQuery({
+    queryKey: erpKeys.supplierBalances,
+    queryFn: listSupplierBalances,
+  });
 
   useEffect(() => {
     setCurrentPage(1);
@@ -174,6 +179,16 @@ export default function Suppliers() {
   });
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const supplierBalances = useMemo(() => {
+    const balancesBySupplier = new Map<number, { usd: number; iqd: number }>();
+
+    for (const balance of supplierBalanceRows ?? []) {
+      balancesBySupplier.set(balance.supplierId, { usd: balance.balanceUsd, iqd: balance.balanceIqd });
+    }
+
+    return balancesBySupplier;
+  }, [supplierBalanceRows]);
+  const supplierBalance = (supplier: SupplierRow) => supplierBalances.get(supplier.id) ?? { usd: 0, iqd: 0 };
   const columns: TableProps<SupplierRow>["columns"] = [
     {
       title: t.name,
@@ -184,6 +199,26 @@ export default function Suppliers() {
     { title: t.phoneSup, dataIndex: "phone", render: (value: string | null) => value ?? "-" },
     { title: t.email, dataIndex: "email", render: (value: string | null) => value ?? "-" },
     { title: t.address, dataIndex: "address", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.balance,
+      dataIndex: "id",
+      align: "right",
+      render: (_value: number, supplier) => {
+        const balance = supplierBalance(supplier);
+        const isPositive = balance.usd >= 0 && balance.iqd >= 0;
+
+        return (
+          <Space direction="vertical" size={0}>
+            <Typography.Text strong type={isPositive ? "success" : "danger"}>
+              {formatCurrencyPair({ usd: balance.usd, iqd: balance.iqd })}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {isPositive ? t.positiveBalance : t.negativeBalance}
+            </Typography.Text>
+          </Space>
+        );
+      },
+    },
     {
       title: "",
       key: "actions",
@@ -214,13 +249,20 @@ export default function Suppliers() {
 
   function exportSuppliers(format: "csv" | "xlsx") {
     const fileBase = t.suppliersTitle;
-    const exportRows = rows.map((supplier) => ({
-      [t.name]: supplier.name,
-      [t.contact]: supplier.contact ?? "",
-      [t.phoneSup]: supplier.phone ?? "",
-      [t.email]: supplier.email ?? "",
-      [t.address]: supplier.address ?? "",
-    }));
+    const exportRows = rows.map((supplier) => {
+      const balance = supplierBalance(supplier);
+
+      return {
+        [t.name]: supplier.name,
+        [t.contact]: supplier.contact ?? "",
+        [t.phoneSup]: supplier.phone ?? "",
+        [t.email]: supplier.email ?? "",
+        [t.address]: supplier.address ?? "",
+        [`${t.balance} ${formatCurrencyLabel("USD")}`]: balance.usd,
+        [`${t.balance} ${formatCurrencyLabel("IQD")}`]: balance.iqd,
+        [t.status]: balance.usd >= 0 && balance.iqd >= 0 ? t.positiveBalance : t.negativeBalance,
+      };
+    });
 
     if (format === "csv") {
       exportRowsToCsv(`${fileBase}.csv`, exportRows);
@@ -293,7 +335,7 @@ export default function Suppliers() {
         {...tableProps}
         rowKey="id"
         columns={columns}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1050 }}
         pagination={
           tableProps.pagination
             ? {

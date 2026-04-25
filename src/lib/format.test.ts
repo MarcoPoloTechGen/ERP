@@ -9,6 +9,8 @@ describe("format helpers", () => {
 
   it("formats currency pairs without mixing currencies", () => {
     expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).toContain("/");
+    expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).toContain("$");
+    expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).not.toContain("USD");
     expect(formatCurrencyPair({ usd: 0, iqd: 1250 }, { hideZero: true })).not.toContain("0.00");
   });
 
