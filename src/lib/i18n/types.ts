@@ -132,6 +132,8 @@ export type TranslationShape = {
   addTransaction: string;
   noTransactions: string;
   newTransaction: string;
+  editTransaction: string;
+  deleteTransactionConfirm: string;
   type: string;
   amount: string;
   description: string;
@@ -261,6 +263,14 @@ export type TranslationShape = {
   adminSubtitle: string;
   adminRestricted: string;
   allowedProjects: string;
+  transactionAmountLimitsTitle: string;
+  transactionAmountLimitsSubtitle: string;
+  transactionAmountLimitsInvalid: string;
+  minUsd: string;
+  maxUsd: string;
+  minIqd: string;
+  maxIqd: string;
+  settingsUpdated: string;
   noUsersFound: string;
   roleLabel: string;
   incomeTitle: string;

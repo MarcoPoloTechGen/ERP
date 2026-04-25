@@ -19,6 +19,10 @@ export type Database = {
           company_logo_path: string | null
           exchange_rate_iqd_per_100_usd: number | null
           id: string
+          transaction_amount_max_iqd: number | null
+          transaction_amount_max_usd: number | null
+          transaction_amount_min_iqd: number | null
+          transaction_amount_min_usd: number | null
           updated_at: string
           updated_by: string | null
         }
@@ -26,6 +30,10 @@ export type Database = {
           company_logo_path?: string | null
           exchange_rate_iqd_per_100_usd?: number | null
           id?: string
+          transaction_amount_max_iqd?: number | null
+          transaction_amount_max_usd?: number | null
+          transaction_amount_min_iqd?: number | null
+          transaction_amount_min_usd?: number | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -33,6 +41,10 @@ export type Database = {
           company_logo_path?: string | null
           exchange_rate_iqd_per_100_usd?: number | null
           id?: string
+          transaction_amount_max_iqd?: number | null
+          transaction_amount_max_usd?: number | null
+          transaction_amount_min_iqd?: number | null
+          transaction_amount_min_usd?: number | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -521,6 +533,7 @@ export type Database = {
           amount_iqd: number
           amount_usd: number
           created_at: string
+          created_by: string | null
           currency: string
           date: string
           description: string | null
@@ -538,6 +551,7 @@ export type Database = {
           amount_iqd?: number
           amount_usd?: number
           created_at?: string
+          created_by?: string | null
           currency?: string
           date?: string
           description?: string | null
@@ -555,6 +569,7 @@ export type Database = {
           amount_iqd?: number
           amount_usd?: number
           created_at?: string
+          created_by?: string | null
           currency?: string
           date?: string
           description?: string | null
@@ -568,6 +583,13 @@ export type Database = {
           worker_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "party_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "party_transactions_project_id_fkey"
             columns: ["project_id"]
@@ -1282,7 +1304,10 @@ export type Database = {
           amount: number | null
           amount_iqd: number | null
           amount_usd: number | null
+          can_manage: boolean | null
           created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
           currency: string | null
           date: string | null
           description: string | null
@@ -1301,6 +1326,13 @@ export type Database = {
           worker_name: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "party_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "party_transactions_project_id_fkey"
             columns: ["project_id"]
@@ -1468,7 +1500,10 @@ export type Database = {
           amount: number | null
           amount_iqd: number | null
           amount_usd: number | null
+          can_manage: boolean | null
           created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
           currency: string | null
           date: string | null
           description: string | null
@@ -1481,6 +1516,13 @@ export type Database = {
           type: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "party_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "party_transactions_project_id_fkey"
             columns: ["project_id"]
@@ -1523,7 +1565,10 @@ export type Database = {
           amount: number | null
           amount_iqd: number | null
           amount_usd: number | null
+          can_manage: boolean | null
           created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
           currency: string | null
           date: string | null
           description: string | null
@@ -1536,6 +1581,13 @@ export type Database = {
           worker_id: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "party_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "worker_transactions_project_id_fkey"
             columns: ["project_id"]

@@ -32,6 +32,7 @@ import {
   createIncomeTransaction,
   createInvoice,
   erpKeys,
+  getAppSettings,
   listIncomeTransactions,
   listInvoices,
   listProducts,
@@ -207,6 +208,7 @@ function CalendarEntryModal({
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
   const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
+  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
   const { data: workers } = useQuery({ queryKey: erpKeys.workers, queryFn: listWorkers });
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(0),
@@ -438,12 +440,22 @@ function CalendarEntryModal({
               </Col>
               <Col xs={24} md={12}>
                 <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
-                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinUsd ?? 0}
+                    max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
                 <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
-                  <InputNumber min={0} step={1} style={{ width: "100%" }} />
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinIqd ?? 0}
+                    max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                    step={1}
+                    style={{ width: "100%" }}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button, Card, Empty, Typography } from "antd";
+import { App, Button, Card, Empty, InputNumber, Typography } from "antd";
 import {
   erpKeys,
   getAppSettings,
@@ -11,6 +11,8 @@ import {
   updateCompanyLogoPath,
   updateProfileName,
   updateProfileRole,
+  updateTransactionAmountLimits,
+  type TransactionAmountLimitsInput,
 } from "@/lib/erp";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
@@ -25,6 +27,7 @@ const selectClassName =
 export default function Admin() {
   const { t } = useLang();
   const { profile, refreshProfile } = useAuth();
+  const { message } = App.useApp();
   const canAccessAdmin = hasAdminAccess(profile?.role);
   const currentUserIsSuperAdmin = isSuperAdmin(profile?.role);
   const erpInvalidation = useErpInvalidation();
@@ -32,6 +35,12 @@ export default function Admin() {
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [brandingNotice, setBrandingNotice] = useState<string | null>(null);
+  const [transactionLimitsDraft, setTransactionLimitsDraft] = useState<TransactionAmountLimitsInput>({
+    transactionAmountMinUsd: null,
+    transactionAmountMaxUsd: null,
+    transactionAmountMinIqd: null,
+    transactionAmountMaxIqd: null,
+  });
 
   useEffect(() => {
     return () => {
@@ -61,6 +70,19 @@ export default function Admin() {
     queryFn: listProjectMemberships,
     enabled: canAccessAdmin,
   });
+
+  useEffect(() => {
+    if (!appSettings) {
+      return;
+    }
+
+    setTransactionLimitsDraft({
+      transactionAmountMinUsd: appSettings.transactionAmountMinUsd,
+      transactionAmountMaxUsd: appSettings.transactionAmountMaxUsd,
+      transactionAmountMinIqd: appSettings.transactionAmountMinIqd,
+      transactionAmountMaxIqd: appSettings.transactionAmountMaxIqd,
+    });
+  }, [appSettings]);
 
   const membershipMap = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -150,6 +172,35 @@ export default function Admin() {
     },
   });
 
+  const transactionLimitsMutation = useMutation({
+    mutationFn: updateTransactionAmountLimits,
+    onSuccess: async () => {
+      await erpInvalidation.appSettings();
+      void message.success(t.settingsUpdated);
+    },
+    onError: (error) => void message.error(error instanceof Error ? error.message : t.unexpectedError),
+  });
+
+  const transactionLimitsChanged =
+    transactionLimitsDraft.transactionAmountMinUsd !== (appSettings?.transactionAmountMinUsd ?? null) ||
+    transactionLimitsDraft.transactionAmountMaxUsd !== (appSettings?.transactionAmountMaxUsd ?? null) ||
+    transactionLimitsDraft.transactionAmountMinIqd !== (appSettings?.transactionAmountMinIqd ?? null) ||
+    transactionLimitsDraft.transactionAmountMaxIqd !== (appSettings?.transactionAmountMaxIqd ?? null);
+  const transactionLimitsInvalid =
+    (transactionLimitsDraft.transactionAmountMinUsd != null &&
+      transactionLimitsDraft.transactionAmountMaxUsd != null &&
+      transactionLimitsDraft.transactionAmountMinUsd > transactionLimitsDraft.transactionAmountMaxUsd) ||
+    (transactionLimitsDraft.transactionAmountMinIqd != null &&
+      transactionLimitsDraft.transactionAmountMaxIqd != null &&
+      transactionLimitsDraft.transactionAmountMinIqd > transactionLimitsDraft.transactionAmountMaxIqd);
+
+  function updateTransactionLimitDraft(key: keyof TransactionAmountLimitsInput, value: number | null) {
+    setTransactionLimitsDraft((current) => ({
+      ...current,
+      [key]: typeof value === "number" ? value : null,
+    }));
+  }
+
   if (!canAccessAdmin) {
     return <Empty description={t.adminRestricted} />;
   }
@@ -232,6 +283,79 @@ export default function Admin() {
                 disabled={!appSettings?.companyLogoPath || brandingMutation.isPending}
               >
                 {t.removeCompanyLogo}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-base font-semibold text-foreground">{t.transactionAmountLimitsTitle}</p>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t.transactionAmountLimitsSubtitle}</p>
+          </div>
+
+          <div className="w-full max-w-2xl rounded-3xl border border-border bg-background/60 p-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">{t.minUsd}</span>
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  value={transactionLimitsDraft.transactionAmountMinUsd}
+                  style={{ width: "100%" }}
+                  onChange={(value) => updateTransactionLimitDraft("transactionAmountMinUsd", value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">{t.maxUsd}</span>
+                <InputNumber
+                  min={0}
+                  step={0.01}
+                  value={transactionLimitsDraft.transactionAmountMaxUsd}
+                  style={{ width: "100%" }}
+                  onChange={(value) => updateTransactionLimitDraft("transactionAmountMaxUsd", value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">{t.minIqd}</span>
+                <InputNumber
+                  min={0}
+                  step={1}
+                  precision={0}
+                  value={transactionLimitsDraft.transactionAmountMinIqd}
+                  style={{ width: "100%" }}
+                  onChange={(value) => updateTransactionLimitDraft("transactionAmountMinIqd", value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">{t.maxIqd}</span>
+                <InputNumber
+                  min={0}
+                  step={1}
+                  precision={0}
+                  value={transactionLimitsDraft.transactionAmountMaxIqd}
+                  style={{ width: "100%" }}
+                  onChange={(value) => updateTransactionLimitDraft("transactionAmountMaxIqd", value)}
+                />
+              </label>
+            </div>
+
+            {transactionLimitsInvalid ? (
+              <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {t.transactionAmountLimitsInvalid}
+              </p>
+            ) : null}
+
+            <div className="mt-4">
+              <Button
+                type="primary"
+                loading={transactionLimitsMutation.isPending}
+                disabled={!transactionLimitsChanged || transactionLimitsInvalid || transactionLimitsMutation.isPending}
+                onClick={() => transactionLimitsMutation.mutate(transactionLimitsDraft)}
+              >
+                {t.save}
               </Button>
             </div>
           </div>

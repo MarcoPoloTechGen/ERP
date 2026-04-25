@@ -117,7 +117,15 @@ type IncomeTransactionRecordStatusUpdatePayload = Pick<
 >;
 type AppSettingsUpsertPayload = Pick<
   TableInsertPayload<"app_settings">,
-  "id" | "company_logo_path" | "exchange_rate_iqd_per_100_usd" | "updated_by" | "updated_at"
+  | "id"
+  | "company_logo_path"
+  | "exchange_rate_iqd_per_100_usd"
+  | "transaction_amount_min_usd"
+  | "transaction_amount_max_usd"
+  | "transaction_amount_min_iqd"
+  | "transaction_amount_max_iqd"
+  | "updated_by"
+  | "updated_at"
 >;
 type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
@@ -157,8 +165,19 @@ export interface AppSettings {
   companyLogoPath: string | null;
   companyLogoUrl: string | null;
   exchangeRateIqdPer100Usd: number | null;
+  transactionAmountMinUsd: number | null;
+  transactionAmountMaxUsd: number | null;
+  transactionAmountMinIqd: number | null;
+  transactionAmountMaxIqd: number | null;
   updatedAt: string | null;
 }
+
+export type TransactionAmountLimitsInput = {
+  transactionAmountMinUsd: number | null;
+  transactionAmountMaxUsd: number | null;
+  transactionAmountMinIqd: number | null;
+  transactionAmountMaxIqd: number | null;
+};
 
 export interface ProjectMembership {
   id: number;
@@ -323,6 +342,9 @@ export interface WorkerTransaction {
   projectName: string | null;
   sourceInvoiceId: number | null;
   sourceKind: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  canManage: boolean;
   createdAt: string | null;
 }
 
@@ -340,6 +362,9 @@ export interface SupplierTransaction {
   projectName: string | null;
   sourceInvoiceId: number | null;
   sourceKind: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  canManage: boolean;
   createdAt: string | null;
 }
 
@@ -724,6 +749,10 @@ function normalizeAppSettings(row: AppSettingsRow): AppSettings {
         ? `${companyLogoUrl}${companyLogoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(updatedAt)}`
         : companyLogoUrl,
     exchangeRateIqdPer100Usd: readNumber(row, "exchange_rate_iqd_per_100_usd", "exchangeRateIqdPer100Usd"),
+    transactionAmountMinUsd: readNumber(row, "transaction_amount_min_usd", "transactionAmountMinUsd"),
+    transactionAmountMaxUsd: readNumber(row, "transaction_amount_max_usd", "transactionAmountMaxUsd"),
+    transactionAmountMinIqd: readNumber(row, "transaction_amount_min_iqd", "transactionAmountMinIqd"),
+    transactionAmountMaxIqd: readNumber(row, "transaction_amount_max_iqd", "transactionAmountMaxIqd"),
     updatedAt,
   };
 }
@@ -992,6 +1021,9 @@ function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransac
     projectName: readString(row, "project_name", "projectName"),
     sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
     sourceKind: readString(row, "source_kind", "sourceKind"),
+    createdBy: readString(row, "created_by", "createdBy"),
+    createdByName: readString(row, "created_by_name", "createdByName"),
+    canManage: readValue(row, "can_manage", "canManage") === true,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -1020,6 +1052,9 @@ function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierT
     projectName: readString(row, "project_name", "projectName"),
     sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
     sourceKind: readString(row, "source_kind", "sourceKind"),
+    createdBy: readString(row, "created_by", "createdBy"),
+    createdByName: readString(row, "created_by_name", "createdByName"),
+    canManage: readValue(row, "can_manage", "canManage") === true,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -1538,6 +1573,44 @@ function normalizePartyTransactionInput(input: {
   return payload;
 }
 
+function assertAmountWithinLimit(
+  amount: number,
+  min: number | null,
+  max: number | null,
+  label: string,
+) {
+  if (amount <= 0) {
+    return;
+  }
+
+  if (min != null && amount < min) {
+    throw new Error(`${label} must be at least ${min}.`);
+  }
+
+  if (max != null && amount > max) {
+    throw new Error(`${label} must be at most ${max}.`);
+  }
+}
+
+function assertTransactionAmountLimits(input: {
+  amountUsd: number;
+  amountIqd: number;
+  settings: AppSettings;
+}) {
+  assertAmountWithinLimit(
+    input.amountUsd,
+    input.settings.transactionAmountMinUsd,
+    input.settings.transactionAmountMaxUsd,
+    "Transaction amount USD",
+  );
+  assertAmountWithinLimit(
+    input.amountIqd,
+    input.settings.transactionAmountMinIqd,
+    input.settings.transactionAmountMaxIqd,
+    "Transaction amount IQD",
+  );
+}
+
 function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
   const amountUsd = input.amountUsd ?? 0;
   const amountIqd = input.amountIqd ?? 0;
@@ -1587,6 +1660,10 @@ export async function getAppSettings() {
     id: "default",
     company_logo_path: null,
     exchange_rate_iqd_per_100_usd: null,
+    transaction_amount_min_usd: null,
+    transaction_amount_max_usd: null,
+    transaction_amount_min_iqd: null,
+    transaction_amount_max_iqd: null,
     updated_at: "",
     updated_by: null,
   };
@@ -1600,6 +1677,10 @@ export async function updateCompanyLogoPath(companyLogoPath: string | null) {
     id: "default",
     company_logo_path: companyLogoPath,
     exchange_rate_iqd_per_100_usd: undefined,
+    transaction_amount_min_usd: undefined,
+    transaction_amount_max_usd: undefined,
+    transaction_amount_min_iqd: undefined,
+    transaction_amount_max_iqd: undefined,
     updated_by: currentUserId,
     updated_at: new Date().toISOString(),
   };
@@ -1626,6 +1707,65 @@ export async function updateExchangeRateIqdPer100Usd(exchangeRateIqdPer100Usd: n
     id: "default",
     company_logo_path: undefined,
     exchange_rate_iqd_per_100_usd: exchangeRateIqdPer100Usd,
+    transaction_amount_min_usd: undefined,
+    transaction_amount_max_usd: undefined,
+    transaction_amount_min_iqd: undefined,
+    transaction_amount_max_iqd: undefined,
+    updated_by: currentUserId,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("app_settings").upsert(payload, {
+    onConflict: "id",
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+function validateTransactionAmountLimits(input: TransactionAmountLimitsInput) {
+  const entries = [
+    ["Minimum USD", input.transactionAmountMinUsd],
+    ["Maximum USD", input.transactionAmountMaxUsd],
+    ["Minimum IQD", input.transactionAmountMinIqd],
+    ["Maximum IQD", input.transactionAmountMaxIqd],
+  ] as const;
+
+  for (const [label, value] of entries) {
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      throw new Error(`${label} must be zero or greater.`);
+    }
+  }
+
+  if (
+    input.transactionAmountMinUsd != null &&
+    input.transactionAmountMaxUsd != null &&
+    input.transactionAmountMinUsd > input.transactionAmountMaxUsd
+  ) {
+    throw new Error("Minimum USD cannot be greater than maximum USD.");
+  }
+
+  if (
+    input.transactionAmountMinIqd != null &&
+    input.transactionAmountMaxIqd != null &&
+    input.transactionAmountMinIqd > input.transactionAmountMaxIqd
+  ) {
+    throw new Error("Minimum IQD cannot be greater than maximum IQD.");
+  }
+}
+
+export async function updateTransactionAmountLimits(input: TransactionAmountLimitsInput) {
+  validateTransactionAmountLimits(input);
+
+  const currentUserId = await getCurrentUserId();
+  const payload: AppSettingsUpsertPayload = {
+    id: "default",
+    company_logo_path: undefined,
+    exchange_rate_iqd_per_100_usd: undefined,
+    transaction_amount_min_usd: input.transactionAmountMinUsd,
+    transaction_amount_max_usd: input.transactionAmountMaxUsd,
+    transaction_amount_min_iqd: input.transactionAmountMinIqd,
+    transaction_amount_max_iqd: input.transactionAmountMaxIqd,
     updated_by: currentUserId,
     updated_at: new Date().toISOString(),
   };
@@ -1885,6 +2025,12 @@ export async function listWorkerTransactions(workerId?: number) {
 }
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
+  const settings = await getAppSettings();
+  assertTransactionAmountLimits({
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    settings,
+  });
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
@@ -1896,6 +2042,44 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     projectId: input.projectId,
   });
   const { error } = await supabase.from("party_transactions").insert(payload);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateWorkerTransaction(id: number, input: WorkerTransactionInput) {
+  const payload = normalizePartyTransactionInput({
+    partyId: input.workerId,
+    partyType: "worker",
+    type: input.type,
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    description: input.description,
+    date: input.date,
+    projectId: input.projectId,
+  });
+  const { error } = await supabase
+    .from("party_transactions")
+    .update(payload)
+    .eq("id", id)
+    .eq("party_type", "worker")
+    .is("source_invoice_id", null)
+    .is("source_kind", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteWorkerTransaction(id: number) {
+  const { error } = await supabase
+    .from("party_transactions")
+    .delete()
+    .eq("id", id)
+    .eq("party_type", "worker")
+    .is("source_invoice_id", null)
+    .is("source_kind", null);
 
   if (error) {
     throw new Error(error.message);
@@ -1917,6 +2101,12 @@ export async function listSupplierTransactions(supplierId?: number) {
 }
 
 export async function createSupplierTransaction(input: SupplierTransactionInput) {
+  const settings = await getAppSettings();
+  assertTransactionAmountLimits({
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    settings,
+  });
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
@@ -1928,6 +2118,44 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
     projectId: input.projectId,
   });
   const { error } = await supabase.from("party_transactions").insert(payload);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateSupplierTransaction(id: number, input: SupplierTransactionInput) {
+  const payload = normalizePartyTransactionInput({
+    partyId: input.supplierId,
+    partyType: "supplier",
+    type: input.type,
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    description: input.description,
+    date: input.date,
+    projectId: input.projectId,
+  });
+  const { error } = await supabase
+    .from("party_transactions")
+    .update(payload)
+    .eq("id", id)
+    .eq("party_type", "supplier")
+    .is("source_invoice_id", null)
+    .is("source_kind", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteSupplierTransaction(id: number) {
+  const { error } = await supabase
+    .from("party_transactions")
+    .delete()
+    .eq("id", id)
+    .eq("party_type", "supplier")
+    .is("source_invoice_id", null)
+    .is("source_kind", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2104,6 +2332,12 @@ export async function listIncomeTransactionHistory() {
 
 export async function createIncomeTransaction(input: IncomeTransactionInput) {
   const currentUserId = await getCurrentUserId();
+  const settings = await getAppSettings();
+  assertTransactionAmountLimits({
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    settings,
+  });
   const payload: IncomeTransactionCreatePayload = {
     ...normalizeIncomeTransactionInput(input),
     created_by: currentUserId,
@@ -2116,6 +2350,12 @@ export async function createIncomeTransaction(input: IncomeTransactionInput) {
 }
 
 export async function updateIncomeTransaction(id: number, input: IncomeTransactionInput) {
+  const settings = await getAppSettings();
+  assertTransactionAmountLimits({
+    amountUsd: input.amountUsd,
+    amountIqd: input.amountIqd,
+    settings,
+  });
   const payload = normalizeIncomeTransactionInput(input);
   const { error } = await supabase
     .from("income_transactions")

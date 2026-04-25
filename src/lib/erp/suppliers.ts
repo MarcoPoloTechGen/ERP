@@ -1,11 +1,13 @@
 export {
   createSupplierTransaction,
   createSupplier,
+  deleteSupplierTransaction,
   deleteSupplier,
   getSupplier,
   listSupplierBalances,
   listSupplierTransactions,
   listSuppliers,
+  updateSupplierTransaction,
   updateSupplier,
   type Supplier,
   type SupplierBalance,

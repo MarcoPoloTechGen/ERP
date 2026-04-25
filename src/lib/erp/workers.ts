@@ -1,10 +1,12 @@
 export {
   createWorker,
   createWorkerTransaction,
+  deleteWorkerTransaction,
   deleteWorker,
   getWorker,
   listWorkerTransactions,
   listWorkers,
+  updateWorkerTransaction,
   updateWorker,
   type TransactionType,
   type Worker,

@@ -15,6 +15,20 @@ create table if not exists public.app_settings (
     exchange_rate_iqd_per_100_usd is null
     or exchange_rate_iqd_per_100_usd between 100000 and 1000000
   ),
+  transaction_amount_min_usd numeric(14,2) check (transaction_amount_min_usd is null or transaction_amount_min_usd >= 0),
+  transaction_amount_max_usd numeric(14,2) check (transaction_amount_max_usd is null or transaction_amount_max_usd >= 0),
+  transaction_amount_min_iqd numeric(14,2) check (transaction_amount_min_iqd is null or transaction_amount_min_iqd >= 0),
+  transaction_amount_max_iqd numeric(14,2) check (transaction_amount_max_iqd is null or transaction_amount_max_iqd >= 0),
+  constraint app_settings_transaction_amount_usd_range_check check (
+    transaction_amount_min_usd is null
+    or transaction_amount_max_usd is null
+    or transaction_amount_min_usd <= transaction_amount_max_usd
+  ),
+  constraint app_settings_transaction_amount_iqd_range_check check (
+    transaction_amount_min_iqd is null
+    or transaction_amount_max_iqd is null
+    or transaction_amount_min_iqd <= transaction_amount_max_iqd
+  ),
   updated_by uuid references public.profiles(id) on delete set null,
   updated_at timestamptz not null default now()
 );

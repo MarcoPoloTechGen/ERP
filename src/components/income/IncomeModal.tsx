@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Col, Form, Input, InputNumber, Modal, Row, Select } from "antd";
-import { createIncomeTransaction, updateIncomeTransaction } from "@/lib/erp";
+import { createIncomeTransaction, erpKeys, getAppSettings, updateIncomeTransaction } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { formatCurrencyLabel, formatDateInput } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
@@ -29,6 +29,7 @@ export function IncomeModal({
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<IncomeFormValues>();
   const { data: projects } = useProjects();
+  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
 
   const saveMutation = useMutation({
     mutationFn: (values: IncomeFormValues) => {
@@ -107,12 +108,22 @@ export function IncomeModal({
           </Col>
           <Col span={12}>
             <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+              <InputNumber
+                min={appSettings?.transactionAmountMinUsd ?? 0}
+                max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                step={0.01}
+                style={{ width: "100%" }}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
+              <InputNumber
+                min={appSettings?.transactionAmountMinIqd ?? 0}
+                max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                step={1}
+                style={{ width: "100%" }}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
