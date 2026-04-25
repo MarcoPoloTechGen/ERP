@@ -15,6 +15,7 @@ import {
   validateDualCurrencyInvoiceInput,
   validateProjectInput as validateProjectPayload,
 } from "@/lib/validation";
+import { asExpenseType, type ExpenseType } from "@/lib/expense-types";
 
 type Row = Record<string, unknown>;
 type TableName = keyof Database["public"]["Tables"];
@@ -60,6 +61,9 @@ type ProductWritePayload = {
 };
 type InvoiceWritePayload = {
   number: string;
+  expense_type: ExpenseType;
+  labor_worker_id: number | null;
+  labor_person_name: string | null;
   supplier_id: number | null;
   project_id: number | null;
   building_id: number | null;
@@ -226,6 +230,10 @@ export interface Product {
 export interface Invoice {
   id: number;
   number: string;
+  expenseType: ExpenseType;
+  laborWorkerId: number | null;
+  laborWorkerName: string | null;
+  laborPersonName: string | null;
   status: InvoiceStatus;
   recordStatus: RecordStatus;
   supplierId: number | null;
@@ -263,6 +271,10 @@ export interface InvoiceHistoryEntry {
   invoiceId: number;
   action: InvoiceHistoryAction;
   number: string;
+  expenseType: ExpenseType;
+  laborWorkerId: number | null;
+  laborWorkerName: string | null;
+  laborPersonName: string | null;
   status: InvoiceStatus;
   supplierId: number | null;
   supplierName: string | null;
@@ -450,6 +462,9 @@ export interface ProductInput {
 
 export interface InvoiceInput {
   number: string;
+  expenseType: ExpenseType;
+  laborWorkerId: number | null;
+  laborPersonName: string | null;
   supplierId: number | null;
   projectId: number | null;
   buildingId: number | null;
@@ -498,6 +513,7 @@ export const erpKeys = {
   dashboard: ["dashboard"] as const,
   workers: ["workers"] as const,
   worker: (id: number) => ["worker", id] as const,
+  workerTransactionsList: ["workerTransactions"] as const,
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,
   suppliers: ["suppliers"] as const,
   supplierBalances: ["invoices", "supplierBalances"] as const,
@@ -794,6 +810,10 @@ function normalizeInvoice(row: AppInvoiceRow): Invoice {
   return {
     id: readId(row, "id"),
     number: readString(row, "number") ?? "INV",
+    expenseType: asExpenseType(readString(row, "expense_type", "expenseType")),
+    laborWorkerId: readNumber(row, "labor_worker_id", "laborWorkerId"),
+    laborWorkerName: readString(row, "labor_worker_name", "laborWorkerName"),
+    laborPersonName: readString(row, "labor_person_name", "laborPersonName"),
     status: toDualCurrencyInvoiceStatus(
       readString(row, "status"),
       totalAmountUsd,
@@ -863,6 +883,10 @@ function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistory
     invoiceId: readId(row, "invoice_id", "invoiceId"),
     action: toInvoiceHistoryAction(readString(row, "change_type", "changeType", "action")),
     number: readString(row, "number") ?? "INV",
+    expenseType: asExpenseType(readString(row, "expense_type", "expenseType")),
+    laborWorkerId: readNumber(row, "labor_worker_id", "laborWorkerId"),
+    laborWorkerName: readString(row, "labor_worker_name", "laborWorkerName"),
+    laborPersonName: readString(row, "labor_person_name", "laborPersonName"),
     status: toDualCurrencyInvoiceStatus(
       readString(row, "status"),
       totalAmountUsd,
@@ -1357,12 +1381,24 @@ function normalizeInvoiceInput(input: InvoiceInput) {
     dueDate: input.dueDate,
   });
 
+  const laborPersonName = normalizeOptionalText(input.laborPersonName);
+  if (input.expenseType === "labor" && input.laborWorkerId == null) {
+    throw new Error("Worker is required.");
+  }
+
+  if (input.expenseType === "products" && input.supplierId == null) {
+    throw new Error("Supplier is required.");
+  }
+
   const payload: InvoiceWritePayload = {
     number: input.number.trim(),
-    supplier_id: input.supplierId,
+    expense_type: input.expenseType,
+    labor_worker_id: input.expenseType === "labor" ? input.laborWorkerId : null,
+    labor_person_name: input.expenseType === "labor" ? laborPersonName : null,
+    supplier_id: input.expenseType === "products" ? input.supplierId : null,
     project_id: input.projectId,
     building_id: input.buildingId,
-    product_id: input.productId,
+    product_id: input.expenseType === "products" ? input.productId : null,
     total_amount: totalAmount,
     paid_amount: paidAmount,
     currency,

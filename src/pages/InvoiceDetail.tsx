@@ -4,6 +4,7 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, CheckCircle2, Image as ImageIcon } from "lucide-react";
 import { Button, Card, Col, Empty, Image, Progress, Row, Skeleton, Space, Table, Tag, Typography } from "antd";
 import { erpKeys, getInvoice, listInvoiceHistory, markInvoicePaid, type InvoiceStatus } from "@/lib/erp";
+import type { ExpenseType } from "@/lib/expense-types";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
@@ -15,6 +16,16 @@ function invoiceStatusColor(status: InvoiceStatus) {
     return "orange";
   }
   return "red";
+}
+
+function expenseTypeLabel(expenseType: ExpenseType, t: ReturnType<typeof useLang>["t"]) {
+  if (expenseType === "labor") {
+    return t.expenseTypeLabor;
+  }
+  if (expenseType === "logistics") {
+    return t.expenseTypeLogistics;
+  }
+  return t.expenseTypeProducts;
 }
 
 export default function InvoiceDetail() {
@@ -50,6 +61,8 @@ export default function InvoiceDetail() {
         queryClient.invalidateQueries({ queryKey: erpKeys.invoice(invoiceId) }),
         queryClient.invalidateQueries({ queryKey: erpKeys.invoiceHistory(invoiceId) }),
         queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactionsList }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
     },
@@ -119,6 +132,10 @@ export default function InvoiceDetail() {
       <Card title={t.expenseDetails}>
         <Row gutter={[16, 16]}>
           {[
+            [t.expenseType, expenseTypeLabel(invoice.expenseType, t)],
+            ...(invoice.expenseType === "labor"
+              ? ([[t.laborPersonName, invoice.laborWorkerName ?? invoice.laborPersonName ?? "-"]] as const)
+              : []),
             [t.supplierOption, invoice.supplierName ?? "-"],
             [t.projectOption, invoice.projectName ?? "-"],
             [t.invoiceAssignment, invoice.buildingName ?? t.projectGlobalCost],
@@ -204,6 +221,15 @@ export default function InvoiceDetail() {
                 render: (value) => (value === "updated" ? t.changeUpdated : t.changeCreated),
               },
               { title: t.expenseTitle, dataIndex: "number" },
+              {
+                title: t.expenseType,
+                dataIndex: "expenseType",
+                render: (value: ExpenseType) => expenseTypeLabel(value, t),
+              },
+              {
+                title: t.laborPersonName,
+                render: (_, entry) => entry.laborWorkerName ?? entry.laborPersonName ?? "-",
+              },
               {
                 title: t.status,
                 dataIndex: "status",

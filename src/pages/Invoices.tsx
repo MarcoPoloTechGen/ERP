@@ -36,17 +36,18 @@ import {
   listProjectBuildings,
   listProjects,
   listSuppliers,
+  listWorkers,
   type Currency,
   type InvoiceStatus,
   updateInvoice,
 } from "@/lib/erp";
-import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import {
   buildExpenseAssignmentOptions,
   expenseAssignmentKeyFromRecord,
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
+import { EXPENSE_TYPES, asExpenseType, type ExpenseType } from "@/lib/expense-types";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
 import {
   addContainsSearchFilter,
@@ -73,6 +74,10 @@ import {
 type InvoiceRow = {
   id: number | null;
   number: string | null;
+  expense_type: string | null;
+  labor_worker_id: number | null;
+  labor_worker_name: string | null;
+  labor_person_name: string | null;
   status: string | null;
   record_status: string | null;
   supplier_id: number | null;
@@ -102,15 +107,15 @@ type InvoiceRow = {
 };
 
 type InvoiceFormValues = {
-  number: string;
+  expenseType: ExpenseType;
+  laborWorkerId?: number;
   supplierId?: number;
   assignmentKey?: string;
   productId?: number;
-  totalAmountUsd?: number;
   paidAmountUsd?: number;
-  totalAmountIqd?: number;
+  remainingAmountUsd?: number;
   paidAmountIqd?: number;
-  status: InvoiceStatus;
+  remainingAmountIqd?: number;
   invoiceDate?: string;
   dueDate?: string;
   notes?: string;
@@ -130,6 +135,16 @@ function invoiceStatusLabel(status: InvoiceStatus, t: ReturnType<typeof useLang>
     return t.partial;
   }
   return t.unpaid;
+}
+
+function expenseTypeLabel(expenseType: ExpenseType, t: ReturnType<typeof useLang>["t"]) {
+  if (expenseType === "labor") {
+    return t.expenseTypeLabor;
+  }
+  if (expenseType === "logistics") {
+    return t.expenseTypeLogistics;
+  }
+  return t.expenseTypeProducts;
 }
 
 function buildFilters({
@@ -152,7 +167,18 @@ function buildFilters({
   const filters: CrudFilters = [];
   addContainsSearchFilter(
     filters,
-    ["number", "supplier_name", "project_name", "building_name", "product_name", "created_by_name", "notes"],
+    [
+      "number",
+      "expense_type",
+      "labor_worker_name",
+      "labor_person_name",
+      "supplier_name",
+      "project_name",
+      "building_name",
+      "product_name",
+      "created_by_name",
+      "notes",
+    ],
     search,
   );
   addEqualFilter(filters, "status", status);
@@ -161,6 +187,35 @@ function buildFilters({
   addCurrencyAmountFilter(filters, currency, { USD: "total_amount_usd", IQD: "total_amount_iqd" });
   addDateRangeFilter(filters, "invoice_date", dateFrom, dateTo);
   return filters;
+}
+
+function buildGeneratedExpenseTitle({
+  assignment,
+  buildings,
+  expenseType,
+  fallbackInvoice,
+  projects,
+  t,
+}: {
+  assignment: { projectId: number | null; buildingId: number | null };
+  buildings: Array<{ id: number; name: string; projectId: number }>;
+  expenseType: ExpenseType;
+  fallbackInvoice?: InvoiceRow;
+  projects: Array<{ id: number; name: string }>;
+  t: ReturnType<typeof useLang>["t"];
+}) {
+  const projectName =
+    projects.find((project) => project.id === assignment.projectId)?.name ??
+    fallbackInvoice?.project_name ??
+    t.projectOption;
+  const buildingName =
+    assignment.buildingId == null
+      ? t.projectGlobalCost
+      : buildings.find((building) => building.id === assignment.buildingId)?.name ??
+        fallbackInvoice?.building_name ??
+        t.buildingLabel;
+
+  return [projectName, buildingName, expenseTypeLabel(expenseType, t)].join(" : ");
 }
 
 function InvoiceImageField({
@@ -211,11 +266,12 @@ function InvoiceModal({
 }) {
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
-  const { profile } = useAuth();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<InvoiceFormValues>();
+  const expenseType = Form.useWatch("expenseType", form) ?? "products";
   const assignmentKey = Form.useWatch("assignmentKey", form);
+  const supplierId = Form.useWatch("supplierId", form);
   const [storedImagePath, setStoredImagePath] = useState<string | null>(invoice?.image_path ?? null);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -224,6 +280,7 @@ function InvoiceModal({
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
+  const { data: workers } = useQuery({ queryKey: erpKeys.workers, queryFn: listWorkers });
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(0),
     queryFn: () => listProjectBuildings(),
@@ -276,6 +333,17 @@ function InvoiceModal({
       return product.projectId === selectedProjectId || product.projectId == null;
     });
   }, [products, selectedProjectId]);
+  const supplierProducts = useMemo(() => {
+    if (supplierId == null) {
+      return [];
+    }
+
+    return projectProducts.filter((product) => product.supplierId === supplierId);
+  }, [projectProducts, supplierId]);
+  const showProductField = expenseType === "products" && supplierId != null && supplierProducts.length > 1;
+  const workerNameById = useMemo(() => {
+    return new Map((workers ?? []).map((worker) => [worker.id, worker.name]));
+  }, [workers]);
 
   const assignmentOptions = useMemo(() => {
     const options = buildExpenseAssignmentOptions({
@@ -316,13 +384,55 @@ function InvoiceModal({
     }
   }, [form, projectBuildings, scopedProjectId]);
 
+  useEffect(() => {
+    if (expenseType !== "products") {
+      form.setFieldsValue({ supplierId: undefined, productId: undefined });
+      return;
+    }
+
+    if (supplierId == null) {
+      form.setFieldValue("productId", undefined);
+      return;
+    }
+
+    const currentProductId = form.getFieldValue("productId");
+    if (supplierProducts.length === 1 && currentProductId !== supplierProducts[0].id) {
+      form.setFieldValue("productId", supplierProducts[0].id);
+      return;
+    }
+
+    if (supplierProducts.length !== 1 && !supplierProducts.some((product) => product.id === currentProductId)) {
+      form.setFieldValue("productId", undefined);
+    }
+  }, [expenseType, form, supplierId, supplierProducts]);
+
+  useEffect(() => {
+    if (expenseType !== "labor") {
+      form.setFieldValue("laborWorkerId", undefined);
+    }
+  }, [expenseType, form]);
+
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
       const assignment = parseExpenseAssignmentKey(values.assignmentKey, projectBuildings);
-      const totalAmountUsd = Number(values.totalAmountUsd || 0);
       const paidAmountUsd = Number(values.paidAmountUsd || 0);
-      const totalAmountIqd = Number(values.totalAmountIqd || 0);
+      const remainingAmountUsd = Number(values.remainingAmountUsd || 0);
       const paidAmountIqd = Number(values.paidAmountIqd || 0);
+      const remainingAmountIqd = Number(values.remainingAmountIqd || 0);
+      const totalAmountUsd = paidAmountUsd + remainingAmountUsd;
+      const totalAmountIqd = paidAmountIqd + remainingAmountIqd;
+      const laborWorkerName =
+        values.expenseType === "labor" && values.laborWorkerId != null
+          ? workerNameById.get(values.laborWorkerId) ?? null
+          : null;
+      const generatedTitle = buildGeneratedExpenseTitle({
+        assignment,
+        buildings: projectBuildings ?? [],
+        expenseType: values.expenseType,
+        fallbackInvoice: invoice,
+        projects: projects ?? [],
+        t,
+      });
       let nextImagePath = storedImagePath;
       let uploadedPath: string | null = null;
       const previousImagePath = invoice?.image_path ?? null;
@@ -330,7 +440,7 @@ function InvoiceModal({
       if (selectedImageFile) {
         const uploaded = await uploadInvoiceImage(
           selectedImageFile,
-          values.number || "expense",
+          generatedTitle,
           assignment.projectId,
         );
         uploadedPath = uploaded.path;
@@ -338,16 +448,19 @@ function InvoiceModal({
       }
 
       const payload = {
-        number: values.number.trim(),
-        supplierId: values.supplierId ?? null,
+        number: generatedTitle,
+        expenseType: values.expenseType,
+        laborWorkerId: values.expenseType === "labor" ? values.laborWorkerId ?? null : null,
+        laborPersonName: laborWorkerName,
+        supplierId: values.expenseType === "products" ? values.supplierId ?? null : null,
         projectId: assignment.projectId,
         buildingId: assignment.buildingId,
-        productId: values.productId ?? null,
+        productId: values.expenseType === "products" ? values.productId ?? null : null,
         totalAmountUsd,
         paidAmountUsd,
         totalAmountIqd,
         paidAmountIqd,
-        status: values.status,
+        status: "unpaid" as InvoiceStatus,
         invoiceDate: values.invoiceDate || null,
         dueDate: values.dueDate || null,
         notes: values.notes?.trim() || null,
@@ -378,6 +491,8 @@ function InvoiceModal({
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactionsList }),
         queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
       ]);
       onSaved();
@@ -403,26 +518,22 @@ function InvoiceModal({
         form={form}
         layout="vertical"
         initialValues={{
-          number: invoice?.number ?? "",
+          expenseType: asExpenseType(invoice?.expense_type),
+          laborWorkerId: invoice?.labor_worker_id ?? undefined,
           supplierId: invoice?.supplier_id ?? undefined,
           assignmentKey:
             scopedProjectId != null && !invoice
               ? `project:${scopedProjectId}`
               : expenseAssignmentKeyFromRecord(invoice?.project_id, invoice?.building_id),
           productId: invoice?.product_id ?? undefined,
-          totalAmountUsd:
-            invoice?.total_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.total_amount ?? undefined : undefined),
           paidAmountUsd: invoice?.paid_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.paid_amount ?? 0 : 0),
-          totalAmountIqd:
-            invoice?.total_amount_iqd ?? (asCurrency(invoice?.currency) === "IQD" ? invoice?.total_amount ?? undefined : undefined),
+          remainingAmountUsd:
+            invoice?.remaining_amount_usd ??
+            (asCurrency(invoice?.currency) === "USD" ? invoice?.remaining_amount ?? undefined : undefined),
           paidAmountIqd: invoice?.paid_amount_iqd ?? (asCurrency(invoice?.currency) === "IQD" ? invoice?.paid_amount ?? 0 : 0),
-          status: asDualCurrencyInvoiceStatus(
-            invoice?.status,
-            invoice?.total_amount_usd ?? 0,
-            invoice?.paid_amount_usd ?? 0,
-            invoice?.total_amount_iqd ?? 0,
-            invoice?.paid_amount_iqd ?? 0,
-          ),
+          remainingAmountIqd:
+            invoice?.remaining_amount_iqd ??
+            (asCurrency(invoice?.currency) === "IQD" ? invoice?.remaining_amount ?? undefined : undefined),
           invoiceDate: formatDateInput(invoice?.invoice_date) || new Date().toISOString().slice(0, 10),
           dueDate: formatDateInput(invoice?.due_date),
           notes: invoice?.notes ?? "",
@@ -431,34 +542,10 @@ function InvoiceModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="number" label={t.expenseTitle} rules={[{ required: true, message: t.nameRequired }]}>
-              <Input placeholder={t.expenseTitlePlaceholder} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="status" label={t.invoiceStatus_label}>
+            <Form.Item name="expenseType" label={t.expenseType} rules={[{ required: true, message: t.requiredField }]}>
               <Select
-                options={[
-                  { label: t.unpaid, value: "unpaid" },
-                  { label: t.partial, value: "partial" },
-                  { label: t.paid, value: "paid" },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item label={t.user}>
-              <Input readOnly value={profile?.fullName ?? profile?.email ?? ""} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="supplierId" label={t.supplierOption}>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
+                options={EXPENSE_TYPES.map((value) => ({ label: expenseTypeLabel(value, t), value }))}
+                onChange={() => form.setFieldsValue({ laborWorkerId: undefined, supplierId: undefined, productId: undefined })}
               />
             </Form.Item>
           </Col>
@@ -473,37 +560,68 @@ function InvoiceModal({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="productId" label={t.products}>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                options={projectProducts.map((product) => ({
-                  label: product.buildingName ? `${product.name} - ${product.buildingName}` : product.name,
-                  value: product.id,
-                }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
+          {expenseType === "labor" ? (
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="laborWorkerId"
+                label={t.laborPersonName}
+                rules={[{ required: true, message: t.requiredField }]}
+              >
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  options={workers?.map((worker) => ({ label: worker.name, value: worker.id }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
+          {expenseType === "products" ? (
+            <Col xs={24} md={12}>
+              <Form.Item name="supplierId" label={t.supplierOption} rules={[{ required: true, message: t.requiredField }]}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  onChange={() => form.setFieldValue("productId", undefined)}
+                  options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
+          {showProductField ? (
+            <Col xs={24} md={12}>
+              <Form.Item name="productId" label={t.materialOption} rules={[{ required: true, message: t.requiredField }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  options={supplierProducts.map((product) => ({
+                    label: product.buildingName ? `${product.name} - ${product.buildingName}` : product.name,
+                    value: product.id,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
+          <Col xs={12} md={12}>
             <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`}>
               <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`}>
+          <Col xs={12} md={12}>
+            <Form.Item name="remainingAmountUsd" label={`${t.remaining_label} ${formatCurrencyLabel("USD")}`}>
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+            </Form.Item>
+          </Col>
+          <Col xs={12} md={12}>
+            <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
               <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
+          <Col xs={12} md={12}>
+            <Form.Item name="remainingAmountIqd" label={`${t.remaining_label} IQD`}>
               <InputNumber min={0} step={1} style={{ width: "100%" }} />
             </Form.Item>
           </Col>
@@ -632,7 +750,12 @@ export default function Invoices() {
       return deleteInvoice(invoice.id);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: erpKeys.invoices });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: erpKeys.invoices }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workers }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.workerTransactionsList }),
+        queryClient.invalidateQueries({ queryKey: erpKeys.dashboard }),
+      ]);
       void tableQuery.refetch();
     },
     onError: (error) => void message.error(toErrorMessage(error)),
@@ -725,7 +848,13 @@ export default function Invoices() {
                 {asRecordStatus(invoice.record_status) === "deleted" ? <Tag>{t.deleted}</Tag> : null}
               </Space>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {[invoice.supplier_name, invoice.project_name, invoice.product_name].filter(Boolean).join(" | ") ||
+                {[
+                  expenseTypeLabel(asExpenseType(invoice.expense_type), t),
+                  invoice.labor_worker_name ?? invoice.labor_person_name,
+                  invoice.supplier_name,
+                  invoice.project_name,
+                  invoice.product_name,
+                ].filter(Boolean).join(" | ") ||
                   t.noDetail}
               </Typography.Text>
             </Space>
@@ -781,6 +910,8 @@ export default function Invoices() {
     const fileBase = t.invoicesTitle;
     const exportRows = rows.map((invoice) => ({
       [t.expenseTitle]: invoice.number ?? "",
+      [t.expenseType]: expenseTypeLabel(asExpenseType(invoice.expense_type), t),
+      [t.laborPersonName]: invoice.labor_worker_name ?? invoice.labor_person_name ?? "",
       [t.status]: invoiceStatusLabel(
         asDualCurrencyInvoiceStatus(
           invoice.status,

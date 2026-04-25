@@ -217,8 +217,13 @@ type TranslationShape = {
   newInvoice: string;
   editInvoice: string;
   expenseTitle: string;
-  expenseTitlePlaceholder: string;
-  invoiceStatus_label: string;
+  expenseType: string;
+  expenseTypeLabor: string;
+  expenseTypeProducts: string;
+  expenseTypeLogistics: string;
+  laborPersonName: string;
+  laborPersonNamePlaceholder: string;
+  materialOption: string;
   supplierOption: string;
   projectOption: string;
   invoiceAssignment: string;
@@ -517,8 +522,13 @@ function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape {
     newInvoice: "New expense",
     editInvoice: "Edit expense",
     expenseTitle: "Title",
-    expenseTitlePlaceholder: "Concrete delivery, rent, tool repair...",
-    invoiceStatus_label: "Status",
+    expenseType: "Expense type",
+    expenseTypeLabor: "Labor",
+    expenseTypeProducts: "Products",
+    expenseTypeLogistics: "Logistics",
+    laborPersonName: "Worker",
+    laborPersonNamePlaceholder: "Select a registered worker",
+    materialOption: "Material",
     supplierOption: "Supplier",
     projectOption: "Project",
     invoiceAssignment: "Assignment",
@@ -819,8 +829,13 @@ function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     newInvoice: "خەرجیی نوێ",
     editInvoice: "دەستکاریکردنی خەرجی",
     expenseTitle: "ناونیشان",
-    expenseTitlePlaceholder: "ناونیشانی خەرجی...",
-    invoiceStatus_label: "دۆخ",
+    expenseType: "جۆری خەرجی",
+    expenseTypeLabor: "کرێکاری",
+    expenseTypeProducts: "بەرهەمەکان",
+    expenseTypeLogistics: "لۆجستیک",
+    laborPersonName: "کرێکار",
+    laborPersonNamePlaceholder: "کرێکاری تۆمارکراو هەڵبژێرە",
+    materialOption: "کەرەستە",
     supplierOption: "دابینکەر",
     projectOption: "پڕۆژە",
     invoiceAssignment: "پەیوەستکردن",

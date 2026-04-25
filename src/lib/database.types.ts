@@ -227,8 +227,12 @@ export type Database = {
           image_path: string | null
           invoice_date: string | null
           invoice_id: number
+          labor_worker_id: number | null
+          labor_worker_name: string | null
+          labor_person_name: string | null
           notes: string | null
           number: string
+          expense_type: string
           paid_amount: number
           paid_amount_iqd: number
           paid_amount_usd: number
@@ -256,8 +260,12 @@ export type Database = {
           image_path?: string | null
           invoice_date?: string | null
           invoice_id: number
+          labor_worker_id?: number | null
+          labor_worker_name?: string | null
+          labor_person_name?: string | null
           notes?: string | null
           number: string
+          expense_type?: string
           paid_amount?: number
           paid_amount_iqd?: number
           paid_amount_usd?: number
@@ -285,8 +293,12 @@ export type Database = {
           image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number
+          labor_worker_id?: number | null
+          labor_worker_name?: string | null
+          labor_person_name?: string | null
           notes?: string | null
           number?: string
+          expense_type?: string
           paid_amount?: number
           paid_amount_iqd?: number
           paid_amount_usd?: number
@@ -328,6 +340,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_history_labor_worker_id_fkey"
+            columns: ["labor_worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
           {
@@ -376,10 +395,13 @@ export type Database = {
           deleted_at: string | null
           deleted_by: string | null
           due_date: string | null
+          expense_type: string
           id: number
           image_path: string | null
           internal_id: string
           invoice_date: string
+          labor_worker_id: number | null
+          labor_person_name: string | null
           notes: string | null
           number: string
           paid_amount: number
@@ -402,10 +424,13 @@ export type Database = {
           deleted_at?: string | null
           deleted_by?: string | null
           due_date?: string | null
+          expense_type?: string
           id?: number
           image_path?: string | null
           internal_id?: string
           invoice_date?: string
+          labor_worker_id?: number | null
+          labor_person_name?: string | null
           notes?: string | null
           number: string
           paid_amount?: number
@@ -428,10 +453,13 @@ export type Database = {
           deleted_at?: string | null
           deleted_by?: string | null
           due_date?: string | null
+          expense_type?: string
           id?: number
           image_path?: string | null
           internal_id?: string
           invoice_date?: string
+          labor_worker_id?: number | null
+          labor_person_name?: string | null
           notes?: string | null
           number?: string
           paid_amount?: number
@@ -466,6 +494,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_labor_worker_id_fkey"
+            columns: ["labor_worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
           {
@@ -710,6 +745,8 @@ export type Database = {
           description: string | null
           id: number
           project_id: number | null
+          source_invoice_id: number | null
+          source_kind: string | null
           type: string
           worker_id: number
         }
@@ -723,6 +760,8 @@ export type Database = {
           description?: string | null
           id?: number
           project_id?: number | null
+          source_invoice_id?: number | null
+          source_kind?: string | null
           type: string
           worker_id: number
         }
@@ -736,6 +775,8 @@ export type Database = {
           description?: string | null
           id?: number
           project_id?: number | null
+          source_invoice_id?: number | null
+          source_kind?: string | null
           type?: string
           worker_id?: number
         }
@@ -752,6 +793,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "app_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
           {
@@ -950,10 +1005,14 @@ export type Database = {
           changed_by_name: string | null
           currency: string | null
           due_date: string | null
+          expense_type: string | null
           id: number | null
           image_path: string | null
           invoice_date: string | null
           invoice_id: number | null
+          labor_worker_id: number | null
+          labor_worker_name: string | null
+          labor_person_name: string | null
           notes: string | null
           number: string | null
           paid_amount: number | null
@@ -982,10 +1041,14 @@ export type Database = {
           changed_by_name?: string | null
           currency?: string | null
           due_date?: string | null
+          expense_type?: string | null
           id?: number | null
           image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number | null
+          labor_worker_id?: number | null
+          labor_worker_name?: string | null
+          labor_person_name?: string | null
           notes?: string | null
           number?: string | null
           paid_amount?: number | null
@@ -1014,10 +1077,14 @@ export type Database = {
           changed_by_name?: string | null
           currency?: string | null
           due_date?: string | null
+          expense_type?: string | null
           id?: number | null
           image_path?: string | null
           invoice_date?: string | null
           invoice_id?: number | null
+          labor_worker_id?: number | null
+          labor_worker_name?: string | null
+          labor_person_name?: string | null
           notes?: string | null
           number?: string | null
           paid_amount?: number | null
@@ -1064,6 +1131,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_history_labor_worker_id_fkey"
+            columns: ["labor_worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
           {
@@ -1114,9 +1188,13 @@ export type Database = {
           deleted_at: string | null
           deleted_by: string | null
           due_date: string | null
+          expense_type: string | null
           id: number | null
           image_path: string | null
           invoice_date: string | null
+          labor_worker_id: number | null
+          labor_worker_name: string | null
+          labor_person_name: string | null
           notes: string | null
           number: string | null
           paid_amount: number | null
@@ -1157,6 +1235,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_labor_worker_id_fkey"
+            columns: ["labor_worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
           {
@@ -1222,6 +1307,8 @@ export type Database = {
           id: number | null
           project_id: number | null
           project_name: string | null
+          source_invoice_id: number | null
+          source_kind: string | null
           type: string | null
           worker_id: number | null
         }
@@ -1238,6 +1325,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "app_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "worker_transactions_source_invoice_id_fkey"
+            columns: ["source_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
           {
