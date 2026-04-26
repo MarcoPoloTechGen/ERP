@@ -21,6 +21,7 @@ import {
   Typography,
 } from "antd";
 import {
+  createWorkerTransaction,
   deleteWorker,
   deleteWorkerTransaction,
   erpKeys,
@@ -58,6 +59,124 @@ type WorkerFormValues = {
   category?: string;
   phone?: string;
 };
+
+function WorkerTransactionModal({
+  transaction,
+  workerId,
+  onClose,
+}: {
+  transaction?: WorkerTransaction;
+  workerId: number;
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const { selectedProjectId: scopedProjectId } = useProjectScope();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [form] = Form.useForm<TransactionFormValues>();
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
+
+  const saveMutation = useMutation({
+    mutationFn: (values: TransactionFormValues) => {
+      const payload = {
+        workerId,
+        type: values.type,
+        amountUsd: Number(values.amountUsd || 0),
+        amountIqd: Number(values.amountIqd || 0),
+        description: values.description?.trim() || null,
+        date: values.date || null,
+        projectId: scopedProjectId ?? values.projectId ?? null,
+      };
+
+      return transaction ? updateWorkerTransaction(transaction.id, payload) : createWorkerTransaction(payload);
+    },
+    onSuccess: async () => {
+      await erpInvalidation.workerDetail(workerId);
+      onClose();
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Modal
+      open
+      title={transaction ? t.editTransaction : t.newTransaction}
+      okText={transaction ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<TransactionFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          type: transaction?.type ?? "debit",
+          amountUsd: transaction?.amountUsd ?? 0,
+          amountIqd: transaction?.amountIqd ?? 0,
+          description: transaction?.description ?? undefined,
+          date: transaction?.date ?? new Date().toISOString().slice(0, 10),
+          projectId: scopedProjectId ?? transaction?.projectId ?? undefined,
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="type" label={t.type} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                options={[
+                  { label: t.credit, value: "credit" },
+                  { label: t.debit, value: "debit" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinUsd ?? 0}
+                max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                step={0.01}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinIqd ?? 0}
+                max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                step={1}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="projectId" label={t.txProject}>
+              <Select
+                disabled={scopedProjectId != null}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noProjectOption}
+                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="date" label={t.date} rules={[{ required: true, message: t.dateRequired }]}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item name="description" label={t.description}>
+          <Input />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
 
 function WorkerFormModal({
   worker,
@@ -205,6 +324,8 @@ export default function WorkerDetail() {
   const erpInvalidation = useErpInvalidation();
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showWorkerModal, setShowWorkerModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<typeof transactions[0] | null>(null);
 
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
@@ -466,6 +587,17 @@ export default function WorkerDetail() {
         <WorkerFormModal
           worker={worker}
           onClose={() => setShowWorkerModal(false)}
+        />
+      ) : null}
+
+      {showModal && worker ? (
+        <WorkerTransactionModal
+          transaction={selectedTransaction || undefined}
+          workerId={worker.id}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedTransaction(null);
+          }}
         />
       ) : null}
     </Space>
