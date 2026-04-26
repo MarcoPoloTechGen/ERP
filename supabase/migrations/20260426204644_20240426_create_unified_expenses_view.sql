@@ -13,13 +13,13 @@ SELECT
   total_amount_usd as amount_usd,
   total_amount_iqd as amount_iqd,
   currency,
-  description as notes,
+  notes as notes,
   invoice_date as date,
   project_id,
   project_name,
   supplier_id,
   supplier_name,
-  worker_id as labor_worker_id,
+  labor_worker_id,
   labor_worker_name,
   'paid' as status,
   CASE 
@@ -49,7 +49,7 @@ SELECT
   created_at,
   'transaction' as expense_source,
   'TX-' || id::text as reference,
-  'payment' as category,
+  COALESCE(expense_category, 'general') as category,
   amount,
   amount_usd,
   amount_iqd,
@@ -57,11 +57,11 @@ SELECT
   description,
   date,
   project_id,
-  project_name,
+  NULL as project_name,
   supplier_id,
-  supplier_name,
+  NULL as supplier_name,
   worker_id,
-  worker_name,
+  NULL as worker_name,
   type as status,
   party_type,
   -- Transaction specific fields (null for invoices)
@@ -71,9 +71,9 @@ SELECT
   null as due_date,
   null as image_path,
   created_by,
-  created_by_name,
+  NULL as created_by_name,
   'active' as record_status
-FROM app_party_transactions
+FROM party_transactions
 WHERE source_invoice_id IS NULL
   AND source_kind IS NULL
 ORDER BY date DESC, created_at DESC;
