@@ -1,14 +1,30 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { 
-  createWorkerTransaction, 
+  createWorkerTransaction,
   createSupplierTransaction,
   createInvoice,
   listProjects,
   listWorkers,
   listSuppliers,
-  type ExpenseFormData 
+  erpKeys
 } from '@/lib/erp-core';
+
+// Type pour les données de dépense
+export interface ExpenseFormData {
+  amount: number;
+  amountUsd?: number;
+  amountIqd?: number;
+  currency: 'USD' | 'IQD';
+  category: string;
+  description?: string;
+  date: string;
+  projectId?: number;
+  workerId?: number;
+  supplierId?: number;
+  partyType: 'worker' | 'supplier' | 'general';
+}
 
 // Hook pour créer une dépense unifiée
 export function useCreateExpense() {
@@ -128,8 +144,8 @@ export function useExpenseForm(initialData?: Partial<ExpenseFormData>) {
   const updateField = (field: keyof ExpenseFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Effacer l'erreur quand l'utilisateur corrige
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+    if (errors[field as string]) {
+      setErrors(prev => ({ ...prev, [field as string]: '' }));
     }
   };
 
