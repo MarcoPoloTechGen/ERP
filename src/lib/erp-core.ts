@@ -39,8 +39,8 @@ type AppProjectRow = ViewRow<"app_projects">;
 type AppProductRow = ViewRow<"app_products">;
 type AppInvoiceRow = ViewRow<"app_invoices">;
 type AppInvoiceHistoryRow = ViewRow<"app_invoice_history">;
-type AppWorkerTransactionRow = ViewRow<"app_worker_transactions">;
 type AppSupplierTransactionRow = ViewRow<"app_supplier_transactions">;
+type AppPartyTransactionRow = ViewRow<"app_party_transactions">;
 type AppAllExpenseRow = ViewRow<"all_expenses">;
 type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
@@ -1032,13 +1032,13 @@ function normalizeInvoiceHistoryEntry(row: AppInvoiceHistoryRow): InvoiceHistory
   };
 }
 
-function normalizeWorkerTransaction(row: AppWorkerTransactionRow): WorkerTransaction {
+function normalizePartyTransactionRow(row: AppPartyTransactionRow): WorkerTransaction {
   const currency = toCurrency(readString(row, "currency"));
   const { amountUsd, amountIqd } = readDualCurrencyAmount(
     row,
     ["amount_usd", "amountUsd"],
     ["amount_iqd", "amountIqd"],
-    ["amount"],
+    ["amount", "amount"],
     currency,
   );
 
@@ -2104,8 +2104,9 @@ export async function deleteProject(id: number) {
 
 export async function listWorkerTransactions(workerId?: number) {
   let query: any = supabase
-    .from("app_worker_transactions")
+    .from("app_party_transactions")
     .select("*")
+    .eq("party_type", "worker")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -2113,7 +2114,7 @@ export async function listWorkerTransactions(workerId?: number) {
     query = query.eq("worker_id", workerId);
   }
 
-  return executeSelect(query, normalizeWorkerTransaction);
+  return executeSelect(query, normalizePartyTransactionRow);
 }
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
