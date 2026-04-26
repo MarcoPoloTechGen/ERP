@@ -21,8 +21,8 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
-import { createWorker, deleteWorker, erpKeys, listWorkers, updateWorker } from "@/lib/erp";
+import { Download, FileSpreadsheet, Plus } from "lucide-react";
+import { createWorker, erpKeys, listWorkers } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
@@ -61,11 +61,9 @@ function buildFilters(search: string, category: string) {
 }
 
 function WorkerModal({
-  worker,
   onClose,
   onSaved,
 }: {
-  worker?: WorkerRow;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -83,11 +81,6 @@ function WorkerModal({
         phone: values.phone?.trim() || null,
       };
 
-      if (worker) {
-        await updateWorker(worker.id, payload);
-        return;
-      }
-
       await createWorker(payload);
     },
     onSuccess: async () => {
@@ -101,8 +94,8 @@ function WorkerModal({
   return (
     <Modal
       open
-      title={worker ? t.editWorker : t.newWorker}
-      okText={worker ? t.save : t.create}
+      title={t.newWorker}
+      okText={t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
       onCancel={onClose}
@@ -112,10 +105,10 @@ function WorkerModal({
         form={form}
         layout="vertical"
         initialValues={{
-          name: worker?.name ?? "",
-          role: worker?.role ?? "",
-          category: worker?.category ?? "",
-          phone: worker?.phone ?? "",
+          name: "",
+          role: "",
+          category: "",
+          phone: "",
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -147,8 +140,6 @@ function WorkerModal({
 
 export default function Workers() {
   const { t } = useLang();
-  const { message } = App.useApp();
-  const [selectedWorker, setSelectedWorker] = useState<WorkerRow | undefined>();
   const [open, setOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
@@ -178,12 +169,6 @@ export default function Workers() {
     setFilters(buildFilters(search, categoryFilter), "replace");
   }, [categoryFilter, search, setCurrentPage, setFilters]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (worker: WorkerRow) => deleteWorker(worker.id),
-    onSuccess: () => void tableQuery.refetch(),
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
-
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
   const balanceUsdValue = (worker: WorkerRow) => worker.balance_usd ?? worker.balance ?? 0;
   const balanceIqdValue = (worker: WorkerRow) => worker.balance_iqd ?? 0;
@@ -192,6 +177,7 @@ export default function Workers() {
     {
       title: t.name,
       dataIndex: "name",
+      responsive: ["xs", "sm", "md", "lg"],
       render: (value: string, worker) => (
         <Space size="small" wrap>
           <Typography.Text strong>{value}</Typography.Text>
@@ -199,12 +185,23 @@ export default function Workers() {
         </Space>
       ),
     },
-    { title: t.role, dataIndex: "role", render: (value: string | null) => value ?? "-" },
-    { title: t.phone, dataIndex: "phone", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.role,
+      dataIndex: "role",
+      responsive: ["sm", "md", "lg"],
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: t.phone,
+      dataIndex: "phone",
+      responsive: ["md", "lg"],
+      render: (value: string | null) => value ?? "-",
+    },
     {
       title: t.balance,
       dataIndex: "balance",
       align: "right",
+      responsive: ["sm", "md", "lg"],
       render: (_value: number | null, worker) => (
         <Space direction="vertical" size={0}>
           <Typography.Text
@@ -216,35 +213,6 @@ export default function Workers() {
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes}
           </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "",
-      key: "actions",
-      align: "right",
-      width: 144,
-      render: (_, worker) => (
-        <Space size="small">
-          <Button
-            type="text"
-            icon={<Pencil size={16} />}
-            onClick={() => {
-              setSelectedWorker(worker);
-              setOpen(true);
-            }}
-          />
-          <Popconfirm
-            title={t.deleteWorkerConfirm}
-            okText={t.remove}
-            cancelText={t.cancel}
-            onConfirm={() => deleteMutation.mutate(worker)}
-          >
-            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-          </Popconfirm>
-          <Link href={`/workers/${worker.id}`}>
-            <Button type="text" icon={<ChevronRight size={16} />} />
-          </Link>
         </Space>
       ),
     },
@@ -291,7 +259,6 @@ export default function Workers() {
               type="primary"
               icon={<Plus size={16} />}
               onClick={() => {
-                setSelectedWorker(undefined);
                 setOpen(true);
               }}
             >
@@ -351,7 +318,11 @@ export default function Workers() {
         {...tableProps}
         rowKey="id"
         columns={columns}
-        scroll={{ x: 900 }}
+        scroll={{ x: 600 }}
+        onRow={(worker) => ({
+          onClick: () => window.location.href = `/workers/${worker.id}`,
+          style: { cursor: "pointer" },
+        })}
         pagination={
           tableProps.pagination
             ? {
@@ -365,7 +336,7 @@ export default function Workers() {
       />
 
       {open ? (
-        <WorkerModal worker={selectedWorker} onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
+        <WorkerModal onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
       ) : null}
     </Space>
   );

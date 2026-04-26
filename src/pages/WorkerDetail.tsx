@@ -22,6 +22,7 @@ import {
 } from "antd";
 import {
   createWorkerTransaction,
+  deleteWorker,
   deleteWorkerTransaction,
   erpKeys,
   getAppSettings,
@@ -29,6 +30,7 @@ import {
   listInvoices,
   listProjects,
   listWorkerTransactions,
+  updateWorker,
   updateWorkerTransaction,
   type TransactionType,
   type WorkerTransaction,
@@ -48,6 +50,91 @@ type TransactionFormValues = {
   date?: string;
   projectId?: number;
 };
+
+type WorkerFormValues = {
+  name: string;
+  role: string;
+  category?: string;
+  phone?: string;
+};
+
+function WorkerFormModal({
+  worker,
+  onClose,
+}: {
+  worker: { id: number; name: string; role: string | null; category: string | null; phone: string | null };
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [form] = Form.useForm<WorkerFormValues>();
+
+  const saveMutation = useMutation({
+    mutationFn: async (values: WorkerFormValues) => {
+      const payload = {
+        name: values.name.trim(),
+        role: values.role.trim(),
+        category: values.category?.trim() || null,
+        phone: values.phone?.trim() || null,
+      };
+
+      await updateWorker(worker.id, payload);
+    },
+    onSuccess: async () => {
+      await erpInvalidation.workerDetail(worker.id);
+      message.success(t.saved);
+      onClose();
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Modal
+      open
+      title={t.editWorker}
+      okText={t.save}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<WorkerFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: worker.name,
+          role: worker.role ?? "",
+          category: worker.category ?? "",
+          phone: worker.phone ?? "",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.namePlaceholder} />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="role" label={t.role} rules={[{ required: true, message: t.roleRequired }]}>
+              <Input placeholder={t.rolePlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="category" label={t.category}>
+              <Input placeholder={t.categoryPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="phone" label={t.phone}>
+              <Input placeholder={t.phonePlaceholder} />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
+    </Modal>
+  );
+}
 
 function TransactionModal({
   transaction,
@@ -176,6 +263,7 @@ export default function WorkerDetail() {
   const erpInvalidation = useErpInvalidation();
   const [selectedTransaction, setSelectedTransaction] = useState<WorkerTransaction | undefined>();
   const [showModal, setShowModal] = useState(false);
+  const [showWorkerModal, setShowWorkerModal] = useState(false);
 
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
@@ -201,6 +289,15 @@ export default function WorkerDetail() {
     mutationFn: (transaction: WorkerTransaction) => deleteWorkerTransaction(transaction.id),
     onSuccess: async () => {
       await erpInvalidation.workerDetail(workerId);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  const deleteWorkerMutation = useMutation({
+    mutationFn: () => deleteWorker(workerId),
+    onSuccess: async () => {
+      message.success(t.deleted);
+      window.location.href = "/workers";
     },
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -277,6 +374,26 @@ export default function WorkerDetail() {
           <div>
             <Typography.Text type="secondary">{[worker.role, worker.phone].filter(Boolean).join(" | ")}</Typography.Text>
           </div>
+        </Col>
+        <Col flex="none">
+          <Space>
+            <Button
+              icon={<Pencil size={16} />}
+              onClick={() => setShowWorkerModal(true)}
+            >
+              {t.edit}
+            </Button>
+            <Popconfirm
+              title={t.deleteWorkerConfirm}
+              okText={t.remove}
+              cancelText={t.cancel}
+              onConfirm={() => deleteWorkerMutation.mutate()}
+            >
+              <Button danger icon={<Trash2 size={16} />} loading={deleteWorkerMutation.isPending}>
+                {t.remove}
+              </Button>
+            </Popconfirm>
+          </Space>
         </Col>
         <Col>
           <div className="text-right">
@@ -406,6 +523,13 @@ export default function WorkerDetail() {
             setShowModal(false);
             setSelectedTransaction(undefined);
           }}
+        />
+      ) : null}
+
+      {showWorkerModal && worker ? (
+        <WorkerFormModal
+          worker={worker}
+          onClose={() => setShowWorkerModal(false)}
         />
       ) : null}
     </Space>

@@ -24,6 +24,7 @@ import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { invoiceStatusColor, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
 import {
   createSupplierTransaction,
+  deleteSupplier,
   deleteSupplierTransaction,
   erpKeys,
   getAppSettings,
@@ -31,6 +32,7 @@ import {
   listInvoices,
   listProjects,
   listSupplierTransactions,
+  updateSupplier,
   updateSupplierTransaction,
   type SupplierTransaction,
   type TransactionType,
@@ -49,6 +51,106 @@ type TransactionFormValues = {
   date?: string;
   projectId?: number;
 };
+
+type SupplierFormValues = {
+  name: string;
+  contact?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+};
+
+function SupplierFormModal({
+  supplier,
+  onClose,
+}: {
+  supplier: {
+    id: number;
+    name: string;
+    contact: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+  };
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [form] = Form.useForm<SupplierFormValues>();
+
+  const saveMutation = useMutation({
+    mutationFn: async (values: SupplierFormValues) => {
+      const payload = {
+        name: values.name.trim(),
+        contact: values.contact?.trim() || null,
+        phone: values.phone?.trim() || null,
+        email: values.email?.trim() || null,
+        address: values.address?.trim() || null,
+      };
+
+      await updateSupplier(supplier.id, payload);
+    },
+    onSuccess: async () => {
+      await erpInvalidation.supplierDetail(supplier.id);
+      message.success(t.saved);
+      onClose();
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Modal
+      open
+      title={t.editSupplier}
+      okText={t.save}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<SupplierFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          name: supplier.name,
+          contact: supplier.contact ?? "",
+          phone: supplier.phone ?? "",
+          email: supplier.email ?? "",
+          address: supplier.address ?? "",
+        }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.name} rules={[{ required: true, message: t.nameRequired }]}>
+          <Input placeholder={t.namePlaceholder} />
+        </Form.Item>
+
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="contact" label={t.contact}>
+              <Input placeholder={t.contactPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="phone" label={t.phoneSup}>
+              <Input placeholder={t.phonePlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="email" label={t.email}>
+              <Input type="email" placeholder={t.emailPlaceholder} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="address" label={t.address}>
+              <Input placeholder={t.addressPlaceholder} />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
+    </Modal>
+  );
+}
 
 function SupplierTransactionModal({
   transaction,
@@ -177,6 +279,7 @@ export default function SupplierDetail() {
   const erpInvalidation = useErpInvalidation();
   const [selectedTransaction, setSelectedTransaction] = useState<SupplierTransaction | undefined>();
   const [showModal, setShowModal] = useState(false);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
 
   const { data: supplier, isLoading: supplierLoading } = useQuery({
     queryKey: erpKeys.supplier(supplierId),
@@ -198,6 +301,15 @@ export default function SupplierDetail() {
     mutationFn: (transaction: SupplierTransaction) => deleteSupplierTransaction(transaction.id),
     onSuccess: async () => {
       await erpInvalidation.supplierDetail(supplierId);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: () => deleteSupplier(supplierId),
+    onSuccess: async () => {
+      message.success(t.deleted);
+      window.location.href = "/suppliers";
     },
     onError: (error) => void message.error(toErrorMessage(error)),
   });
@@ -282,6 +394,26 @@ export default function SupplierDetail() {
               {[supplier.contact, supplier.phone, supplier.email, supplier.address].filter(Boolean).join(" | ")}
             </Typography.Text>
           </div>
+        </Col>
+        <Col flex="none">
+          <Space>
+            <Button
+              icon={<Pencil size={16} />}
+              onClick={() => setShowSupplierModal(true)}
+            >
+              {t.edit}
+            </Button>
+            <Popconfirm
+              title={t.deleteSupplierConfirm}
+              okText={t.remove}
+              cancelText={t.cancel}
+              onConfirm={() => deleteSupplierMutation.mutate()}
+            >
+              <Button danger icon={<Trash2 size={16} />} loading={deleteSupplierMutation.isPending}>
+                {t.remove}
+              </Button>
+            </Popconfirm>
+          </Space>
         </Col>
         <Col>
           <div className="text-right">
@@ -471,6 +603,13 @@ export default function SupplierDetail() {
             setShowModal(false);
             setSelectedTransaction(undefined);
           }}
+        />
+      ) : null}
+
+      {showSupplierModal && supplier ? (
+        <SupplierFormModal
+          supplier={supplier}
+          onClose={() => setShowSupplierModal(false)}
         />
       ) : null}
     </Space>

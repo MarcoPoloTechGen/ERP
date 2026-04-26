@@ -19,8 +19,8 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { ChevronRight, Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
-import { createSupplier, deleteSupplier, erpKeys, listSupplierBalances, updateSupplier } from "@/lib/erp";
+import { Download, FileSpreadsheet, Plus } from "lucide-react";
+import { createSupplier, erpKeys, listSupplierBalances } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
@@ -56,11 +56,9 @@ function buildFilters(search: string) {
 }
 
 function SupplierModal({
-  supplier,
   onClose,
   onSaved,
 }: {
-  supplier?: SupplierRow;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -79,11 +77,6 @@ function SupplierModal({
         address: values.address?.trim() || null,
       };
 
-      if (supplier) {
-        await updateSupplier(supplier.id, payload);
-        return;
-      }
-
       await createSupplier(payload);
     },
     onSuccess: async () => {
@@ -97,8 +90,8 @@ function SupplierModal({
   return (
     <Modal
       open
-      title={supplier ? t.editSupplier : t.newSupplier}
-      okText={supplier ? t.save : t.create}
+      title={t.newSupplier}
+      okText={t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
       onCancel={onClose}
@@ -108,11 +101,11 @@ function SupplierModal({
         form={form}
         layout="vertical"
         initialValues={{
-          name: supplier?.name ?? "",
-          contact: supplier?.contact ?? "",
-          phone: supplier?.phone ?? "",
-          email: supplier?.email ?? "",
-          address: supplier?.address ?? "",
+          name: "",
+          contact: "",
+          phone: "",
+          email: "",
+          address: "",
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -149,8 +142,6 @@ function SupplierModal({
 
 export default function Suppliers() {
   const { t } = useLang();
-  const { message } = App.useApp();
-  const [selectedSupplier, setSelectedSupplier] = useState<SupplierRow | undefined>();
   const [open, setOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const search = useDeferredValue(searchInput.trim());
@@ -171,12 +162,6 @@ export default function Suppliers() {
     setFilters(buildFilters(search), "replace");
   }, [search, setCurrentPage, setFilters]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (supplier: SupplierRow) => deleteSupplier(supplier.id),
-    onSuccess: () => void tableQuery.refetch(),
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
-
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
   const supplierBalances = useMemo(() => {
     const balancesBySupplier = new Map<number, { usd: number; iqd: number }>();
@@ -192,16 +177,38 @@ export default function Suppliers() {
     {
       title: t.name,
       dataIndex: "name",
+      responsive: ["xs", "sm", "md", "lg"],
       render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
     },
-    { title: t.contact, dataIndex: "contact", render: (value: string | null) => value ?? "-" },
-    { title: t.phoneSup, dataIndex: "phone", render: (value: string | null) => value ?? "-" },
-    { title: t.email, dataIndex: "email", render: (value: string | null) => value ?? "-" },
-    { title: t.address, dataIndex: "address", render: (value: string | null) => value ?? "-" },
+    {
+      title: t.contact,
+      dataIndex: "contact",
+      responsive: ["sm", "md", "lg"],
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: t.phoneSup,
+      dataIndex: "phone",
+      responsive: ["md", "lg"],
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: t.email,
+      dataIndex: "email",
+      responsive: ["lg"],
+      render: (value: string | null) => value ?? "-",
+    },
+    {
+      title: t.address,
+      dataIndex: "address",
+      responsive: ["lg"],
+      render: (value: string | null) => value ?? "-",
+    },
     {
       title: t.balance,
       dataIndex: "id",
       align: "right",
+      responsive: ["sm", "md", "lg"],
       render: (_value: number, supplier) => {
         const balance = supplierBalance(supplier);
         const isPositive = balance.usd >= 0 && balance.iqd >= 0;
@@ -217,35 +224,6 @@ export default function Suppliers() {
           </Space>
         );
       },
-    },
-    {
-      title: "",
-      key: "actions",
-      align: "right",
-      width: 144,
-      render: (_, supplier) => (
-        <Space size="small">
-          <Button
-            type="text"
-            icon={<Pencil size={16} />}
-            onClick={() => {
-              setSelectedSupplier(supplier);
-              setOpen(true);
-            }}
-          />
-          <Popconfirm
-            title={t.deleteSupplierConfirm}
-            okText={t.remove}
-            cancelText={t.cancel}
-            onConfirm={() => deleteMutation.mutate(supplier)}
-          >
-            <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteMutation.isPending} />
-          </Popconfirm>
-          <Link href={`/suppliers/${supplier.id}`}>
-            <Button type="text" icon={<ChevronRight size={16} />} />
-          </Link>
-        </Space>
-      ),
     },
   ];
 
@@ -295,7 +273,6 @@ export default function Suppliers() {
               type="primary"
               icon={<Plus size={16} />}
               onClick={() => {
-                setSelectedSupplier(undefined);
                 setOpen(true);
               }}
             >
@@ -337,7 +314,11 @@ export default function Suppliers() {
         {...tableProps}
         rowKey="id"
         columns={columns}
-        scroll={{ x: 1050 }}
+        scroll={{ x: 600 }}
+        onRow={(supplier) => ({
+          onClick: () => window.location.href = `/suppliers/${supplier.id}`,
+          style: { cursor: "pointer" },
+        })}
         pagination={
           tableProps.pagination
             ? {
@@ -351,11 +332,7 @@ export default function Suppliers() {
       />
 
       {open ? (
-        <SupplierModal
-          supplier={selectedSupplier}
-          onClose={() => setOpen(false)}
-          onSaved={() => void tableQuery.refetch()}
-        />
+        <SupplierModal onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
       ) : null}
     </Space>
   );
