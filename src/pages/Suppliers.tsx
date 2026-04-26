@@ -223,9 +223,9 @@ export default function Suppliers() {
       title: t.balance,
       dataIndex: "id",
       align: "right",
-      responsive: ["sm", "md", "lg"],
+      responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
-      width: 140,
+      width: 130,
       render: (_value: number, supplier) => {
         const balance = supplierBalance(supplier);
         const isPositive = balance.usd >= 0 && balance.iqd >= 0;

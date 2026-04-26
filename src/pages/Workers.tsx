@@ -210,9 +210,9 @@ export default function Workers() {
       title: t.balance,
       dataIndex: "balance",
       align: "right",
-      responsive: ["sm", "md", "lg"],
+      responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
-      width: 140,
+      width: 130,
       render: (_value: number | null, worker) => (
         <Space direction="vertical" size={0}>
           <Typography.Text
