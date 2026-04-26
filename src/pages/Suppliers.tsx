@@ -178,37 +178,54 @@ export default function Suppliers() {
       title: t.name,
       dataIndex: "name",
       responsive: ["xs", "sm", "md", "lg"],
-      render: (value: string) => <Typography.Text strong>{value}</Typography.Text>,
+      ellipsis: true,
+      flex: 1,
+      minWidth: 120,
+      render: (value: string) => <Typography.Text strong ellipsis>{value}</Typography.Text>,
     },
     {
       title: t.contact,
       dataIndex: "contact",
       responsive: ["sm", "md", "lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 100,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.phoneSup,
       dataIndex: "phone",
       responsive: ["md", "lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 100,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.email,
       dataIndex: "email",
       responsive: ["lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 120,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.address,
       dataIndex: "address",
       responsive: ["lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 120,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.balance,
       dataIndex: "id",
       align: "right",
       responsive: ["sm", "md", "lg"],
+      ellipsis: true,
+      width: 140,
       render: (_value: number, supplier) => {
         const balance = supplierBalance(supplier);
         const isPositive = balance.usd >= 0 && balance.iqd >= 0;
@@ -313,8 +330,9 @@ export default function Suppliers() {
       <Table<SupplierRow>
         {...tableProps}
         rowKey="id"
+        size="small"
         columns={columns}
-        scroll={{ x: 600 }}
+        scroll={{ x: true }}
         onRow={(supplier) => ({
           onClick: () => window.location.href = `/suppliers/${supplier.id}`,
           style: { cursor: "pointer" },

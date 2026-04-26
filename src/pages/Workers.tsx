@@ -178,10 +178,13 @@ export default function Workers() {
       title: t.name,
       dataIndex: "name",
       responsive: ["xs", "sm", "md", "lg"],
+      ellipsis: true,
+      flex: 1,
+      minWidth: 120,
       render: (value: string, worker) => (
-        <Space size="small" wrap>
-          <Typography.Text strong>{value}</Typography.Text>
-          {worker.category ? <Tag color="blue">{worker.category}</Tag> : null}
+        <Space size="small" wrap style={{ width: "100%" }}>
+          <Typography.Text strong ellipsis>{value}</Typography.Text>
+          {worker.category ? <Tag color="blue" style={{ marginLeft: "auto" }}>{worker.category}</Tag> : null}
         </Space>
       ),
     },
@@ -189,19 +192,27 @@ export default function Workers() {
       title: t.role,
       dataIndex: "role",
       responsive: ["sm", "md", "lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 80,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.phone,
       dataIndex: "phone",
       responsive: ["md", "lg"],
-      render: (value: string | null) => value ?? "-",
+      ellipsis: true,
+      flex: 1,
+      minWidth: 100,
+      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.balance,
       dataIndex: "balance",
       align: "right",
       responsive: ["sm", "md", "lg"],
+      ellipsis: true,
+      width: 140,
       render: (_value: number | null, worker) => (
         <Space direction="vertical" size={0}>
           <Typography.Text
@@ -317,8 +328,9 @@ export default function Workers() {
       <Table<WorkerRow>
         {...tableProps}
         rowKey="id"
+        size="small"
         columns={columns}
-        scroll={{ x: 600 }}
+        scroll={{ x: true }}
         onRow={(worker) => ({
           onClick: () => window.location.href = `/workers/${worker.id}`,
           style: { cursor: "pointer" },
