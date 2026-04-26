@@ -21,7 +21,6 @@ import {
   Typography,
 } from "antd";
 import {
-  createWorkerTransaction,
   deleteWorker,
   deleteWorkerTransaction,
   erpKeys,
@@ -41,6 +40,8 @@ import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
+import { ExpenseForm, ExpenseFormData } from "@/components/expenses/ExpenseForm";
+import { useCreateExpense, useExpenseFormData } from "@/hooks/use-create-expense";
 
 type TransactionFormValues = {
   type: TransactionType;
@@ -136,120 +137,61 @@ function WorkerFormModal({
   );
 }
 
-function TransactionModal({
-  transaction,
-  workerId,
+function ExpenseModal({
+  worker,
   onClose,
 }: {
-  transaction?: WorkerTransaction;
-  workerId: number;
+  worker: { id: number; name: string };
   onClose: () => void;
 }) {
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
-  const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
-  const [form] = Form.useForm<TransactionFormValues>();
-  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
-  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
+  const createExpense = useCreateExpense();
+  const { projects, workers, suppliers } = useExpenseFormData();
 
-  const saveMutation = useMutation({
-    mutationFn: (values: TransactionFormValues) => {
-      const payload = {
-        workerId,
-        type: values.type,
-        amountUsd: Number(values.amountUsd || 0),
-        amountIqd: Number(values.amountIqd || 0),
-        description: values.description?.trim() || null,
-        date: values.date || null,
-        projectId: scopedProjectId ?? values.projectId ?? null,
-      };
+  const handleSubmit = async (data: ExpenseFormData) => {
+    // Pré-remplir avec les données du travailleur
+    const expenseData: ExpenseFormData = {
+      ...data,
+      partyType: 'worker',
+      workerId: worker.id,
+      projectId: scopedProjectId ?? data.projectId,
+    };
 
-      return transaction ? updateWorkerTransaction(transaction.id, payload) : createWorkerTransaction(payload);
-    },
-    onSuccess: async () => {
-      await erpInvalidation.workerDetail(workerId);
-      onClose();
-    },
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
+    await createExpense.mutateAsync(expenseData);
+    await erpInvalidation.workerDetail(worker.id);
+    onClose();
+  };
+
+  const handleCancel = () => {
+    onClose();
+  };
 
   return (
     <Modal
       open
-      title={transaction ? t.editTransaction : t.newTransaction}
-      okText={transaction ? t.save : t.create}
-      cancelText={t.cancel}
-      confirmLoading={saveMutation.isPending}
+      title={`Nouvelle Dépense - ${worker.name}`}
+      footer={null}
       onCancel={onClose}
-      onOk={() => form.submit()}
+      width={800}
     >
-      <Form<TransactionFormValues>
-        form={form}
-        layout="vertical"
-        initialValues={{
-          type: transaction?.type ?? "credit",
-          amountUsd: transaction?.amountUsd ?? 0,
-          amountIqd: transaction?.amountIqd ?? 0,
-          description: transaction?.description ?? undefined,
-          date: transaction?.date ?? new Date().toISOString().slice(0, 10),
-          projectId: scopedProjectId ?? transaction?.projectId ?? undefined,
+      <ExpenseForm
+        onSubmit={handleSubmit}
+        onCancel={handleCancel}
+        title=""
+        description=""
+        isLoading={createExpense.isPending}
+        projects={projects}
+        workers={workers}
+        suppliers={suppliers}
+        initialData={{
+          partyType: 'worker',
+          workerId: worker.id,
+          projectId: scopedProjectId || undefined,
+          category: 'salary_payment',
         }}
-        onFinish={(values) => saveMutation.mutate(values)}
-      >
-        <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="type" label={t.type} rules={[{ required: true, message: t.requiredField }]}>
-              <Select
-                options={[
-                  { label: t.credit, value: "credit" },
-                  { label: t.debit, value: "debit" },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinUsd ?? 0}
-                max={appSettings?.transactionAmountMaxUsd ?? undefined}
-                step={0.01}
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinIqd ?? 0}
-                max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={1}
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="projectId" label={t.txProject}>
-              <Select
-                disabled={scopedProjectId != null}
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noProjectOption}
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="date" label={t.date} rules={[{ required: true, message: t.dateRequired }]}>
-              <Input type="date" />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Form.Item name="description" label={t.description}>
-          <Input />
-        </Form.Item>
-      </Form>
+      />
     </Modal>
   );
 }
@@ -261,8 +203,7 @@ export default function WorkerDetail() {
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
-  const [selectedTransaction, setSelectedTransaction] = useState<WorkerTransaction | undefined>();
-  const [showModal, setShowModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showWorkerModal, setShowWorkerModal] = useState(false);
 
   const { data: appSettings } = useQuery({
@@ -438,8 +379,7 @@ export default function WorkerDetail() {
           <Button
             type="primary"
             onClick={() => {
-              setSelectedTransaction(undefined);
-              setShowModal(true);
+              setShowExpenseModal(true);
             }}
           >
             {t.addTransaction}
@@ -515,14 +455,10 @@ export default function WorkerDetail() {
         </Space>
       )}
 
-      {showModal ? (
-        <TransactionModal
-          transaction={selectedTransaction}
-          workerId={workerId}
-          onClose={() => {
-            setShowModal(false);
-            setSelectedTransaction(undefined);
-          }}
+      {showExpenseModal && worker ? (
+        <ExpenseModal
+          worker={{ id: worker.id, name: worker.name }}
+          onClose={() => setShowExpenseModal(false)}
         />
       ) : null}
 
