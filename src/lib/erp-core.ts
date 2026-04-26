@@ -41,6 +41,7 @@ type AppInvoiceRow = ViewRow<"app_invoices">;
 type AppInvoiceHistoryRow = ViewRow<"app_invoice_history">;
 type AppWorkerTransactionRow = ViewRow<"app_worker_transactions">;
 type AppSupplierTransactionRow = ViewRow<"app_supplier_transactions">;
+type AppAllExpenseRow = ViewRow<"all_expenses">;
 type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
 
@@ -99,6 +100,7 @@ type PartyTransactionWritePayload = {
   description: string | null;
   date: string;
   project_id: number | null;
+  expense_category: string | null;
 };
 type IncomeTransactionWritePayload = {
   project_id: number;
@@ -386,6 +388,36 @@ export interface IncomeTransaction {
   createdAt: string | null;
 }
 
+export interface AllExpense {
+  id: number;
+  expenseSource: "invoice" | "transaction";
+  reference: string;
+  category: string;
+  amount: number;
+  currency: Currency;
+  amountUsd: number;
+  amountIqd: number;
+  notes: string | null;
+  date: string | null;
+  projectId: number | null;
+  projectName: string | null;
+  supplierId: number | null;
+  supplierName: string | null;
+  laborWorkerId: number | null;
+  laborWorkerName: string | null;
+  status: string;
+  partyType: PartyType;
+  totalAmount: number | null;
+  paidAmount: number | null;
+  remainingAmount: number | null;
+  dueDate: string | null;
+  imagePath: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  recordStatus: RecordStatus;
+  createdAt: string | null;
+}
+
 export interface IncomeTransactionHistoryEntry {
   id: number;
   incomeTransactionId: number;
@@ -590,6 +622,9 @@ export const erpKeys = {
   invoiceHistory: (id: number) => ["invoice", id, "history"] as const,
   incomes: ["incomes"] as const,
   incomeHistory: ["incomeHistory"] as const,
+  allExpenses: ["allExpenses"] as const,
+  expensesByParty: (partyType: PartyType, partyId: number) => ["expenses", partyType, partyId] as const,
+  expensesByProject: (projectId: number) => ["expenses", "project", projectId] as const,
 };
 
 function asRow(value: unknown): Row {
@@ -1057,6 +1092,51 @@ function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierT
     canManage: readValue(row, "can_manage", "canManage") === true,
     createdAt: readDate(row, "created_at", "createdAt"),
   };
+}
+
+function normalizeAllExpense(row: AppAllExpenseRow): AllExpense {
+  const currency = toCurrency(readString(row, "currency"));
+  const { amountUsd, amountIqd } = readDualCurrencyAmount(
+    row,
+    ["amount_usd", "amountUsd"],
+    ["amount_iqd", "amountIqd"],
+    ["amount", "amount"],
+    currency,
+  );
+
+  return {
+    id: readId(row, "id"),
+    expenseSource: readString(row, "expense_source") === "invoice" ? "invoice" : "transaction",
+    reference: readString(row, "reference") ?? "",
+    category: readString(row, "category") ?? "general",
+    amount: pickPrimaryAmount(amountUsd, amountIqd),
+    currency,
+    amountUsd,
+    amountIqd,
+    notes: readString(row, "notes"),
+    date: readDate(row, "date"),
+    projectId: readNumber(row, "project_id", "projectId"),
+    projectName: readString(row, "project_name", "projectName"),
+    supplierId: readNumber(row, "supplier_id", "supplierId"),
+    supplierName: readString(row, "supplier_name", "supplierName"),
+    laborWorkerId: readNumber(row, "labor_worker_id", "laborWorkerId"),
+    laborWorkerName: readString(row, "labor_worker_name", "laborWorkerName"),
+    status: readString(row, "status") ?? "unknown",
+    partyType: toPartyType(readString(row, "party_type")),
+    totalAmount: readNumber(row, "total_amount", "totalAmount"),
+    paidAmount: readNumber(row, "paid_amount", "paidAmount"),
+    remainingAmount: readNumber(row, "remaining_amount", "remainingAmount"),
+    dueDate: readDate(row, "due_date", "dueDate"),
+    imagePath: readString(row, "image_path", "imagePath"),
+    createdBy: readString(row, "created_by", "createdBy"),
+    createdByName: readString(row, "created_by_name", "createdByName"),
+    recordStatus: toRecordStatus(readString(row, "record_status", "recordStatus")),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function toPartyType(value: unknown): PartyType {
+  return value === "supplier" ? "supplier" : "worker";
 }
 
 function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransaction {
@@ -1549,6 +1629,7 @@ function normalizePartyTransactionInput(input: {
   description: string | null;
   date: string | null;
   projectId: number | null;
+  expenseCategory?: string | null;
 }) {
   const amountUsd = input.amountUsd ?? 0;
   const amountIqd = input.amountIqd ?? 0;
@@ -1568,9 +1649,20 @@ function normalizePartyTransactionInput(input: {
     description: normalizeOptionalText(input.description),
     date: input.date ?? new Date().toISOString().slice(0, 10),
     project_id: input.projectId,
+    expense_category: input.expenseCategory ?? normalizeDefaultExpenseCategory(input.partyType, input.type),
   };
 
   return payload;
+}
+
+function normalizeDefaultExpenseCategory(partyType: PartyType, transactionType: TransactionType): string {
+  if (partyType === "worker") {
+    return transactionType === "debit" ? "salary_payment" : "worker_advance";
+  }
+  if (partyType === "supplier") {
+    return transactionType === "debit" ? "supplier_payment" : "supplier_credit";
+  }
+  return "general";
 }
 
 function assertAmountWithinLimit(
@@ -2357,11 +2449,7 @@ export async function updateIncomeTransaction(id: number, input: IncomeTransacti
     settings,
   });
   const payload = normalizeIncomeTransactionInput(input);
-  const { error } = await supabase
-    .from("income_transactions")
-    .update(payload)
-    .eq("id", id)
-    .eq("record_status", "active");
+  const { error } = await supabase.from("income_transactions").update(payload).eq("id", id);
 
   if (error) {
     throw new Error(error.message);
@@ -2392,6 +2480,46 @@ export async function deleteIncomeTransaction(id: number) {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+// Unified expense functions
+export async function listAllExpenses(options?: {
+  partyType?: PartyType;
+  partyId?: number;
+  projectId?: number;
+  category?: string;
+}) {
+  let query: any = supabase
+    .from("all_expenses")
+    .select("*")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (options?.partyType && options?.partyId != null) {
+    query = query.eq("party_type", options.partyType).eq(options.partyType === "worker" ? "labor_worker_id" : "supplier_id", options.partyId);
+  }
+
+  if (options?.projectId != null) {
+    query = query.eq("project_id", options.projectId);
+  }
+
+  if (options?.category) {
+    query = query.eq("category", options.category);
+  }
+
+  return executeSelect(query, normalizeAllExpense);
+}
+
+export async function listExpensesByWorker(workerId: number) {
+  return listAllExpenses({ partyType: "worker", partyId: workerId });
+}
+
+export async function listExpensesBySupplier(supplierId: number) {
+  return listAllExpenses({ partyType: "supplier", partyId: supplierId });
+}
+
+export async function listExpensesByProject(projectId: number) {
+  return listAllExpenses({ projectId });
 }
 
 export async function getDashboardOverview(projectId?: number | null): Promise<DashboardOverview> {

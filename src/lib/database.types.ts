@@ -537,6 +537,7 @@ export type Database = {
           currency: string
           date: string
           description: string | null
+          expense_category: string | null
           id: number
           party_type: string
           project_id: number | null
@@ -555,6 +556,7 @@ export type Database = {
           currency?: string
           date?: string
           description?: string | null
+          expense_category?: string | null
           id?: number
           party_type: string
           project_id?: number | null
@@ -573,6 +575,7 @@ export type Database = {
           currency?: string
           date?: string
           description?: string | null
+          expense_category?: string | null
           id?: number
           party_type?: string
           project_id?: number | null
@@ -978,6 +981,96 @@ export type Database = {
       }
     }
     Views: {
+      all_expenses: {
+        Row: {
+          id: number
+          created_at: string
+          expense_source: string
+          reference: string
+          category: string
+          amount: number
+          amount_usd: number
+          amount_iqd: number
+          currency: string
+          notes: string | null
+          date: string
+          project_id: number | null
+          project_name: string | null
+          supplier_id: number | null
+          supplier_name: string | null
+          labor_worker_id: number | null
+          labor_worker_name: string | null
+          status: string
+          party_type: string
+          total_amount: number | null
+          paid_amount: number | null
+          remaining_amount: number | null
+          due_date: string | null
+          image_path: string | null
+          created_by: string | null
+          created_by_name: string | null
+          record_status: string
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          expense_source?: string
+          reference?: string
+          category?: string
+          amount?: number
+          amount_usd?: number
+          amount_iqd?: number
+          currency?: string
+          notes?: string | null
+          date?: string
+          project_id?: number | null
+          project_name?: string | null
+          supplier_id?: number | null
+          supplier_name?: string | null
+          labor_worker_id?: number | null
+          labor_worker_name?: string | null
+          status?: string
+          party_type?: string
+          total_amount?: number | null
+          paid_amount?: number | null
+          remaining_amount?: number | null
+          due_date?: string | null
+          image_path?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          record_status?: string
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          expense_source?: string
+          reference?: string
+          category?: string
+          amount?: number
+          amount_usd?: number
+          amount_iqd?: number
+          currency?: string
+          notes?: string | null
+          date?: string
+          project_id?: number | null
+          project_name?: string | null
+          supplier_id?: number | null
+          supplier_name?: string | null
+          labor_worker_id?: number | null
+          labor_worker_name?: number | null
+          status?: string
+          party_type?: string
+          total_amount?: number | null
+          paid_amount?: number | null
+          remaining_amount?: number | null
+          due_date?: string | null
+          image_path?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          record_status?: string
+        }
+        Relationships: []
+      }
       app_income_transaction_history: {
         Row: {
           amount: number | null
