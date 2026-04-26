@@ -1,16 +1,5 @@
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { Button, Input, Select, DatePicker, Form, Card, Typography, Space, Row, Col } from 'antd';
 
 // Types pour les dépenses
 export interface ExpenseFormData {
@@ -65,6 +54,7 @@ export function ExpenseForm({
   workers = [],
   suppliers = [],
 }: ExpenseFormProps) {
+  const [form] = Form.useForm();
   const [formData, setFormData] = useState<ExpenseFormData>({
     amount: 0,
     currency: 'USD',
@@ -74,56 +64,14 @@ export function ExpenseForm({
     ...initialData,
   });
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Validation des champs obligatoires
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.amount || formData.amount <= 0) {
-      newErrors.amount = 'Le montant est obligatoire et doit être positif';
-    }
-
-    if (!formData.category) {
-      newErrors.category = 'La catégorie est obligatoire';
-    }
-
-    if (!formData.date) {
-      newErrors.date = 'La date est obligatoire';
-    }
-
-    if (formData.partyType === 'worker' && !formData.workerId) {
-      newErrors.workerId = 'Le travailleur est obligatoire';
-    }
-
-    if (formData.partyType === 'supplier' && !formData.supplierId) {
-      newErrors.supplierId = 'Le fournisseur est obligatoire';
-    }
-
-    // Validation des montants en double devise
-    if (formData.currency === 'USD') {
-      if (formData.amountUsd !== undefined && formData.amountUsd <= 0) {
-        newErrors.amountUsd = 'Le montant USD doit être positif';
-      }
-    } else {
-      if (formData.amountIqd !== undefined && formData.amountIqd <= 0) {
-        newErrors.amountIqd = 'Le montant IQD doit être positif';
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
-
+  const handleSubmit = async (values: any) => {
     try {
-      await onSubmit(formData);
+      const expenseData: ExpenseFormData = {
+        ...formData,
+        ...values,
+        date: values.date?.format('YYYY-MM-DD') || formData.date,
+      };
+      await onSubmit(expenseData);
     } catch (error) {
       console.error('Erreur lors de la soumission:', error);
     }
@@ -131,297 +79,213 @@ export function ExpenseForm({
 
   const updateField = (field: keyof ExpenseFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Effacer l'erreur quand l'utilisateur corrige
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
-        <CardDescription className="text-center">{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Informations de base */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount" className="text-sm font-medium">
-                Montant <span className="text-red-500">*</span>
-              </Label>
+    <Card title={title} extra={<Typography.Text>{description}</Typography.Text>}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+        initialValues={{
+          amount: formData.amount,
+          currency: formData.currency,
+          category: formData.category,
+          date: formData.date ? new Date(formData.date) : null,
+          partyType: formData.partyType,
+          workerId: formData.workerId,
+          supplierId: formData.supplierId,
+          projectId: formData.projectId,
+          amountUsd: formData.amountUsd,
+          amountIqd: formData.amountIqd,
+          description: formData.description,
+        }}
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="amount"
+              label="Montant *"
+              rules={[{ required: true, message: 'Le montant est obligatoire' }]}
+            >
               <Input
-                id="amount"
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={formData.amount || ''}
                 onChange={(e) => updateField('amount', parseFloat(e.target.value) || 0)}
-                className={errors.amount ? 'border-red-500' : ''}
               />
-              {errors.amount && (
-                <p className="text-sm text-red-500">{errors.amount}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="currency" className="text-sm font-medium">
-                Devise <span className="text-red-500">*</span>
-              </Label>
+            </Form.Item>
+          </Col>
+          
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="currency"
+              label="Devise *"
+              rules={[{ required: true, message: 'La devise est obligatoire' }]}
+            >
               <Select
-                value={formData.currency}
-                onValueChange={(value: 'USD' | 'IQD') => updateField('currency', value)}
+                placeholder="Sélectionner la devise"
+                onChange={(value: 'USD' | 'IQD') => updateField('currency', value)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner la devise" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="IQD">IQD</SelectItem>
-                </SelectContent>
+                <Select.Option value="USD">USD</Select.Option>
+                <Select.Option value="IQD">IQD</Select.Option>
               </Select>
-            </div>
-          </div>
+            </Form.Item>
+          </Col>
+        </Row>
 
-          {/* Montants en double devise */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="amountUsd" className="text-sm font-medium">
-                Montant USD
-              </Label>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="amountUsd" label="Montant USD">
               <Input
-                id="amountUsd"
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={formData.amountUsd || ''}
                 onChange={(e) => updateField('amountUsd', parseFloat(e.target.value) || undefined)}
-                className={errors.amountUsd ? 'border-red-500' : ''}
               />
-              {errors.amountUsd && (
-                <p className="text-sm text-red-500">{errors.amountUsd}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amountIqd" className="text-sm font-medium">
-                Montant IQD
-              </Label>
+            </Form.Item>
+          </Col>
+          
+          <Col xs={24} md={12}>
+            <Form.Item name="amountIqd" label="Montant IQD">
               <Input
-                id="amountIqd"
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={formData.amountIqd || ''}
                 onChange={(e) => updateField('amountIqd', parseFloat(e.target.value) || undefined)}
-                className={errors.amountIqd ? 'border-red-500' : ''}
               />
-              {errors.amountIqd && (
-                <p className="text-sm text-red-500">{errors.amountIqd}</p>
-              )}
-            </div>
-          </div>
+            </Form.Item>
+          </Col>
+        </Row>
 
-          {/* Catégorie et Date */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category" className="text-sm font-medium">
-                Catégorie <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.category}
-                onValueChange={(value) => updateField('category', value)}
-              >
-                <SelectTrigger className={errors.category ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Sélectionner une catégorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.category && (
-                <p className="text-sm text-red-500">{errors.category}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="date" className="text-sm font-medium">
-                Date <span className="text-red-500">*</span>
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date && "text-muted-foreground",
-                      errors.date && "border-red-500"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date ? (
-                      format(new Date(formData.date), "PPP", { locale: fr })
-                    ) : (
-                      "Sélectionner une date"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={new Date(formData.date)}
-                    onSelect={(date) => {
-                      if (date) {
-                        updateField('date', date.toISOString().split('T')[0]);
-                      }
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              {errors.date && (
-                <p className="text-sm text-red-500">{errors.date}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Type de partie */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              Type de partie <span className="text-red-500">*</span>
-            </Label>
-            <Select
-              value={formData.partyType}
-              onValueChange={(value: 'worker' | 'supplier' | 'general') => updateField('partyType', value)}
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="category"
+              label="Catégorie *"
+              rules={[{ required: true, message: 'La catégorie est obligatoire' }]}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner le type de partie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="general">Général</SelectItem>
-                <SelectItem value="worker">Travailleur</SelectItem>
-                <SelectItem value="supplier">Fournisseur</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Sélection du travailleur/fournisseur selon le type */}
-          {formData.partyType === 'worker' && (
-            <div className="space-y-2">
-              <Label htmlFor="workerId" className="text-sm font-medium">
-                Travailleur <span className="text-red-500">*</span>
-              </Label>
               <Select
-                value={formData.workerId?.toString()}
-                onValueChange={(value) => updateField('workerId', parseInt(value))}
+                placeholder="Sélectionner une catégorie"
+                onChange={(value) => updateField('category', value)}
               >
-                <SelectTrigger className={errors.workerId ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Sélectionner un travailleur" />
-                </SelectTrigger>
-                <SelectContent>
-                  {workers.map((worker) => (
-                    <SelectItem key={worker.id} value={worker.id.toString()}>
-                      {worker.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.workerId && (
-                <p className="text-sm text-red-500">{errors.workerId}</p>
-              )}
-            </div>
-          )}
-
-          {formData.partyType === 'supplier' && (
-            <div className="space-y-2">
-              <Label htmlFor="supplierId" className="text-sm font-medium">
-                Fournisseur <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.supplierId?.toString()}
-                onValueChange={(value) => updateField('supplierId', parseInt(value))}
-              >
-                <SelectTrigger className={errors.supplierId ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Sélectionner un fournisseur" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((supplier) => (
-                    <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                      {supplier.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.supplierId && (
-                <p className="text-sm text-red-500">{errors.supplierId}</p>
-              )}
-            </div>
-          )}
-
-          {/* Projet */}
-          <div className="space-y-2">
-            <Label htmlFor="projectId" className="text-sm font-medium">
-              Projet
-            </Label>
-            <Select
-              value={formData.projectId?.toString()}
-              onValueChange={(value) => updateField('projectId', value ? parseInt(value) : undefined)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un projet (optionnel)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Aucun projet</SelectItem>
-                {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.id.toString()}>
-                    {project.name}
-                  </SelectItem>
+                {EXPENSE_CATEGORIES.map((cat) => (
+                  <Select.Option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </Select.Option>
                 ))}
-              </SelectContent>
+              </Select>
+            </Form.Item>
+          </Col>
+          
+          <Col xs={24} md={12}>
+            <Form.Item
+              name="date"
+              label="Date *"
+              rules={[{ required: true, message: 'La date est obligatoire' }]}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                placeholder="Sélectionner une date"
+                format="DD/MM/YYYY"
+                onChange={(date) => {
+                  if (date) {
+                    updateField('date', date.format('YYYY-MM-DD'));
+                  }
+                }}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Form.Item
+          name="partyType"
+          label="Type de partie *"
+          rules={[{ required: true, message: 'Le type de partie est obligatoire' }]}
+        >
+          <Select
+            placeholder="Sélectionner le type de partie"
+            onChange={(value: 'worker' | 'supplier' | 'general') => updateField('partyType', value)}
+          >
+            <Select.Option value="general">Général</Select.Option>
+            <Select.Option value="worker">Travailleur</Select.Option>
+            <Select.Option value="supplier">Fournisseur</Select.Option>
+          </Select>
+        </Form.Item>
+
+        {formData.partyType === 'worker' && (
+          <Form.Item
+            name="workerId"
+            label="Travailleur *"
+            rules={[{ required: true, message: 'Le travailleur est obligatoire' }]}
+          >
+            <Select
+              placeholder="Sélectionner un travailleur"
+              onChange={(value) => updateField('workerId', parseInt(value))}
+            >
+              {workers.map((worker) => (
+                <Select.Option key={worker.id} value={worker.id}>
+                  {worker.name}
+                </Select.Option>
+              ))}
             </Select>
-          </div>
+          </Form.Item>
+        )}
 
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description" className="text-sm font-medium">
-              Description
-            </Label>
-            <Textarea
-              id="description"
-              placeholder="Ajouter une description (optionnel)"
-              value={formData.description || ''}
-              onChange={(e) => updateField('description', e.target.value)}
-              rows={3}
-            />
-          </div>
+        {formData.partyType === 'supplier' && (
+          <Form.Item
+            name="supplierId"
+            label="Fournisseur *"
+            rules={[{ required: true, message: 'Le fournisseur est obligatoire' }]}
+          >
+            <Select
+              placeholder="Sélectionner un fournisseur"
+              onChange={(value) => updateField('supplierId', parseInt(value))}
+            >
+              {suppliers.map((supplier) => (
+                <Select.Option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+        )}
 
-          {/* Boutons d'action */}
-          <div className="flex justify-end space-x-4 pt-4">
+        <Form.Item name="projectId" label="Projet">
+          <Select
+            placeholder="Sélectionner un projet (optionnel)"
+            allowClear
+            onChange={(value) => updateField('projectId', value ? parseInt(value) : undefined)}
+          >
+            {projects.map((project) => (
+              <Select.Option key={project.id} value={project.id}>
+                {project.name}
+              </Select.Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item name="description" label="Description">
+          <Input.TextArea
+            placeholder="Ajouter une description (optionnel)"
+            rows={3}
+            onChange={(e) => updateField('description', e.target.value)}
+          />
+        </Form.Item>
+
+        <Form.Item>
+          <Space>
             {onCancel && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onCancel}
-                disabled={isLoading}
-              >
+              <Button onClick={onCancel} disabled={isLoading}>
                 Annuler
               </Button>
             )}
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="min-w-[120px]"
-            >
+            <Button type="primary" htmlType="submit" loading={isLoading}>
               {isLoading ? 'Création...' : 'Créer la dépense'}
             </Button>
-          </div>
-        </form>
-      </CardContent>
+          </Space>
+        </Form.Item>
+      </Form>
     </Card>
   );
 }
