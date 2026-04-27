@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Input, Select, DatePicker, Form, Card, Typography, Space, Row, Col } from 'antd';
+import { Button, Input, Select, Form, Card, Typography, Space, Row, Col } from 'antd';
 
 // Types pour les dépenses
 export interface ExpenseFormData {
@@ -91,7 +91,7 @@ export function ExpenseForm({
           amount: formData.amount,
           currency: formData.currency,
           category: formData.category,
-          date: formData.date ? new Date(formData.date) : null,
+          date: formData.date || undefined,
           partyType: formData.partyType,
           workerId: formData.workerId,
           supplierId: formData.supplierId,
@@ -184,16 +184,7 @@ export function ExpenseForm({
               label="Date *"
               rules={[{ required: true, message: 'La date est obligatoire' }]}
             >
-              <DatePicker
-                style={{ width: '100%' }}
-                placeholder="Sélectionner une date"
-                format="DD/MM/YYYY"
-                onChange={(date) => {
-                  if (date) {
-                    updateField('date', date.format('YYYY-MM-DD'));
-                  }
-                }}
-              />
+              <Input type="date" style={{ width: '100%' }} />
             </Form.Item>
           </Col>
         </Row>

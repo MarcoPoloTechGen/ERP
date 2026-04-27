@@ -122,6 +122,8 @@ export function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     roleRequired: "ئەرک پێویستە.",
     requiredField: "ئەم خانەیە پێویستە.",
     save: "پاشەکەوتکردن",
+    saved: "پاشەکەوتکرا",
+    edit: "دەستکاریکردن",
     create: "دروستکردن",
     cancel: "هەڵوەشاندنەوە",
     deleteWorkerConfirm: "ئەم کرێکارە بسڕدرێتەوە؟",
@@ -310,5 +312,20 @@ export function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     initialRenderFailed: "ڕەندەرکردنی سەرەتایی پێش نیشاندانی ئەپلیکەیشنەکە سەرکەوتوو نەبوو.",
     authenticationFailed: "پشتڕاستکردنەوەی ناسنامە سەرکەوتوو نەبوو.",
     updatePasswordFailed: "نوێکردنەوەی وشەی نهێنی سەرکەوتوو نەبوو.",
+    // Error handling
+    networkError: "هەڵەی ڕایەڵە. تکایە پەیوەندییەکەت بپشکنە.",
+    authError: "هەڵەی ناسنامە. تکایە دوبارە بچۆ ژوورەوە.",
+    permissionError: "مافی ئەنجامدانی ئەم کردارەت نییە.",
+    notFoundError: "سەرچاوەی داواکراو نەدۆزرایەوە.",
+    validationError: "هەڵەی پشتڕاستکردنەوە. تکایە زانیارییەکان بپشکنە.",
+    serverError: "هەڵەی سێرڤەر. تکایە دواتر هەوڵبدەوە.",
+    tryAgain: "دووبارە هەوڵبدەوە",
+    // Admin - Error notifications
+    errorNotificationsTitle: "ئاگادارکردنەوەکانی هەڵە",
+    errorNotificationsSubtitle: "ئیمەیڵ وەربگرە کاتێک هەڵەی گرنگ ڕوو دەدات (سێرڤەر، ناسنامە، ماف) لە ئەپلیکەیشنەکە.",
+    superAdminEmailLabel: "ئیمەیڵی بەڕێوەبەری باڵا",
+    superAdminEmailPlaceholder: "admin@example.com",
+    emailUpdated: "ئیمەیڵی ئاگادارکردنەوەکان بە سەرکەوتوویی نوێکرایەوە.",
+    settingsUpdatedMessage: "ڕێکخستنەکان نوێکرانەوە.",
   };
 }

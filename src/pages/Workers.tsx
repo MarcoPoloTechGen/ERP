@@ -22,7 +22,7 @@ import {
   type TableProps,
 } from "antd";
 import { Download, FileSpreadsheet, Plus } from "lucide-react";
-import { createWorker, erpKeys, listWorkers } from "@/lib/erp";
+import { createWorker, erpKeys, listWorkerBalances, listWorkers } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
@@ -157,6 +157,11 @@ export default function Workers() {
     queryFn: listWorkers,
   });
 
+  const { data: workerBalanceRows } = useQuery({
+    queryKey: erpKeys.workerBalances,
+    queryFn: listWorkerBalances,
+  });
+
   const categories = useMemo(() => {
     const values = Array.from(
       new Set((allWorkers ?? []).map((worker) => worker.category).filter(Boolean) as string[]),
@@ -170,8 +175,20 @@ export default function Workers() {
   }, [categoryFilter, search, setCurrentPage, setFilters]);
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
-  const balanceUsdValue = (worker: WorkerRow) => worker.balance_usd ?? worker.balance ?? 0;
-  const balanceIqdValue = (worker: WorkerRow) => worker.balance_iqd ?? 0;
+
+  const workerBalances = useMemo(() => {
+    const balancesByWorker = new Map<number, { usd: number; iqd: number }>();
+
+    for (const balance of workerBalanceRows ?? []) {
+      balancesByWorker.set(balance.workerId, { usd: balance.balanceUsd, iqd: balance.balanceIqd });
+    }
+
+    return balancesByWorker;
+  }, [workerBalanceRows]);
+
+  const workerBalance = (worker: WorkerRow) => workerBalances.get(worker.id) ?? { usd: 0, iqd: 0 };
+  const balanceUsdValue = (worker: WorkerRow) => workerBalance(worker).usd;
+  const balanceIqdValue = (worker: WorkerRow) => workerBalance(worker).iqd;
   const hasFilters = Boolean(searchInput || categoryFilter !== "all");
   const columns: TableProps<WorkerRow>["columns"] = [
     {

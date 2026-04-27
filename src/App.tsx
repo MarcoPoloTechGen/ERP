@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { App as AntdApp, ConfigProvider } from "antd";
@@ -16,11 +16,32 @@ import { ProjectScopeProvider } from "@/lib/project-scope";
 import { supabase, supabaseConfigError } from "@/lib/supabase";
 
 // AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
+import { handleQueryError, handleMutationError, shouldRetryError, getRetryDelay } from "@/lib/error-handler";
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      // Ne pas afficher d'erreur pour les requêtes silencieuses (préférences utilisateur, etc.)
+      if (query.meta?.silent) return;
+      handleQueryError(error);
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      // Ne pas afficher d'erreur pour les mutations silencieuses
+      if (mutation.meta?.silent) return;
+      handleMutationError(error);
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Retry uniquement pour les erreurs réseau/serveur avec exponential backoff
+        if (!shouldRetryError(error)) return false;
+        return failureCount < 2; // Max 2 retries
+      },
+      retryDelay: getRetryDelay,
       refetchOnWindowFocus: false,
     },
     mutations: {

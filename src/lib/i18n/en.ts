@@ -125,6 +125,8 @@ export function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape 
     roleRequired: "Role is required.",
     requiredField: "Required field.",
     save: "Save",
+    saved: "Saved",
+    edit: "Edit",
     create: "Create",
     cancel: "Cancel",
     deleteWorkerConfirm: "Delete this worker?",
@@ -321,5 +323,20 @@ export function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape 
     initialRenderFailed: "The initial render failed before the application could display.",
     authenticationFailed: "Authentication failed.",
     updatePasswordFailed: "Unable to update password.",
+    // Error handling
+    networkError: "Network error. Please check your connection.",
+    authError: "Authentication error. Please sign in again.",
+    permissionError: "You don't have permission to perform this action.",
+    notFoundError: "The requested resource was not found.",
+    validationError: "Validation error. Please check your input.",
+    serverError: "Server error. Please try again later.",
+    tryAgain: "Try again",
+    // Admin - Error notifications
+    errorNotificationsTitle: "Error Notifications",
+    errorNotificationsSubtitle: "Receive an email when critical errors occur (server, auth, permission) in the application.",
+    superAdminEmailLabel: "Super admin email",
+    superAdminEmailPlaceholder: "admin@example.com",
+    emailUpdated: "Notification email updated successfully.",
+    settingsUpdatedMessage: "Settings updated.",
   };
 }

@@ -216,6 +216,12 @@ export interface SupplierBalance {
   balanceIqd: number;
 }
 
+export interface WorkerBalance {
+  workerId: number;
+  balanceUsd: number;
+  balanceIqd: number;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -613,6 +619,7 @@ export const erpKeys = {
   supplierTransactionsList: ["supplierTransactions"] as const,
   supplierTransactions: (supplierId: number) => ["supplierTransactions", supplierId] as const,
   supplierBalances: ["supplierBalances"] as const,
+  workerBalances: ["workerBalances"] as const,
   projects: ["projects"] as const,
   project: (id: number) => ["project", id] as const,
   projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
@@ -1936,8 +1943,32 @@ export async function listWorkers() {
   );
 }
 
-export async function getWorker(id: number) {
-  return executeSingle(supabase.from("workers").select("*").eq("id", id).single(), normalizeWorker);
+export async function getWorker(id: number): Promise<Worker> {
+  // Fetch worker data
+  const worker = await executeSingle(
+    supabase.from("workers").select("*").eq("id", id).single(),
+    normalizeWorker
+  );
+
+  // Fetch worker transactions to calculate balance
+  const transactions = await listWorkerTransactions(id);
+
+  // Calculate balance from transactions (credit - debit)
+  const balanceUsd = transactions.reduce(
+    (sum, t) => sum + (t.type === "credit" ? t.amountUsd : -t.amountUsd),
+    0
+  );
+  const balanceIqd = transactions.reduce(
+    (sum, t) => sum + (t.type === "credit" ? t.amountIqd : -t.amountIqd),
+    0
+  );
+
+  return {
+    ...worker,
+    balance: balanceUsd, // Legacy single currency balance
+    balanceUsd,
+    balanceIqd,
+  };
 }
 
 export async function createWorker(input: WorkerInput) {
@@ -2005,6 +2036,43 @@ export async function listSupplierBalances(): Promise<SupplierBalance[]> {
 
   return Array.from(balancesBySupplier, ([supplierId, balance]) => ({
     supplierId,
+    balanceUsd: balance.balanceUsd,
+    balanceIqd: balance.balanceIqd,
+  }));
+}
+
+export async function listWorkerBalances(): Promise<WorkerBalance[]> {
+  const transactionBalances = await executeSelect(
+    supabase
+      .from("app_party_transactions")
+      .select("worker_id,type,amount_usd,amount_iqd")
+      .eq("party_type", "worker"),
+    (row: Row) => ({
+      workerId: readNumber(row, "worker_id", "workerId"),
+      balanceUsd:
+        (readString(row, "type") === "credit" ? 1 : -1) *
+        (readNumber(row, "amount_usd", "amountUsd") ?? 0),
+      balanceIqd:
+        (readString(row, "type") === "credit" ? 1 : -1) *
+        (readNumber(row, "amount_iqd", "amountIqd") ?? 0),
+    }),
+  );
+  const balancesByWorker = new Map<number, { balanceUsd: number; balanceIqd: number }>();
+
+  for (const balance of transactionBalances) {
+    if (balance.workerId == null) {
+      continue;
+    }
+
+    const current = balancesByWorker.get(balance.workerId) ?? { balanceUsd: 0, balanceIqd: 0 };
+    balancesByWorker.set(balance.workerId, {
+      balanceUsd: current.balanceUsd + balance.balanceUsd,
+      balanceIqd: current.balanceIqd + balance.balanceIqd,
+    });
+  }
+
+  return Array.from(balancesByWorker, ([workerId, balance]) => ({
+    workerId,
     balanceUsd: balance.balanceUsd,
     balanceIqd: balance.balanceIqd,
   }));

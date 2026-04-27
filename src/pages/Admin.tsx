@@ -14,6 +14,10 @@ import {
   updateTransactionAmountLimits,
   type TransactionAmountLimitsInput,
 } from "@/lib/erp";
+import {
+  getNotificationSettings,
+  setSuperAdminEmail,
+} from "@/lib/notifications/error-notification";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
@@ -41,6 +45,8 @@ export default function Admin() {
     transactionAmountMinIqd: null,
     transactionAmountMaxIqd: null,
   });
+  const [superAdminEmailDraft, setSuperAdminEmailDraft] = useState<string>("");
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -70,6 +76,11 @@ export default function Admin() {
     queryFn: listProjectMemberships,
     enabled: canAccessAdmin,
   });
+  const { data: notificationSettings } = useQuery({
+    queryKey: ["notificationSettings"],
+    queryFn: getNotificationSettings,
+    enabled: currentUserIsSuperAdmin,
+  });
 
   useEffect(() => {
     if (!appSettings) {
@@ -83,6 +94,12 @@ export default function Admin() {
       transactionAmountMaxIqd: appSettings.transactionAmountMaxIqd,
     });
   }, [appSettings]);
+
+  useEffect(() => {
+    if (notificationSettings?.super_admin_email) {
+      setSuperAdminEmailDraft(notificationSettings.super_admin_email);
+    }
+  }, [notificationSettings]);
 
   const membershipMap = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -177,6 +194,17 @@ export default function Admin() {
     onSuccess: async () => {
       await erpInvalidation.appSettings();
       void message.success(t.settingsUpdated);
+    },
+    onError: (error) => void message.error(error instanceof Error ? error.message : t.unexpectedError),
+  });
+
+  const superAdminEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      await setSuperAdminEmail(email);
+    },
+    onSuccess: async () => {
+      setEmailNotice("Email de notification mis à jour avec succès.");
+      void message.success("Paramètres de notification mis à jour");
     },
     onError: (error) => void message.error(error instanceof Error ? error.message : t.unexpectedError),
   });
@@ -361,6 +389,69 @@ export default function Admin() {
           </div>
         </div>
       </Card>
+
+      {currentUserIsSuperAdmin && (
+        <Card className="p-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-base font-semibold text-foreground">{t.errorNotificationsTitle}</p>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                {t.errorNotificationsSubtitle}
+              </p>
+            </div>
+
+            <div className="w-full max-w-xl rounded-3xl border border-border bg-background/60 p-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-foreground">
+                  {t.superAdminEmailLabel}
+                </span>
+                <input
+                  type="email"
+                  value={superAdminEmailDraft}
+                  onChange={(e) => {
+                    setSuperAdminEmailDraft(e.target.value);
+                    setEmailNotice(null);
+                  }}
+                  placeholder={t.superAdminEmailPlaceholder}
+                  className={selectClassName}
+                />
+              </label>
+
+              {emailNotice && (
+                <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  {emailNotice}
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="primary"
+                  loading={superAdminEmailMutation.isPending}
+                  disabled={
+                    superAdminEmailDraft === ((notificationSettings as { super_admin_email?: string } | null)?.super_admin_email ?? "") ||
+                    superAdminEmailMutation.isPending
+                  }
+                  onClick={() => superAdminEmailMutation.mutate(superAdminEmailDraft)}
+                >
+                  {t.save}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSuperAdminEmailDraft((notificationSettings as { super_admin_email?: string } | null)?.super_admin_email ?? "");
+                    setEmailNotice(null);
+                  }}
+                  disabled={
+                    superAdminEmailDraft === ((notificationSettings as { super_admin_email?: string } | null)?.super_admin_email ?? "") ||
+                    superAdminEmailMutation.isPending
+                  }
+                >
+                  {t.reset}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {!profiles?.length ? (
         <Empty description={t.noUsersFound} />

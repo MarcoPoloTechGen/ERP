@@ -124,6 +124,8 @@ export type TranslationShape = {
   roleRequired: string;
   requiredField: string;
   save: string;
+  saved: string;
+  edit: string;
   create: string;
   cancel: string;
   deleteWorkerConfirm: string;
@@ -315,4 +317,19 @@ export type TranslationShape = {
   initialRenderFailed: string;
   authenticationFailed: string;
   updatePasswordFailed: string;
+  // Error handling
+  networkError: string;
+  authError: string;
+  permissionError: string;
+  notFoundError: string;
+  validationError: string;
+  serverError: string;
+  tryAgain: string;
+  // Admin - Error notifications
+  errorNotificationsTitle: string;
+  errorNotificationsSubtitle: string;
+  superAdminEmailLabel: string;
+  superAdminEmailPlaceholder: string;
+  emailUpdated: string;
+  settingsUpdatedMessage: string;
 };

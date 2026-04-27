@@ -132,8 +132,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(nextSession);
         setProfile(nextProfile);
-        setAuthCallbackError(readAuthCallbackParams().errorDescription);
-        if (nextSession && isPasswordRecoveryCallback(readAuthCallbackParams())) {
+        setAuthCallbackError(initialAuthCallback.errorDescription);
+        if (nextSession && isPasswordRecoveryCallback(initialAuthCallback)) {
           setIsPasswordRecovery(true);
         }
       } catch (error) {
@@ -158,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSession(nextSession);
-      setAuthCallbackError(readAuthCallbackParams().errorDescription);
+      setAuthCallbackError(initialAuthCallback.errorDescription);
 
       if (event === "PASSWORD_RECOVERY") {
         setIsPasswordRecovery(true);
