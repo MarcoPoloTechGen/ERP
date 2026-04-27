@@ -14,10 +14,10 @@ WITH invoice_expenses AS (
     i.created_at,
     'invoice' as expense_source,
     i.number as reference,
-    i.expense_type as category,
+    'invoice' as category,
     i.total_amount as amount,
-    i.total_amount_usd as amount_usd,
-    i.total_amount_iqd as amount_iqd,
+    null::numeric as amount_usd,
+    null::numeric as amount_iqd,
     i.currency,
     i.notes,
     i.invoice_date as date,
@@ -25,12 +25,11 @@ WITH invoice_expenses AS (
     p.name as project_name,
     i.supplier_id,
     s.name as supplier_name,
-    i.labor_worker_id as worker_id,  -- Standardisé avec party_expenses
-    w.name as worker_name,
+    null::bigint as worker_id,  -- Invoices n'ont pas de worker direct
+    null::text as worker_name,
     'paid' as status,
     CASE 
       WHEN i.supplier_id IS NOT NULL THEN 'supplier'
-      WHEN i.labor_worker_id IS NOT NULL THEN 'worker'
       ELSE 'general'
     END as party_type,
     -- Invoice specific fields
@@ -45,7 +44,7 @@ WITH invoice_expenses AS (
   FROM app_invoices i
   LEFT JOIN projects p ON p.id = i.project_id
   LEFT JOIN suppliers s ON s.id = i.supplier_id
-  LEFT JOIN workers w ON w.id = i.labor_worker_id
+  -- Pas de jointure sur workers car invoices n'ont pas de worker_id
   LEFT JOIN profiles created_profile ON created_profile.id = i.created_by
   WHERE i.record_status = 'active' 
     AND i.status IN ('paid', 'partial')

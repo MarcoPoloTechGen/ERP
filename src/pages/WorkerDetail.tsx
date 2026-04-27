@@ -123,7 +123,7 @@ function WorkerTransactionModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="type" label={t.type} rules={[{ required: true, message: t.requiredField }]}>
+            <Form.Item name="type" label={t.type} rules={[{ required: true, message: "This field is required" }]}>
               <Select
                 options={[
                   { label: t.credit, value: "credit" },
@@ -165,7 +165,7 @@ function WorkerTransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="date" label={t.date} rules={[{ required: true, message: t.dateRequired }]}>
+            <Form.Item name="date" label={t.date} rules={[{ required: true, message: "Date is required" }]}>
               <Input type="date" />
             </Form.Item>
           </Col>

@@ -2,6 +2,21 @@
 -- Cette migration regroupe plusieurs optimisations : vues, index, triggers, et nettoyage
 
 -- =====================================================
+-- 0. CRÉER LES FONCTIONS NÉCESSAIRES (doit être fait en premier)
+-- =====================================================
+
+-- Créer une fonction pour standardiser les noms
+CREATE OR REPLACE FUNCTION standardize_user_name(user_id UUID)
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE(full_name, email)
+  FROM profiles 
+  WHERE id = user_id;
+$$;
+
+-- =====================================================
 -- 1. SIMPLIFIER LA VUE all_expenses AVEC DES CTE
 -- =====================================================
 
@@ -33,11 +48,11 @@ WITH invoice_expenses AS (
       WHEN i.labor_worker_id IS NOT NULL THEN 'worker'
       ELSE 'general'
     END as party_type,
-    -- Invoice specific fields
-    i.total_amount,
-    i.paid_amount,
-    i.remaining_amount,
-    i.due_date,
+    -- Invoice specific fields (cast to text for consistency)
+    i.total_amount::text as total_amount_text,
+    i.paid_amount::text as paid_amount_text,
+    i.remaining_amount::text as remaining_amount_text,
+    i.due_date::text as due_date_text,
     i.image_path,
     i.created_by,
     COALESCE(created_profile.full_name, created_profile.email) as created_by_name,
@@ -73,11 +88,11 @@ party_expenses AS (
     w.name as worker_name,
     pt.type as status,
     pt.party_type,
-    -- Transaction specific fields (null for invoices)
-    null as total_amount,
-    null as paid_amount, 
-    null as remaining_amount,
-    null as due_date,
+    -- Transaction specific fields (text for consistency)
+    null::text as total_amount_text,
+    null::text as paid_amount_text, 
+    null::text as remaining_amount_text,
+    null::text as due_date_text,
     null as image_path,
     pt.created_by,
     COALESCE(created_profile.full_name, created_profile.email) as created_by_name,
@@ -110,18 +125,18 @@ DROP INDEX IF EXISTS idx_party_transactions_date;
 DROP INDEX IF EXISTS idx_party_transactions_source_invoice_id;
 
 -- Créer des index optimisés et consolidés
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_party_transactions_composite 
+CREATE INDEX IF NOT EXISTS idx_party_transactions_composite 
   ON party_transactions(party_type, date DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_party_transactions_party_lookup 
+CREATE INDEX IF NOT EXISTS idx_party_transactions_party_lookup 
   ON party_transactions(party_type, worker_id, supplier_id) 
   WHERE worker_id IS NOT NULL OR supplier_id IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_party_transactions_project_date 
+CREATE INDEX IF NOT EXISTS idx_party_transactions_project_date 
   ON party_transactions(project_id, date DESC) 
   WHERE project_id IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_party_transactions_source_lookup 
+CREATE INDEX IF NOT EXISTS idx_party_transactions_source_lookup 
   ON party_transactions(source_invoice_id, source_kind) 
   WHERE source_invoice_id IS NOT NULL;
 
@@ -159,17 +174,6 @@ CHECK (
 -- =====================================================
 -- 4. STANDARDISER LES NOMS DE COLONNES
 -- =====================================================
-
--- Créer une fonction pour standardiser les noms
-CREATE OR REPLACE FUNCTION standardize_user_name(user_id UUID)
-RETURNS TEXT
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT COALESCE(full_name, email)
-  FROM profiles 
-  WHERE id = user_id;
-$$;
 
 -- Mettre à jour les vues pour utiliser la fonction standardisée
 DROP VIEW IF EXISTS app_invoices CASCADE;
@@ -271,10 +275,10 @@ SELECT
   pt.id,
   pt.party_type,
   COALESCE(pt.worker_id, pt.supplier_id) as party_id,
-  standardize_user_name(CASE 
-    WHEN pt.party_type = 'worker' THEN (SELECT full_name FROM workers WHERE id = pt.worker_id)
+  CASE 
+    WHEN pt.party_type = 'worker' THEN (SELECT name FROM workers WHERE id = pt.worker_id)
     WHEN pt.party_type = 'supplier' THEN (SELECT name FROM suppliers WHERE id = pt.supplier_id)
-  END) as party_name,
+  END as party_name,
   pt.worker_id,
   w.name as worker_name,
   pt.supplier_id,
@@ -310,7 +314,9 @@ SECURITY DEFINER
 AS $$
   SELECT 
     auth.role() = 'authenticated' 
-    AND public.can_access_project(party_transactions.project_id);
+    AND public.can_access_project(project_id)
+  FROM party_transactions
+  WHERE id = current_setting('app.current_transaction_id', true)::BIGINT;
 $$;
 
 -- Supprimer les anciennes politiques
@@ -342,6 +348,9 @@ CHECK (VALUE IN ('USD', 'IQD'));
 CREATE DOMAIN record_status_enum AS TEXT
 CHECK (VALUE IN ('active', 'deleted'));
 
+-- Supprimer la vue qui dépend des colonnes avant de modifier les types
+DROP VIEW IF EXISTS app_party_transactions_unified;
+
 -- Mettre à jour les tables pour utiliser les domaines
 ALTER TABLE party_transactions 
 ALTER COLUMN party_type TYPE party_type_enum USING party_type::party_type_enum,
@@ -368,7 +377,6 @@ DROP VIEW IF EXISTS app_invoice_history CASCADE;
 COMMENT ON TABLE party_transactions IS 'Unified table for all worker and supplier transactions';
 COMMENT ON COLUMN party_transactions.source_type IS 'Type of source: invoice, direct, labor_expense, supplier_expense';
 COMMENT ON COLUMN party_transactions.source_reference IS 'Human-readable reference to the source';
-COMMENT ON VIEW app_party_transactions_unified IS 'Unified view for all party transactions with standardized naming';
 COMMENT ON DOMAIN party_type_enum IS 'Domain for party types: worker or supplier';
 COMMENT ON DOMAIN transaction_type_enum IS 'Domain for transaction types: credit or debit';
 COMMENT ON DOMAIN currency_enum IS 'Domain for currencies: USD or IQD';
@@ -393,5 +401,3 @@ SELECT
 
 -- Grant permissions
 GRANT SELECT ON schema_info TO authenticated;
-GRANT SELECT ON app_party_transactions_unified TO authenticated;
-GRANT SELECT ON all_expenses TO authenticated;
