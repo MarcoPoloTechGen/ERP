@@ -46,6 +46,7 @@ function getUrlParam(url: URL, key: string) {
 export type AuthCallbackParams = {
   type: string | null;
   tokenHash: string | null;
+  accessToken: string | null;
   errorCode: string | null;
   errorDescription: string | null;
 };
@@ -55,6 +56,7 @@ export function readAuthCallbackParams(urlLike?: string | URL) {
     return {
       type: null,
       tokenHash: null,
+      accessToken: null,
       errorCode: null,
       errorDescription: null,
     } satisfies AuthCallbackParams;
@@ -69,6 +71,7 @@ export function readAuthCallbackParams(urlLike?: string | URL) {
   return {
     type: normalizeAuthMessage(getUrlParam(url, "type")),
     tokenHash: getUrlParam(url, "token_hash"),
+    accessToken: getUrlParam(url, "access_token"),
     errorCode: getUrlParam(url, "error_code"),
     errorDescription: decodeAuthParam(
       getUrlParam(url, "error_description") ?? getUrlParam(url, "error"),
@@ -77,7 +80,8 @@ export function readAuthCallbackParams(urlLike?: string | URL) {
 }
 
 export function isPasswordRecoveryCallback(params: AuthCallbackParams) {
-  return params.type === "recovery";
+  // Recovery can be indicated by explicit type=recovery OR by presence of access_token/token_hash in URL
+  return params.type === "recovery" || Boolean(params.accessToken) || Boolean(params.tokenHash);
 }
 
 export function isDuplicateSignUpErrorMessage(message: string | null | undefined) {

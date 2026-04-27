@@ -39,7 +39,18 @@ describe("auth helpers", () => {
     );
 
     expect(params.type).toBe("recovery");
+    expect(params.accessToken).toBe("abc");
     expect(params.errorDescription).toBe("Link expired");
+    expect(isPasswordRecoveryCallback(params)).toBe(true);
+  });
+
+  it("detects password recovery from access_token alone (no type=recovery)", () => {
+    const params = readAuthCallbackParams(
+      "http://localhost:3000/#access_token=eyJhbGc&refresh_token=xyz",
+    );
+
+    expect(params.type).toBeNull();
+    expect(params.accessToken).toBe("eyJhbGc");
     expect(isPasswordRecoveryCallback(params)).toBe(true);
   });
 
