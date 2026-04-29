@@ -342,7 +342,7 @@ export default function SupplierDetail() {
           </Space>
         </Col>
         <Col>
-          <div className="text-right">
+          <div style={{ textAlign: "right" }}>
             <Typography.Title level={3} style={{ margin: 0 }}>
               {formatCurrencyPair(balance)}
             </Typography.Title>
@@ -395,7 +395,7 @@ export default function SupplierDetail() {
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           {visibleTransactions.map((transaction) => (
             <Card key={transaction.id} size="small">
-              <div className="flex items-center justify-between gap-4">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                 <Space>
                   {transaction.type === "credit" ? (
                     <TrendingUp size={18} color="#047857" />
@@ -459,9 +459,9 @@ export default function SupplierDetail() {
           <Space direction="vertical" size="middle" style={{ width: "100%" }}>
             {supplierInvoices.map((invoice) => (
               <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
-                <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
+                <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
                       <Space size="small" wrap>
                         <Typography.Text strong>{invoice.number}</Typography.Text>
                         <Tag color={invoiceStatusColor[invoice.status]}>{invoiceStatusLabel(invoice.status, t)}</Tag>
@@ -479,7 +479,7 @@ export default function SupplierDetail() {
                         </Typography.Text>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div style={{ textAlign: "right" }}>
                       <Typography.Text strong>
                         {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
                       </Typography.Text>

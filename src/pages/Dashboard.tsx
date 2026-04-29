@@ -41,7 +41,7 @@ function StatCard({
 }) {
   return (
     <Card size="small">
-      <div className="flex items-start justify-between gap-4">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <Typography.Text type="secondary">{label}</Typography.Text>
           <Typography.Title level={2} style={{ margin: "8px 0 0" }}>
@@ -157,9 +157,9 @@ export default function Dashboard() {
               <Space direction="vertical" size="middle" style={{ width: "100%" }}>
                 {data.projectsSummary.slice(0, 6).map((project) => (
                   <Link href={`/projects/${project.id}`} key={project.id}>
-                    <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                    <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px", transition: "background 0.15s" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ minWidth: 0 }}>
                           <Typography.Text strong ellipsis>
                             {project.name}
                           </Typography.Text>
@@ -167,7 +167,7 @@ export default function Dashboard() {
                             <Tag color={projectStatusColor(project.status)}>{t[project.status]}</Tag>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div style={{ textAlign: "right" }}>
                           <Typography.Text strong>
                             {formatCurrencyPair({ usd: project.totalInvoicedUsd, iqd: project.totalInvoicedIqd })}
                           </Typography.Text>
@@ -192,9 +192,9 @@ export default function Dashboard() {
               <Space direction="vertical" size="middle" style={{ width: "100%" }}>
                 {data.workersSummary.slice(0, 6).map((worker) => (
                   <Link href={`/workers/${worker.id}`} key={worker.id}>
-                    <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                    <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px", transition: "background 0.15s" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ minWidth: 0 }}>
                           <Typography.Text strong ellipsis>
                             {worker.name}
                           </Typography.Text>
@@ -202,7 +202,7 @@ export default function Dashboard() {
                             <Typography.Text type="secondary">{worker.role}</Typography.Text>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div style={{ textAlign: "right" }}>
                           <Typography.Text
                             strong
                             type={worker.balanceUsd >= 0 && worker.balanceIqd >= 0 ? "success" : "danger"}
@@ -234,9 +234,9 @@ export default function Dashboard() {
               <Space direction="vertical" size="middle" style={{ width: "100%" }}>
                 {data.invoicesSummary.slice(0, 6).map((invoice) => (
                   <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
-                    <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
+                    <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px", transition: "background 0.15s" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ minWidth: 0 }}>
                           <Space size="small" wrap>
                             <Typography.Text strong ellipsis>
                               {invoice.number}
@@ -247,7 +247,7 @@ export default function Dashboard() {
                             <Typography.Text type="secondary">{invoice.supplierName ?? t.noSupplier}</Typography.Text>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div style={{ textAlign: "right" }}>
                           <Typography.Text strong>
                             {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
                           </Typography.Text>

@@ -497,9 +497,9 @@ function SummaryItem({
   const textType = tone === "credit" ? "success" : tone === "debit" ? "danger" : undefined;
 
   return (
-    <div className="min-h-24 rounded-md border border-card-border bg-background px-4 py-3">
+    <div style={{ minHeight: 96, borderRadius: 8, border: "1px solid #e5e0d5", background: "#fff", padding: "12px 16px" }}>
       <Typography.Text type="secondary">{label}</Typography.Text>
-      <div className="mt-2">
+      <div style={{ marginTop: 8 }}>
         <Typography.Text strong type={textType}>
           {formatCurrencyPair(value)}
         </Typography.Text>
@@ -535,7 +535,7 @@ export default function AccountFlowChart({
         <Empty description={emptyDescription} />
       ) : (
         <Space direction="vertical" size="large" style={{ width: "100%" }}>
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
             <SummaryItem label={creditLabel} tone="credit" value={credit} />
             <SummaryItem label={debitLabel} tone="debit" value={debit} />
             <SummaryItem label={balanceLabel} value={balance} />

@@ -15,13 +15,15 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { App, Button, InputNumber, Select } from "antd";
+import { App, Button, Divider, InputNumber, Layout as AntLayout, Select, Space, Typography } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings, updateExchangeRateIqdPer100Usd } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
 import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { useProjectScope } from "@/lib/project-scope";
+
+const { Sider, Content } = AntLayout;
 
 const MIN_EXCHANGE_RATE_IQD_PER_100_USD = 100_000;
 const MAX_EXCHANGE_RATE_IQD_PER_100_USD = 1_000_000;
@@ -49,13 +51,23 @@ function NavLink({
   return (
     <Link href={href} onClick={onSelect}>
       <div
-        className={`flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition ${
-          active
-            ? "bg-primary text-primary-foreground shadow-sm"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        }`}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 12px",
+          borderRadius: 10,
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: 500,
+          transition: "background 0.15s",
+          background: active ? "#f59e0b" : "transparent",
+          color: active ? "#fff" : "rgba(232,223,200,0.85)",
+        }}
+        onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.08)"; }}
+        onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
       >
-        <Icon size={18} />
+        <Icon size={17} />
         <span>{label}</span>
       </div>
     </Link>
@@ -78,9 +90,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   });
   const canEditAppSettings = hasAdminAccess(profile?.role);
   const exchangeRateValue = appSettings?.exchangeRateIqdPer100Usd ?? null;
-  const exchangeRateDisplay = new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(exchangeRateValue ?? 0);
+  const exchangeRateDisplay = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(exchangeRateValue ?? 0);
   const exchangeRateMutation = useMutation({
     mutationFn: updateExchangeRateIqdPer100Usd,
     onSuccess: async () => {
@@ -106,192 +116,244 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/expenses", label: t.expenses, icon: FileText },
   ];
 
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.16),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.95),_rgba(248,250,252,1))] text-foreground">
-      {mobileOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-30 bg-slate-950/40 md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-label={t.closeNavigation}
+  const sidebarContent = (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "20px 16px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <BrandMark
+            companyLogoUrl={appSettings?.companyLogoUrl}
+            alt={t.siteTitle}
+            style={{ width: 40, height: 40, borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "#fff" }}
+          />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.95)" }}>{t.siteTitle}</div>
+            <div style={{ fontSize: 11, color: "rgba(232,223,200,0.45)" }}>{t.siteSub}</div>
+          </div>
+        </div>
+        {mobileOpen && (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(232,223,200,0.7)", padding: 4 }}
+            aria-label={t.close}
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+        {navItems.map((item) => (
+          <NavLink
+            key={item.href}
+            currentPath={location}
+            onSelect={() => setMobileOpen(false)}
+            {...item}
+          />
+        ))}
+        {hasAdminAccess(profile?.role) && (
+          <NavLink
+            href="/admin"
+            label={t.adminTitle}
+            icon={ShieldCheck}
+            currentPath={location}
+            onSelect={() => setMobileOpen(false)}
+          />
+        )}
+      </nav>
+
+      <Divider style={{ borderColor: "rgba(255,255,255,0.1)", margin: "16px 0" }} />
+
+      {/* Project scope */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginBottom: 6 }}>
+          {t.projectScope}
+        </div>
+        <Select<string>
+          value={selectedProjectId == null ? "all" : String(selectedProjectId)}
+          loading={projectScopeLoading}
+          disabled={projects.length <= 1 || forcedProjectId != null}
+          optionFilterProp="label"
+          showSearch
+          style={{ width: "100%" }}
+          onChange={(value) => setSelectedProjectId(value === "all" ? null : Number(value))}
+          options={[
+            { label: t.allProjects, value: "all", disabled: forcedProjectId != null },
+            ...projects.map((project) => ({ label: project.name, value: String(project.id) })),
+          ]}
         />
-      ) : null}
+      </div>
 
-      <div className="flex min-h-screen w-full">
-        <aside
-          className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform md:static md:translate-x-0 ${
-            mobileOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-sidebar-border pb-5">
-            <div className="flex items-center gap-3">
-              <BrandMark
-                companyLogoUrl={appSettings?.companyLogoUrl}
-                alt={t.siteTitle}
-                className="h-11 w-11 border border-sidebar-border bg-white shadow-lg shadow-amber-400/20"
-              />
-              <div>
-                <p className="text-sm font-semibold text-sidebar-foreground">{t.siteTitle}</p>
-                <p className="text-xs text-sidebar-foreground/60">{t.siteSub}</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg p-2 text-sidebar-foreground md:hidden"
-              onClick={() => setMobileOpen(false)}
-              aria-label={t.close}
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <nav className="mt-5 flex-1 space-y-1.5">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.href}
-                currentPath={location}
-                onSelect={() => setMobileOpen(false)}
-                {...item}
-              />
-            ))}
-            {hasAdminAccess(profile?.role) ? (
-              <NavLink
-                href="/admin"
-                label={t.adminTitle}
-                icon={ShieldCheck}
-                currentPath={location}
-                onSelect={() => setMobileOpen(false)}
-              />
-            ) : null}
-          </nav>
-
-          <div className="space-y-3 border-t border-sidebar-border pt-4">
-            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {t.projectScope}
-              </p>
-              <Select<string>
-                value={selectedProjectId == null ? "all" : String(selectedProjectId)}
-                loading={projectScopeLoading}
-                disabled={projects.length <= 1 || forcedProjectId != null}
-                optionFilterProp="label"
-                showSearch
-                style={{ width: "100%" }}
-                onChange={(value) => setSelectedProjectId(value === "all" ? null : Number(value))}
-                options={[
-                  { label: t.allProjects, value: "all", disabled: forcedProjectId != null },
-                  ...projects.map((project) => ({ label: project.name, value: String(project.id) })),
-                ]}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {t.exchangeRate}
-              </p>
-              <p className="mb-2 text-sm font-semibold text-sidebar-foreground">
-                100$ = {exchangeRateValue == null ? "-" : exchangeRateDisplay} IQD
-              </p>
-              {canEditAppSettings ? (
-                <div className="flex gap-2">
-                  <InputNumber
-                    min={MIN_EXCHANGE_RATE_IQD_PER_100_USD}
-                    max={MAX_EXCHANGE_RATE_IQD_PER_100_USD}
-                    precision={0}
-                    value={exchangeRateDraft}
-                    controls={false}
-                    style={{ width: "100%" }}
-                    onChange={(value) => setExchangeRateDraft(typeof value === "number" ? value : null)}
-                  />
-                  <Button
-                    loading={exchangeRateMutation.isPending}
-                    disabled={
-                      exchangeRateDraft === exchangeRateValue ||
-                      exchangeRateDraft == null ||
-                      exchangeRateDraft < MIN_EXCHANGE_RATE_IQD_PER_100_USD ||
-                      exchangeRateDraft > MAX_EXCHANGE_RATE_IQD_PER_100_USD
-                    }
-                    onClick={() => exchangeRateMutation.mutate(exchangeRateDraft)}
-                  >
-                    {t.save}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="rounded-2xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-3">
-              <p className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile?.fullName ?? profile?.email ?? t.user}
-              </p>
-              <p className="mt-1 text-xs uppercase tracking-[0.14em] text-sidebar-foreground/55">
-                {isSuperAdmin(profile?.role)
-                  ? t.superAdminTitle
-                  : profile?.role === "admin"
-                    ? t.adminTitle
-                    : t.user}
-              </p>
-            </div>
-
-            <div className="flex rounded-2xl bg-sidebar-accent p-1">
-              {languages.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => setLang(item.value)}
-                  className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                    lang === item.value
-                      ? "bg-primary text-primary-foreground"
-                      : "text-sidebar-foreground/70"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
+      {/* Exchange rate */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginBottom: 6 }}>
+          {t.exchangeRate}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.85)", marginBottom: 8 }}>
+          100$ = {exchangeRateValue == null ? "-" : exchangeRateDisplay} IQD
+        </div>
+        {canEditAppSettings && (
+          <Space.Compact style={{ width: "100%" }}>
+            <InputNumber
+              min={MIN_EXCHANGE_RATE_IQD_PER_100_USD}
+              max={MAX_EXCHANGE_RATE_IQD_PER_100_USD}
+              precision={0}
+              value={exchangeRateDraft}
+              controls={false}
+              style={{ flex: 1 }}
+              onChange={(value) => setExchangeRateDraft(typeof value === "number" ? value : null)}
+            />
             <Button
-              block
-              icon={<LogOut size={16} />}
-              onClick={() => {
-                void signOut();
-              }}
+              loading={exchangeRateMutation.isPending}
+              disabled={
+                exchangeRateDraft === exchangeRateValue ||
+                exchangeRateDraft == null ||
+                exchangeRateDraft < MIN_EXCHANGE_RATE_IQD_PER_100_USD ||
+                exchangeRateDraft > MAX_EXCHANGE_RATE_IQD_PER_100_USD
+              }
+              onClick={() => exchangeRateMutation.mutate(exchangeRateDraft)}
             >
-              {t.signOut}
+              {t.save}
             </Button>
+          </Space.Compact>
+        )}
+      </div>
 
-            <p className="text-center text-xs text-sidebar-foreground/45">{t.version}</p>
-          </div>
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur md:hidden">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="rounded-xl border border-border p-2 text-foreground"
-                  onClick={() => setMobileOpen(true)}
-                >
-                  <Menu size={18} />
-                </button>
-                <div className="flex items-center gap-3">
-                  <BrandMark
-                    companyLogoUrl={appSettings?.companyLogoUrl}
-                    alt={t.siteTitle}
-                    className="h-10 w-10 border border-border bg-white"
-                  />
-                  <div>
-                  <p className="text-sm font-semibold text-foreground">{t.siteTitle}</p>
-                  <p className="text-xs text-muted-foreground">{t.siteSub}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      {/* User info */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(232,223,200,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {profile?.fullName ?? profile?.email ?? t.user}
+        </div>
+        <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginTop: 2 }}>
+          {isSuperAdmin(profile?.role) ? t.superAdminTitle : profile?.role === "admin" ? t.adminTitle : t.user}
         </div>
       </div>
+
+      {/* Language switcher */}
+      <div style={{ display: "flex", background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: 4, marginBottom: 10 }}>
+        {languages.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => setLang(item.value)}
+            style={{
+              flex: 1,
+              border: "none",
+              borderRadius: 7,
+              padding: "6px 0",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "background 0.15s, color 0.15s",
+              background: lang === item.value ? "#f59e0b" : "transparent",
+              color: lang === item.value ? "#fff" : "rgba(232,223,200,0.6)",
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <Button
+        block
+        icon={<LogOut size={15} />}
+        onClick={() => { void signOut(); }}
+      >
+        {t.signOut}
+      </Button>
+
+      <div style={{ textAlign: "center", fontSize: 11, color: "rgba(232,223,200,0.3)", marginTop: 10 }}>{t.version}</div>
     </div>
+  );
+
+  return (
+    <AntLayout style={{ minHeight: "100vh" }}>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          aria-label={t.closeNavigation}
+          style={{
+            position: "fixed", inset: 0, zIndex: 30,
+            background: "rgba(15,20,40,0.5)",
+            border: "none", cursor: "pointer",
+            display: "block",
+          }}
+        />
+      )}
+
+      {/* Sidebar desktop */}
+      <Sider
+        width={272}
+        style={{
+          background: "var(--sidebar-bg, #1e2433)",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflow: "auto",
+          display: typeof window !== "undefined" && window.innerWidth < 768 ? "none" : "block",
+        }}
+      >
+        {sidebarContent}
+      </Sider>
+
+      {/* Mobile sidebar */}
+      <div
+        style={{
+          position: "fixed",
+          inset: "0 auto 0 0",
+          zIndex: 40,
+          width: 272,
+          background: "#1e2433",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
+          transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.2s ease",
+          overflowY: "auto",
+        }}
+      >
+        {sidebarContent}
+      </div>
+
+      <AntLayout style={{ background: "#f8f6f0" }}>
+        {/* Mobile header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 16px",
+            background: "rgba(248,246,240,0.92)",
+            borderBottom: "1px solid #e5e0d5",
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            backdropFilter: "blur(8px)",
+          }}
+          
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Button
+              icon={<Menu size={17} />}
+              onClick={() => setMobileOpen(true)}
+              size="small"
+            />
+            <BrandMark
+              companyLogoUrl={appSettings?.companyLogoUrl}
+              alt={t.siteTitle}
+              style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #e5e0d5" }}
+            />
+            <Typography.Text strong style={{ fontSize: 14 }}>{t.siteTitle}</Typography.Text>
+          </div>
+        </div>
+
+        <Content style={{ padding: "24px 32px", minWidth: 0 }}>
+          {children}
+        </Content>
+      </AntLayout>
+    </AntLayout>
   );
 }

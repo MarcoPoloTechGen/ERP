@@ -102,8 +102,8 @@ function ExpensePanel({
   emptyText: string;
 }) {
   return (
-    <section className="min-w-0 overflow-hidden rounded-md border border-card-border bg-card shadow-sm">
-      <div className="border-b border-card-border bg-muted px-3 py-2 text-center">
+    <section style={{ minWidth: 0, overflow: "hidden", borderRadius: 8, border: "1px solid #e5e0d5", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ borderBottom: "1px solid #e5e0d5", background: "#f8f6f0", padding: "6px 12px", textAlign: "center" }}>
         <Typography.Text strong>{section.title}</Typography.Text>
       </div>
 
@@ -117,9 +117,9 @@ function ExpensePanel({
         size="small"
       />
 
-      <div className="flex min-h-12 items-center justify-between gap-3 border-t border-card-border bg-background px-3 py-2">
+      <div style={{ display: "flex", minHeight: 48, alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid #e5e0d5", background: "#fff", padding: "8px 12px" }}>
         <Typography.Text strong>{totalLabel}</Typography.Text>
-        <Typography.Text strong className="text-right">
+        <Typography.Text strong style={{ textAlign: "right" }}>
           {formatCurrencyPair({ usd: section.totalUsd, iqd: section.totalIqd })}
         </Typography.Text>
       </div>
@@ -173,7 +173,7 @@ export default function ProjectExpenseVisualization({
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <div className="rounded-md border border-card-border bg-card px-4 py-3 shadow-sm">
+      <div style={{ borderRadius: 8, border: "1px solid #e5e0d5", background: "#fff", padding: "12px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <Space direction="vertical" size={6} style={{ width: "100%" }}>
           <Typography.Text strong>{t.projectOption}</Typography.Text>
           <Select<number>
@@ -197,7 +197,7 @@ export default function ProjectExpenseVisualization({
       ) : selectedProjectId == null ? (
         <Empty description={t.noProjects} />
       ) : sections.length ? (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 2xl:grid-cols-3">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
           {sections.map((section) => (
             <ExpensePanel
               key={section.key}

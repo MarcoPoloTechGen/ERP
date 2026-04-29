@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { App, Button, Card, Empty, InputNumber, Typography } from "antd";
+import { App, Button, Card, Empty, Input, InputNumber, Select as AntSelect, Space, Typography } from "antd";
 import {
   erpKeys,
   getAppSettings,
@@ -25,8 +25,7 @@ import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { deleteCompanyLogo, uploadCompanyLogo } from "@/lib/supabase";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
-const selectClassName =
-  "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+
 
 export default function Admin() {
   const { t } = useLang();
@@ -234,7 +233,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="space-y-6">
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <div>
         <Typography.Title level={2} style={{ marginBottom: 4 }}>
           {t.adminTitle}
@@ -242,30 +241,30 @@ export default function Admin() {
         <Typography.Text type="secondary">{t.adminSubtitle}</Typography.Text>
       </div>
 
-      <Card className="p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <Card style={{ padding: "20px 24px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "space-between" }}>
           <div>
-            <p className="text-base font-semibold text-foreground">{t.brandingTitle}</p>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t.brandingSubtitle}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{t.companyLogoHint}</p>
+            <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t.brandingTitle}</p>
+            <p style={{ fontSize: 13, color: "#6b7280", maxWidth: 480, marginBottom: 4 }}>{t.brandingSubtitle}</p>
+            <p style={{ fontSize: 12, color: "#9ca3af" }}>{t.companyLogoHint}</p>
           </div>
 
-          <div className="w-full max-w-xl rounded-3xl border border-border bg-background/60 p-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div style={{ width: "100%", maxWidth: 480, borderRadius: 16, border: "1px solid #e5e0d5", background: "#fafaf8", padding: 16 }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
               <BrandMark
                 companyLogoUrl={logoPreviewUrl ?? appSettings?.companyLogoUrl}
                 alt={t.companyLogo}
-                className="h-20 w-20 border border-border bg-white"
+                style={{ width: 80, height: 80, borderRadius: 12, border: "1px solid #e5e0d5", background: "#fff" }}
               />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{t.companyLogo}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 500 }}>{t.companyLogo}</p>
+                <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>
                   {appSettings?.companyLogoPath || selectedLogoFile ? t.changeCompanyLogo : t.noCompanyLogo}
                 </p>
                 <input
                   type="file"
                   accept="image/*"
-                  className="mt-3 block w-full text-sm text-muted-foreground file:mr-3 file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:opacity-90"
+                  style={{ display: "block", width: "100%", fontSize: 13, marginTop: 12, color: "#6b7280" }}
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
                     setSelectedLogoFile(file);
@@ -280,12 +279,12 @@ export default function Admin() {
             </div>
 
             {brandingNotice ? (
-              <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <p style={{ marginTop: 16, borderRadius: 12, border: "1px solid #bbf7d0", background: "#f0fdf4", padding: "10px 16px", fontSize: 13, color: "#166534" }}>
                 {brandingNotice}
               </p>
             ) : null}
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
               <Button
                 type="primary"
                 onClick={() => brandingMutation.mutate({ remove: false })}
@@ -317,17 +316,17 @@ export default function Admin() {
         </div>
       </Card>
 
-      <Card className="p-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <Card style={{ padding: "20px 24px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "space-between" }}>
           <div>
-            <p className="text-base font-semibold text-foreground">{t.transactionAmountLimitsTitle}</p>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t.transactionAmountLimitsSubtitle}</p>
+            <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t.transactionAmountLimitsTitle}</p>
+            <p style={{ fontSize: 13, color: "#6b7280", maxWidth: 480, marginBottom: 4 }}>{t.transactionAmountLimitsSubtitle}</p>
           </div>
 
-          <div className="w-full max-w-2xl rounded-3xl border border-border bg-background/60 p-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">{t.minUsd}</span>
+          <div style={{ width: "100%", maxWidth: 640, borderRadius: 16, border: "1px solid #e5e0d5", background: "#fafaf8", padding: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+              <label >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.minUsd}</span>
                 <InputNumber
                   min={0}
                   step={0.01}
@@ -336,8 +335,8 @@ export default function Admin() {
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMinUsd", value)}
                 />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">{t.maxUsd}</span>
+              <label >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.maxUsd}</span>
                 <InputNumber
                   min={0}
                   step={0.01}
@@ -346,8 +345,8 @@ export default function Admin() {
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMaxUsd", value)}
                 />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">{t.minIqd}</span>
+              <label >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.minIqd}</span>
                 <InputNumber
                   min={0}
                   step={1}
@@ -357,8 +356,8 @@ export default function Admin() {
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMinIqd", value)}
                 />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">{t.maxIqd}</span>
+              <label >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.maxIqd}</span>
                 <InputNumber
                   min={0}
                   step={1}
@@ -371,12 +370,12 @@ export default function Admin() {
             </div>
 
             {transactionLimitsInvalid ? (
-              <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <p style={{ marginTop: 16, borderRadius: 12, border: "1px solid #fecdd3", background: "#fff1f2", padding: "10px 16px", fontSize: 13, color: "#9f1239" }}>
                 {t.transactionAmountLimitsInvalid}
               </p>
             ) : null}
 
-            <div className="mt-4">
+            <div style={{ marginTop: 16 }}>
               <Button
                 type="primary"
                 loading={transactionLimitsMutation.isPending}
@@ -391,21 +390,21 @@ export default function Admin() {
       </Card>
 
       {currentUserIsSuperAdmin && (
-        <Card className="p-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <Card style={{ padding: "20px 24px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 20, justifyContent: "space-between" }}>
             <div>
-              <p className="text-base font-semibold text-foreground">{t.errorNotificationsTitle}</p>
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{t.errorNotificationsTitle}</p>
+              <p style={{ fontSize: 13, color: "#6b7280", maxWidth: 480, marginBottom: 4 }}>
                 {t.errorNotificationsSubtitle}
               </p>
             </div>
 
-            <div className="w-full max-w-xl rounded-3xl border border-border bg-background/60 p-4">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-foreground">
+            <div style={{ width: "100%", maxWidth: 480, borderRadius: 16, border: "1px solid #e5e0d5", background: "#fafaf8", padding: 16 }}>
+              <label >
+                <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
                   {t.superAdminEmailLabel}
                 </span>
-                <input
+                <Input
                   type="email"
                   value={superAdminEmailDraft}
                   onChange={(e) => {
@@ -413,17 +412,16 @@ export default function Admin() {
                     setEmailNotice(null);
                   }}
                   placeholder={t.superAdminEmailPlaceholder}
-                  className={selectClassName}
                 />
               </label>
 
               {emailNotice && (
-                <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <p style={{ marginTop: 16, borderRadius: 12, border: "1px solid #bbf7d0", background: "#f0fdf4", padding: "10px 16px", fontSize: 13, color: "#166534" }}>
                   {emailNotice}
                 </p>
               )}
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <Button
                   type="primary"
                   loading={superAdminEmailMutation.isPending}
@@ -456,7 +454,7 @@ export default function Admin() {
       {!profiles?.length ? (
         <Empty description={t.noUsersFound} />
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {profiles.map((user) => {
             const allowedProjectIds = membershipMap.get(user.id) ?? [];
             const draftName = draftNames[user.id] ?? user.fullName ?? "";
@@ -469,22 +467,22 @@ export default function Admin() {
             const userHasAllProjects = hasAdminAccess(user.role);
 
             return (
-              <Card key={user.id} className="p-5">
-                <div className="flex flex-col gap-5">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold text-foreground">
+              <Card key={user.id} style={{ padding: "20px 24px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {user.fullName ?? user.email ?? t.user}
                     </p>
-                    <p className="mt-1 text-sm text-muted-foreground">{user.email ?? "-"}</p>
+                    <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>{user.email ?? "-"}</p>
                   </div>
 
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 256px", gap: 16, flexWrap: "wrap" }}>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-foreground">
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
                         {t.fullName}
                       </label>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <Input
                           value={draftName}
                           disabled={!canUpdateThisRole || isSavingName}
                           onChange={(event) =>
@@ -493,7 +491,7 @@ export default function Admin() {
                               [user.id]: event.target.value,
                             }))
                           }
-                          className={`${selectClassName} flex-1`}
+                          style={{ flex: 1 }}
                           placeholder={t.fullNamePlaceholder}
                         />
                         <Button
@@ -511,43 +509,40 @@ export default function Admin() {
                       </div>
                     </div>
 
-                    <div className="w-full max-w-xs">
-                      <label className="mb-1 block text-sm font-medium text-foreground">
+                    <div style={{ width: "100%", maxWidth: 280 }}>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
                         {t.roleLabel}
                       </label>
-                      <select
-                        className={selectClassName}
+                      <AntSelect
                         value={user.role}
                         disabled={!canUpdateThisRole || isUpdatingRole}
-                        onChange={(event) =>
+                        style={{ width: "100%" }}
+                        onChange={(value) =>
                           roleMutation.mutate({
                             userId: user.id,
-                            role: event.target.value as "super_admin" | "admin" | "user",
+                            role: value as "super_admin" | "admin" | "user",
                           })
                         }
-                      >
-                        <option value="super_admin" disabled={!currentUserIsSuperAdmin}>
-                          {t.superAdminTitle}
-                        </option>
-                        <option value="admin">{t.adminTitle}</option>
-                        <option value="user">{t.user}</option>
-                      </select>
+                        options={[
+                          { value: "super_admin", label: t.superAdminTitle, disabled: !currentUserIsSuperAdmin },
+                          { value: "admin", label: t.adminTitle },
+                          { value: "user", label: t.user },
+                        ]}
+                      />
                     </div>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-foreground">
+                    <p style={{ fontSize: 13, fontWeight: 500 }}>
                       {t.allowedProjects}
                     </p>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginTop: 12 }}>
                       {(projects ?? []).map((project) => {
                         const checked = userHasAllProjects ? true : allowedProjectIds.includes(project.id);
                         return (
                           <label
                             key={project.id}
-                            className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm ${
-                              checked ? "border-primary/30 bg-primary/5" : "border-border bg-background"
-                            } ${userHasAllProjects ? "opacity-70" : ""}`}
+                            style={{ display: "flex", alignItems: "center", gap: 12, borderRadius: 12, border: checked ? "1px solid rgba(245,158,11,0.4)" : "1px solid #e5e0d5", padding: "10px 16px", fontSize: 13, background: checked ? "rgba(245,158,11,0.05)" : "#fff", opacity: userHasAllProjects ? 0.7 : 1, cursor: userHasAllProjects ? "default" : "pointer" }}
                           >
                             <input
                               type="checkbox"
@@ -575,6 +570,6 @@ export default function Admin() {
           })}
         </div>
       )}
-    </div>
+    </Space>
   );
 }

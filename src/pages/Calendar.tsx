@@ -145,7 +145,7 @@ async function loadCalendarSources() {
 
 function eventContent(info: EventContentArg) {
   return (
-    <span className="block truncate px-1 text-xs font-medium">
+    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 4px", fontSize: 11, fontWeight: 500 }}>
       {info.event.title}
     </span>
   );
@@ -817,7 +817,7 @@ export default function CalendarPage() {
             description={error instanceof Error ? error.message : undefined}
           />
         ) : isLoading ? (
-          <div className="flex min-h-80 items-center justify-center">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 320 }}>
             <Spin />
           </div>
         ) : (

@@ -458,7 +458,7 @@ export default function WorkerDetail() {
           </Space>
         </Col>
         <Col>
-          <div className="text-right">
+          <div style={{ textAlign: "right" }}>
             <Typography.Title
               level={3}
               type={worker.balanceUsd >= 0 && worker.balanceIqd >= 0 ? "success" : "danger"}
@@ -518,7 +518,7 @@ export default function WorkerDetail() {
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           {visibleTransactions.map((transaction) => (
             <Card key={transaction.id} size="small">
-              <div className="flex items-center justify-between gap-4">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                 <Space>
                   {transaction.type === "credit" ? (
                     <TrendingUp size={18} color="#047857" />

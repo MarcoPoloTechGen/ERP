@@ -1,18 +1,24 @@
+import type { CSSProperties } from "react";
+
 type BrandMarkProps = {
   companyLogoUrl?: string | null;
   alt: string;
   className?: string;
+  style?: CSSProperties;
 };
 
-export default function BrandMark({ companyLogoUrl, alt, className = "" }: BrandMarkProps) {
+export default function BrandMark({ companyLogoUrl, alt, className = "", style }: BrandMarkProps) {
   const source = companyLogoUrl ?? `${import.meta.env.BASE_URL}app-logo.svg`;
-  const fitClassName = companyLogoUrl ? "bg-white object-contain p-1.5" : "object-cover";
+  const fitStyle: CSSProperties = companyLogoUrl
+    ? { objectFit: "contain", padding: 4, background: "#fff" }
+    : { objectFit: "cover" };
 
   return (
     <img
       src={source}
       alt={alt}
-      className={`rounded-2xl ${fitClassName} ${className}`.trim()}
+      className={className}
+      style={{ borderRadius: 12, ...fitStyle, ...style }}
     />
   );
 }

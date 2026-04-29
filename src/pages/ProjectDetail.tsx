@@ -113,7 +113,7 @@ export default function ProjectDetail() {
 
               return (
                 <Card key={building.id} size="small">
-                  <div className="flex items-center justify-between gap-3">
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div>
                       <Typography.Text strong>{building.name}</Typography.Text>
                       <div>
@@ -144,9 +144,9 @@ export default function ProjectDetail() {
             {globalInvoices.length ? <Typography.Text type="secondary">{t.projectGlobalCost}</Typography.Text> : null}
             {relatedInvoices.map((invoice) => (
               <Link href={`/expenses/${invoice.id}`} key={invoice.id}>
-                <div className="cursor-pointer rounded-md border border-border px-3 py-3 transition hover:bg-muted/40">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
+                <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
                       <Typography.Text strong ellipsis>{invoice.number}</Typography.Text>
                       <div>
                         <Typography.Text type="secondary">
@@ -156,7 +156,7 @@ export default function ProjectDetail() {
                         </Typography.Text>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div style={{ textAlign: "right" }}>
                       <Typography.Text strong>
                         {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
                       </Typography.Text>

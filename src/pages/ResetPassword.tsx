@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Button } from "antd";
+import { Alert, Button, Form, Input, Space, Typography } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { localizeAuthErrorMessage } from "@/lib/auth-utils";
 import { erpKeys, getAppSettings } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
-
-const inputClassName =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/25";
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "ku", label: "سۆرانی" },
@@ -20,52 +17,29 @@ export default function ResetPasswordPage() {
   const { session, isPasswordRecovery, authCallbackError, updatePassword } = useAuth();
   const { t, lang, setLang } = useLang();
   const [, navigate] = useLocation();
-  const { data: appSettings } = useQuery({
-    queryKey: erpKeys.appSettings,
-    queryFn: getAppSettings,
-  });
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showRecoveryFallback, setShowRecoveryFallback] = useState(false);
+  const [form] = Form.useForm();
 
   useEffect(() => {
-    if (!isPasswordRecovery || session || authCallbackError) {
-      setShowRecoveryFallback(false);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setShowRecoveryFallback(true);
-    }, 4000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
+    if (!isPasswordRecovery || session || authCallbackError) { setShowRecoveryFallback(false); return; }
+    const timeoutId = window.setTimeout(() => setShowRecoveryFallback(true), 4000);
+    return () => window.clearTimeout(timeoutId);
   }, [authCallbackError, isPasswordRecovery, session]);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleSubmit(values: { newPassword: string; confirmPassword: string }) {
     try {
       setSubmitting(true);
       setError(null);
       setSuccess(null);
-
-      if (password.length < 8) {
-        throw new Error(t.passwordTooShort);
-      }
-
-      if (password !== confirmPassword) {
-        throw new Error(t.passwordMismatch);
-      }
-
-      await updatePassword(password);
+      if (values.newPassword.length < 8) throw new Error(t.passwordTooShort);
+      if (values.newPassword !== values.confirmPassword) throw new Error(t.passwordMismatch);
+      await updatePassword(values.newPassword);
       setSuccess(t.passwordUpdated);
-      setPassword("");
-      setConfirmPassword("");
+      form.resetFields();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.updatePasswordFailed);
     } finally {
@@ -74,110 +48,72 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(245,158,11,0.18),_transparent_28%),linear-gradient(180deg,_#fffaf0_0%,_#f5efe3_100%)] px-6 py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
-        <div className="grid w-full overflow-hidden rounded-[32px] border border-amber-100 bg-white shadow-2xl shadow-amber-950/10 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="bg-slate-900 p-10 text-slate-100">
-            <BrandMark
-              companyLogoUrl={appSettings?.companyLogoUrl}
-              alt={t.siteTitle}
-              className="h-14 w-14 border border-white/10 bg-white shadow-lg shadow-amber-500/30"
-            />
-            <h1 className="mt-8 text-4xl font-semibold tracking-tight">{t.siteTitle}</h1>
-            <p className="mt-4 max-w-md text-sm leading-6 text-slate-300">
-              {t.resetPasswordPageIntro}
-            </p>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #fffaf0 0%, #f5efe3 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+      <div style={{ width: "100%", maxWidth: 900, display: "grid", gridTemplateColumns: "1fr 1fr", borderRadius: 24, overflow: "hidden", boxShadow: "0 20px 60px rgba(180,100,0,0.12)", border: "1px solid #fde68a" }}>
+        {/* Left panel */}
+        <div style={{ background: "#1e2433", padding: 40, color: "#e8dfc8" }}>
+          <BrandMark
+            companyLogoUrl={appSettings?.companyLogoUrl}
+            alt={t.siteTitle}
+            style={{ width: 56, height: 56, borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)" }}
+          />
+          <Typography.Title level={2} style={{ color: "#e8dfc8", marginTop: 32, fontWeight: 600 }}>
+            {t.siteTitle}
+          </Typography.Title>
+          <Typography.Text style={{ color: "rgba(232,223,200,0.7)", display: "block", marginTop: 12, lineHeight: 1.7 }}>
+            {t.resetPasswordPageIntro}
+          </Typography.Text>
+        </div>
+
+        {/* Right panel */}
+        <div style={{ background: "#fff", padding: 40 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
+            <Space>
+              {languages.map((item) => (
+                <Button
+                  key={item.value}
+                  size="small"
+                  type={lang === item.value ? "primary" : "default"}
+                  onClick={() => setLang(item.value)}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </Space>
           </div>
 
-          <div className="p-8 sm:p-10">
-            <div className="flex justify-end">
-              <div className="inline-flex rounded-2xl bg-slate-100 p-1">
-                {languages.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setLang(item.value)}
-                    className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                      lang === item.value ? "bg-white shadow-sm text-slate-900" : "text-slate-500"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <Typography.Title level={4} style={{ marginBottom: 4 }}>{t.resetPasswordPageTitle}</Typography.Title>
+          <Typography.Text type="secondary" style={{ display: "block", marginBottom: 20, fontSize: 13 }}>
+            {session?.user.email ?? t.resetPasswordPageIntro}
+          </Typography.Text>
 
-            <div className="mt-8 space-y-4">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  {t.resetPasswordPageTitle}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  {session?.user.email ?? t.resetPasswordPageIntro}
-                </p>
-              </div>
-
-              {success ? (
-                <div className="space-y-4">
-                  <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    {success}
-                  </p>
-                  <Button type="primary" htmlType="button" onClick={() => navigate("/")}>
-                    {t.dashboard}
-                  </Button>
-                </div>
-              ) : isPasswordRecovery && !session && !authCallbackError && !showRecoveryFallback ? (
-                <div className="space-y-4">
-                  <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    {t.preparingRecoveryLink}
-                  </p>
-                </div>
-              ) : session ? (
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                  <input
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    className={inputClassName}
-                    name="newPassword"
-                    placeholder={t.newPasswordPlaceholder}
-                    type="password"
-                  />
-                  <input
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    className={inputClassName}
-                    name="confirmPassword"
-                    placeholder={t.confirmPasswordPlaceholder}
-                    type="password"
-                  />
-                  {error ? <p className="text-sm text-rose-700">{error}</p> : null}
-                  <div className="flex gap-3">
-                    <Button type="primary" htmlType="submit" loading={submitting}>
-                      {t.updatePassword}
-                    </Button>
-                    <Button htmlType="button" onClick={() => navigate("/")}>
-                      {t.dashboard}
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {localizeAuthErrorMessage(authCallbackError) ?? t.invalidRecoveryLink}
-                  </p>
-                  <Button type="primary" htmlType="button" onClick={() => navigate("/")}>
-                    {t.requestNewResetLink}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
+          {success ? (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Alert type="success" message={success} showIcon />
+              <Button type="primary" onClick={() => navigate("/")}>{t.dashboard}</Button>
+            </Space>
+          ) : isPasswordRecovery && !session && !authCallbackError && !showRecoveryFallback ? (
+            <Alert type="warning" message={t.preparingRecoveryLink} showIcon />
+          ) : session ? (
+            <Form form={form} layout="vertical" onFinish={handleSubmit}>
+              <Form.Item name="newPassword" label={t.newPasswordPlaceholder} rules={[{ required: true, min: 8 }]}>
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+              <Form.Item name="confirmPassword" label={t.confirmPasswordPlaceholder} rules={[{ required: true, min: 8 }]}>
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+              {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} showIcon />}
+              <Space>
+                <Button type="primary" htmlType="submit" loading={submitting}>{t.updatePassword}</Button>
+                <Button onClick={() => navigate("/")}>{t.dashboard}</Button>
+              </Space>
+            </Form>
+          ) : (
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <Alert type="error" message={localizeAuthErrorMessage(authCallbackError) ?? t.invalidRecoveryLink} showIcon />
+              <Button type="primary" onClick={() => navigate("/")}>{t.requestNewResetLink}</Button>
+            </Space>
+          )}
         </div>
       </div>
     </div>
