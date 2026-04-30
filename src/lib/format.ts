@@ -53,7 +53,7 @@ export function formatCurrencyInputValue(value: string | number | undefined, cur
     return "";
   }
 
-  return isolateLtr(formatCurrencyText(amount, currency));
+  return formatCurrencyText(amount, currency);
 }
 
 export function parseCurrencyInputValue(value: string | undefined) {

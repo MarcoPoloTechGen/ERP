@@ -20,11 +20,11 @@ describe("format helpers", () => {
   });
 
   it("formats and parses currency input values", () => {
-    expect(formatCurrencyInputValue(123456, "USD")).toBe(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`);
-    expect(formatCurrencyInputValue(123456, "IQD")).toBe(`${LTR_ISOLATE_START}123 456 IQD${LTR_ISOLATE_END}`);
+    expect(formatCurrencyInputValue(123456, "USD")).toBe("123 456 $");
+    expect(formatCurrencyInputValue(123456, "IQD")).toBe("123 456 IQD");
     expect(parseCurrencyInputValue("123 456 $")).toBe("123456");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
-    expect(parseCurrencyInputValue(formatCurrencyInputValue(123456, "USD"))).toBe("123456");
+    expect(parseCurrencyInputValue(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`)).toBe("123456");
   });
 
   it("keeps currency inputs left-to-right in rtl layouts", () => {

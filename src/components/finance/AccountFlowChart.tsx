@@ -53,15 +53,6 @@ type AccountFlowChartProps = {
 
 type CurrencyKey = "usd" | "iqd";
 
-type CurrencyConfig = {
-  axisIndex: number;
-  color: string;
-  deltaKey: "balanceDeltaUsd" | "balanceDeltaIqd";
-  key: CurrencyKey;
-  label: string;
-  transactionKey: "transactionUsd" | "transactionIqd";
-};
-
 type ChartPoint = {
   affected: boolean;
   balance: number;
@@ -79,24 +70,9 @@ type Scale = {
   min: number;
 };
 
-const CURRENCIES: CurrencyConfig[] = [
-  {
-    axisIndex: 0,
-    color: "#047857",
-    deltaKey: "balanceDeltaUsd",
-    key: "usd",
-    label: formatCurrencyLabel("USD"),
-    transactionKey: "transactionUsd",
-  },
-  {
-    axisIndex: 1,
-    color: "#2563eb",
-    deltaKey: "balanceDeltaIqd",
-    key: "iqd",
-    label: formatCurrencyLabel("IQD"),
-    transactionKey: "transactionIqd",
-  },
-];
+const GRAPH_CURRENCY = "IQD";
+const GRAPH_COLOR = "#2563eb";
+const GRAPH_LABEL = formatCurrencyLabel(GRAPH_CURRENCY);
 
 echarts.use([DataZoomComponent, GridComponent, LabelLayout, LegendComponent, LineChart, SVGRenderer, TooltipComponent]);
 
@@ -104,14 +80,13 @@ function currencyAmount(value: number, currencyKey: CurrencyKey) {
   return formatCurrency(value, currencyKey === "usd" ? "USD" : "IQD");
 }
 
-function axisAmount(value: number, currencyKey: CurrencyKey) {
-  const label = formatCurrencyLabel(currencyKey === "usd" ? "USD" : "IQD");
+function axisAmount(value: number) {
   const amount = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 1,
     notation: "compact",
   }).format(Number.isFinite(value) ? value : 0);
 
-  return currencyKey === "usd" ? `${label}${amount}` : `${amount} ${label}`;
+  return `${amount} ${GRAPH_LABEL}`;
 }
 
 function sortDateKey(value: string | null) {
@@ -146,7 +121,15 @@ function sortEntries(entries: AccountFlowEntry[]) {
   });
 }
 
-function buildPoints(entries: AccountFlowEntry[], currency: CurrencyConfig): ChartPoint[] {
+function convertUsdToIqd(amountUsd: number, exchangeRateIqdPer100Usd: number | null) {
+  return exchangeRateIqdPer100Usd ? (amountUsd * exchangeRateIqdPer100Usd) / 100 : 0;
+}
+
+function convertMoneyPairToIqd(amounts: { usd: number; iqd: number }, exchangeRateIqdPer100Usd: number | null) {
+  return amounts.iqd + convertUsdToIqd(amounts.usd, exchangeRateIqdPer100Usd);
+}
+
+function buildPoints(entries: AccountFlowEntry[], exchangeRateIqdPer100Usd: number | null): ChartPoint[] {
   let balance = 0;
 
   return [
@@ -161,8 +144,14 @@ function buildPoints(entries: AccountFlowEntry[], currency: CurrencyConfig): Cha
       value: 0,
     },
     ...entries.map((entry) => {
-      const delta = entry[currency.deltaKey];
-      const transaction = entry[currency.transactionKey];
+      const delta = convertMoneyPairToIqd(
+        { usd: entry.balanceDeltaUsd, iqd: entry.balanceDeltaIqd },
+        exchangeRateIqdPer100Usd,
+      );
+      const transaction = convertMoneyPairToIqd(
+        { usd: entry.transactionUsd, iqd: entry.transactionIqd },
+        exchangeRateIqdPer100Usd,
+      );
       balance += delta;
 
       return {
@@ -217,33 +206,6 @@ function normalizeExchangeRate(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function buildSyncedScale(
-  seriesData: Array<{ currency: CurrencyConfig; points: ChartPoint[]; scale: Scale }>,
-  exchangeRateIqdPer100Usd: number | null,
-) {
-  if (!exchangeRateIqdPer100Usd) {
-    return null;
-  }
-
-  const usdEquivalentPoints = seriesData.flatMap(({ currency, points }) =>
-    points.map((point) => ({
-      ...point,
-      balance: currency.key === "iqd" ? (point.balance * 100) / exchangeRateIqdPer100Usd : point.balance,
-    })),
-  );
-  const usdScale = buildScale(usdEquivalentPoints);
-  const iqdPerUsd = exchangeRateIqdPer100Usd / 100;
-
-  return {
-    iqd: {
-      interval: usdScale.interval ? usdScale.interval * iqdPerUsd : undefined,
-      max: usdScale.max * iqdPerUsd,
-      min: usdScale.min * iqdPerUsd,
-    },
-    usd: usdScale,
-  };
-}
-
 function buildTooltipFormatter(dateLabel: ReactNode) {
   return (rawParams: unknown) => {
     const params = Array.isArray(rawParams) ? rawParams : [rawParams];
@@ -259,19 +221,18 @@ function buildTooltipFormatter(dateLabel: ReactNode) {
     const rows = validParams
       .map((param) => {
         const point = param.data;
-        const currency = CURRENCIES.find((item) => item.label === param.seriesName);
 
-        if (!point || !currency) {
+        if (!point) {
           return null;
         }
 
         const transaction = point.affected && !point.isStart
-          ? `<span style="color:${currency.color};font-weight:600">${point.transaction > 0 ? "+" : ""}${escapeHtml(currencyAmount(point.transaction, currency.key))}</span>`
+          ? `<span style="color:${GRAPH_COLOR};font-weight:600">${point.transaction > 0 ? "+" : ""}${escapeHtml(currencyAmount(point.transaction, "iqd"))}</span>`
           : "";
 
         return `<div style="display:flex;justify-content:space-between;gap:18px;margin-top:6px">
           <span>${param.marker ?? ""}${escapeHtml(param.seriesName ?? "")}</span>
-          <span style="font-weight:700">${escapeHtml(currencyAmount(point.balance, currency.key))}</span>
+          <span style="font-weight:700">${escapeHtml(currencyAmount(point.balance, "iqd"))}</span>
           ${transaction ? `<span>${transaction}</span>` : ""}
         </div>`;
       })
@@ -301,25 +262,12 @@ function buildChartOption({
   const xLabels = ["0", ...sortedEntries.map((entry) => formatDate(entry.date))];
   const showLabels = sortedEntries.length <= 12;
   const exchangeRate = normalizeExchangeRate(exchangeRateIqdPer100Usd);
-  const rawSeriesData = CURRENCIES.map((currency) => {
-    const points = buildPoints(sortedEntries, currency);
-    const scale = buildScale(points);
-
-    return {
-      currency,
-      points,
-      scale,
-    };
-  });
-  const syncedScale = buildSyncedScale(rawSeriesData, exchangeRate);
-  const seriesData = rawSeriesData.map((item) => ({
-    ...item,
-    scale: syncedScale ? syncedScale[item.currency.key] : item.scale,
-  }));
+  const points = buildPoints(sortedEntries, exchangeRate);
+  const scale = buildScale(points);
 
   return {
     animationDuration: 240,
-    color: CURRENCIES.map((currency) => currency.color),
+    color: [GRAPH_COLOR],
     dataZoom: [
       {
         filterMode: "none",
@@ -342,7 +290,7 @@ function buildChartOption({
       bottom: 72,
       containLabel: false,
       left: 86,
-      right: 92,
+      right: 32,
       top: 52,
     },
     legend: {
@@ -365,12 +313,14 @@ function buildChartOption({
           grid: {
             bottom: 66,
             left: 58,
-            right: 58,
+            right: 24,
             top: 48,
           },
-          series: CURRENCIES.map(() => ({
-            label: { show: false },
-          })),
+          series: [
+            {
+              label: { show: false },
+            },
+          ],
           xAxis: {
             axisLabel: {
               fontSize: 10,
@@ -379,8 +329,9 @@ function buildChartOption({
             },
           },
           yAxis: [
-            { axisLabel: { fontSize: 10 } },
-            { axisLabel: { fontSize: 10 } },
+            {
+              axisLabel: { fontSize: 10 },
+            },
           ],
         },
         query: {
@@ -388,53 +339,54 @@ function buildChartOption({
         },
       },
     ],
-    series: seriesData.map(({ currency, points }) => ({
-      connectNulls: true,
-      data: points,
-      emphasis: {
-        focus: "series",
-      },
-      itemStyle: {
-        color: currency.color,
-      },
-      label: {
-        color: currency.color,
-        distance: currency.key === "usd" ? 10 : 14,
-        formatter: (params: unknown) => {
-          const data = (params as { data?: ChartPoint }).data;
-
-          if (!showLabels || !data?.affected || data.isStart) {
-            return "";
-          }
-
-          const building = truncateLabel(data.buildingName);
-          const amount = `${data.transaction > 0 ? "+" : ""}${currencyAmount(data.transaction, currency.key)}`;
-
-          return building ? `${amount}\n${building}` : amount;
+    series: [
+      {
+        connectNulls: true,
+        data: points,
+        emphasis: {
+          focus: "series",
         },
-        fontSize: 10,
-        fontWeight: 700,
-        position: currency.key === "usd" ? "top" : "bottom",
-        show: showLabels,
+        itemStyle: {
+          color: GRAPH_COLOR,
+        },
+        label: {
+          color: GRAPH_COLOR,
+          distance: 10,
+          formatter: (params: unknown) => {
+            const data = (params as { data?: ChartPoint }).data;
+
+            if (!showLabels || !data?.affected || data.isStart) {
+              return "";
+            }
+
+            const building = truncateLabel(data.buildingName);
+            const amount = `${data.transaction > 0 ? "+" : ""}${currencyAmount(data.transaction, "iqd")}`;
+
+            return building ? `${amount}\n${building}` : amount;
+          },
+          fontSize: 10,
+          fontWeight: 700,
+          position: "top",
+          show: showLabels,
+        },
+        labelLayout: {
+          hideOverlap: true,
+        },
+        lineStyle: {
+          color: GRAPH_COLOR,
+          width: 3,
+        },
+        name: GRAPH_LABEL,
+        showSymbol: true,
+        smooth: false,
+        step: "end",
+        symbol: "circle",
+        symbolSize: (_value: unknown, params: unknown) => {
+          return (params as { data?: ChartPoint }).data?.affected ? 7 : 0;
+        },
+        type: "line",
       },
-      labelLayout: {
-        hideOverlap: true,
-      },
-      lineStyle: {
-        color: currency.color,
-        width: 3,
-      },
-      name: currency.label,
-      showSymbol: true,
-      smooth: false,
-      step: "end",
-      symbol: "circle",
-      symbolSize: (_value: unknown, params: unknown) => {
-        return (params as { data?: ChartPoint }).data?.affected ? 7 : 0;
-      },
-      type: "line",
-      yAxisIndex: currency.axisIndex,
-    })),
+    ],
     tooltip: {
       axisPointer: {
         type: "cross",
@@ -458,30 +410,32 @@ function buildChartOption({
       nameLocation: "middle",
       type: "category",
     },
-    yAxis: seriesData.map(({ currency, scale }) => ({
-      axisLabel: {
-        color: currency.color,
-        formatter: (value: number) => axisAmount(value, currency.key),
+    yAxis: [
+      {
+        axisLabel: {
+          color: GRAPH_COLOR,
+          formatter: (value: number) => axisAmount(value),
+        },
+        axisLine: {
+          lineStyle: { color: GRAPH_COLOR },
+          show: true,
+        },
+        max: scale.max,
+        min: scale.min,
+        interval: scale.interval,
+        name: `${amountLabel} ${GRAPH_LABEL}`,
+        nameTextStyle: {
+          color: GRAPH_COLOR,
+          fontWeight: 700,
+        },
+        position: "left",
+        splitLine: {
+          show: true,
+        },
+        splitNumber: 4,
+        type: "value",
       },
-      axisLine: {
-        lineStyle: { color: currency.color },
-        show: true,
-      },
-      max: scale.max,
-      min: scale.min,
-      interval: scale.interval,
-      name: `${amountLabel} ${currency.label}`,
-      nameTextStyle: {
-        color: currency.color,
-        fontWeight: 700,
-      },
-      position: currency.axisIndex === 0 ? "left" : "right",
-      splitLine: {
-        show: currency.axisIndex === 0,
-      },
-      splitNumber: 4,
-      type: "value",
-    })),
+    ],
   };
 }
 

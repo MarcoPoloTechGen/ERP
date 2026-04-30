@@ -336,6 +336,11 @@ export default function SupplierDetail() {
   const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<SupplierTransaction | null>(null);
 
+  const { data: appSettings } = useQuery({
+    queryKey: erpKeys.appSettings,
+    queryFn: getAppSettings,
+  });
+
   const { data: supplier, isLoading: supplierLoading } = useQuery({
     queryKey: erpKeys.supplier(supplierId),
     queryFn: () => getSupplier(supplierId),
@@ -496,6 +501,7 @@ export default function SupplierDetail() {
           empty={!transactionRows.length}
           emptyDescription={t.noTransactions}
           entries={chartEntries}
+          exchangeRateIqdPer100Usd={appSettings?.exchangeRateIqdPer100Usd}
           title={t.debitCredit}
         />
       )}
