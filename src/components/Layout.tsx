@@ -27,11 +27,16 @@ const { Sider, Content } = AntLayout;
 
 const MIN_EXCHANGE_RATE_IQD_PER_100_USD = 100_000;
 const MAX_EXCHANGE_RATE_IQD_PER_100_USD = 1_000_000;
+const DESKTOP_NAV_QUERY = "(min-width: 768px)";
 
 const languages: Array<{ value: Lang; label: string }> = [
   { value: "en", label: "EN" },
   { value: "ku", label: "سۆرانی" },
 ];
+
+function getIsDesktopNav() {
+  return typeof window === "undefined" || window.matchMedia(DESKTOP_NAV_QUERY).matches;
+}
 
 function NavLink({
   href,
@@ -75,7 +80,8 @@ function NavLink({
 }
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDesktopNav, setIsDesktopNav] = useState(getIsDesktopNav);
+  const [navOpen, setNavOpen] = useState(getIsDesktopNav);
   const [exchangeRateDraft, setExchangeRateDraft] = useState<number | null>(null);
   const [location] = useLocation();
   const { t, lang, setLang } = useLang();
@@ -105,6 +111,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setExchangeRateDraft(exchangeRateValue);
   }, [exchangeRateValue]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(DESKTOP_NAV_QUERY);
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsDesktopNav(event.matches);
+      setNavOpen(event.matches);
+    };
+
+    handleChange(mediaQuery);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
   const navItems = [
     { href: "/", label: t.dashboard, icon: LayoutDashboard },
     { href: "/workers", label: t.workers, icon: Users },
@@ -131,10 +153,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div style={{ fontSize: 11, color: "rgba(232,223,200,0.45)" }}>{t.siteSub}</div>
           </div>
         </div>
-        {mobileOpen && (
+        {!isDesktopNav && navOpen && (
           <button
             type="button"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => setNavOpen(false)}
             style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(232,223,200,0.7)", padding: 4 }}
             aria-label={t.close}
           >
@@ -149,7 +171,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <NavLink
             key={item.href}
             currentPath={location}
-            onSelect={() => setMobileOpen(false)}
+            onSelect={() => {
+              if (!isDesktopNav) {
+                setNavOpen(false);
+              }
+            }}
             {...item}
           />
         ))}
@@ -159,7 +185,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             label={t.adminTitle}
             icon={ShieldCheck}
             currentPath={location}
-            onSelect={() => setMobileOpen(false)}
+            onSelect={() => {
+              if (!isDesktopNav) {
+                setNavOpen(false);
+              }
+            }}
           />
         )}
       </nav>
@@ -271,10 +301,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <AntLayout style={{ minHeight: "100vh" }}>
       {/* Mobile overlay */}
-      {mobileOpen && (
+      {!isDesktopNav && navOpen && (
         <button
           type="button"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => setNavOpen(false)}
           aria-label={t.closeNavigation}
           style={{
             position: "fixed", inset: 0, zIndex: 30,
@@ -295,7 +325,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           top: 0,
           height: "100vh",
           overflow: "auto",
-          display: typeof window !== "undefined" && window.innerWidth < 768 ? "none" : "block",
+          display: isDesktopNav && navOpen ? "block" : "none",
         }}
       >
         {sidebarContent}
@@ -310,7 +340,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           width: 272,
           background: "#1e2433",
           borderRight: "1px solid rgba(255,255,255,0.07)",
-          transform: mobileOpen ? "translateX(0)" : "translateX(-100%)",
+          transform: !isDesktopNav && navOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.2s ease",
           overflowY: "auto",
         }}
@@ -337,9 +367,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Button
-              icon={<Menu size={17} />}
-              onClick={() => setMobileOpen(true)}
+              icon={navOpen ? <X size={17} /> : <Menu size={17} />}
+              onClick={() => setNavOpen((open) => !open)}
               size="small"
+              aria-expanded={navOpen}
+              aria-label={navOpen ? t.closeNavigation : t.openNavigation}
             />
             <BrandMark
               companyLogoUrl={appSettings?.companyLogoUrl}

@@ -19,6 +19,16 @@ export interface AppError {
   statusCode?: number;
 }
 
+type ErrorTranslations = {
+  authError?: string;
+  networkError?: string;
+  notFoundError?: string;
+  permissionError?: string;
+  serverError?: string;
+  unexpectedError?: string;
+  validationError?: string;
+};
+
 // Normaliser une erreur en AppError
 export function normalizeError(error: unknown): AppError {
   const t = getTranslationsForLang(getStoredLang());
@@ -89,7 +99,7 @@ interface SupabaseError {
   statusCode?: number;
 }
 
-function normalizeSupabaseError(error: SupabaseError, t: Record<string, string>): AppError {
+function normalizeSupabaseError(error: SupabaseError, t: ErrorTranslations): AppError {
   const code = error.code || "";
   const statusCode = error.statusCode;
 
@@ -156,7 +166,7 @@ function normalizeSupabaseError(error: SupabaseError, t: Record<string, string>)
   };
 }
 
-function normalizeHttpError(response: Response, t: Record<string, string>): AppError {
+function normalizeHttpError(response: Response, t: ErrorTranslations): AppError {
   const statusCode = response.status;
 
   if (statusCode === 401) {

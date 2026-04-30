@@ -41,8 +41,6 @@ import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
-import { ExpenseForm, ExpenseFormData } from "@/components/expenses/ExpenseForm";
-import { useCreateExpense, useExpenseFormData } from "@/hooks/use-create-expense";
 
 type TransactionFormValues = {
   type: TransactionType;
@@ -98,6 +96,16 @@ function WorkerTransactionModal({
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 
+  const validateAmountPair = () => {
+    const values = form.getFieldsValue(["amountUsd", "amountIqd"]);
+    const amountUsd = Number(values.amountUsd || 0);
+    const amountIqd = Number(values.amountIqd || 0);
+
+    return amountUsd > 0 || amountIqd > 0
+      ? Promise.resolve()
+      : Promise.reject(new Error(t.requiredField));
+  };
+
   return (
     <Modal
       open
@@ -133,7 +141,7 @@ function WorkerTransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`}>
+            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
               <InputNumber
                 min={appSettings?.transactionAmountMinUsd ?? 0}
                 max={appSettings?.transactionAmountMaxUsd ?? undefined}
@@ -143,7 +151,7 @@ function WorkerTransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="amountIqd" label={`${t.amount} IQD`}>
+            <Form.Item name="amountIqd" label={`${t.amount} IQD`} rules={[{ validator: validateAmountPair }]}>
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
@@ -152,18 +160,19 @@ function WorkerTransactionModal({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="projectId" label={t.txProject}>
-              <Select
-                disabled={scopedProjectId != null}
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noProjectOption}
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-              />
-            </Form.Item>
-          </Col>
+          {scopedProjectId == null ? (
+            <Col xs={24} md={12}>
+              <Form.Item name="projectId" label={t.txProject} rules={[{ required: true, message: t.requiredField }]}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noProjectOption}
+                  options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
           <Col xs={24} md={12}>
             <Form.Item name="date" label={t.date} rules={[{ required: true, message: "Date is required" }]}>
               <Input type="date" />
@@ -256,65 +265,6 @@ function WorkerFormModal({
   );
 }
 
-function ExpenseModal({
-  worker,
-  onClose,
-}: {
-  worker: { id: number; name: string };
-  onClose: () => void;
-}) {
-  const { t } = useLang();
-  const { selectedProjectId: scopedProjectId } = useProjectScope();
-  const erpInvalidation = useErpInvalidation();
-  const createExpense = useCreateExpense();
-  const { projects, workers, suppliers } = useExpenseFormData();
-
-  const handleSubmit = async (data: ExpenseFormData) => {
-    // Pré-remplir avec les données du travailleur
-    const expenseData: ExpenseFormData = {
-      ...data,
-      partyType: 'worker',
-      workerId: worker.id,
-      projectId: scopedProjectId ?? data.projectId,
-    };
-
-    await createExpense.mutateAsync(expenseData);
-    await erpInvalidation.workerDetail(worker.id);
-    onClose();
-  };
-
-  const handleCancel = () => {
-    onClose();
-  };
-
-  return (
-    <Modal
-      open
-      title={`Nouvelle Dépense - ${worker.name}`}
-      footer={null}
-      onCancel={onClose}
-      width={800}
-    >
-      <ExpenseForm
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        title=""
-        description=""
-        isLoading={createExpense.isPending}
-        projects={projects}
-        workers={workers}
-        suppliers={suppliers}
-        initialData={{
-          partyType: 'worker',
-          workerId: worker.id,
-          projectId: scopedProjectId || undefined,
-          category: 'salary_payment',
-        }}
-      />
-    </Modal>
-  );
-}
-
 export default function WorkerDetail() {
   const { id } = useParams<{ id: string }>();
   const workerId = Number(id);
@@ -322,10 +272,9 @@ export default function WorkerDetail() {
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showWorkerModal, setShowWorkerModal] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<typeof transactions[0] | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<WorkerTransaction | null>(null);
 
   const { data: appSettings } = useQuery({
     queryKey: erpKeys.appSettings,
@@ -500,7 +449,8 @@ export default function WorkerDetail() {
           <Button
             type="primary"
             onClick={() => {
-              setShowExpenseModal(true);
+              setSelectedTransaction(null);
+              setShowModal(true);
             }}
           >
             {t.addTransaction}
@@ -575,13 +525,6 @@ export default function WorkerDetail() {
           ))}
         </Space>
       )}
-
-      {showExpenseModal && worker ? (
-        <ExpenseModal
-          worker={{ id: worker.id, name: worker.name }}
-          onClose={() => setShowExpenseModal(false)}
-        />
-      ) : null}
 
       {showWorkerModal && worker ? (
         <WorkerFormModal

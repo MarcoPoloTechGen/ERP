@@ -10,6 +10,7 @@ import {
   Empty,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Row,
@@ -22,13 +23,18 @@ import {
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { invoiceStatusColor, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
 import {
+  createSupplierTransaction,
   deleteSupplier,
   deleteSupplierTransaction,
   erpKeys,
+  getAppSettings,
   getSupplier,
   listInvoices,
+  listProjects,
   listSupplierTransactions,
+  updateSupplierTransaction,
   updateSupplier,
+  type TransactionType,
   type SupplierTransaction,
 } from "@/lib/erp";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
@@ -36,8 +42,6 @@ import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
-import { ExpenseForm, ExpenseFormData } from "@/components/expenses/ExpenseForm";
-import { useCreateExpense, useExpenseFormData } from "@/hooks/use-create-expense";
 
 type SupplierFormValues = {
   name: string;
@@ -45,6 +49,15 @@ type SupplierFormValues = {
   phone?: string;
   email?: string;
   address?: string;
+};
+
+type TransactionFormValues = {
+  type: TransactionType;
+  amountUsd?: number;
+  amountIqd?: number;
+  description?: string;
+  date?: string;
+  projectId?: number;
 };
 
 function SupplierFormModal({
@@ -139,60 +152,131 @@ function SupplierFormModal({
   );
 }
 
-function ExpenseModal({
+function SupplierTransactionModal({
   supplier,
+  transaction,
   onClose,
 }: {
   supplier: { id: number; name: string };
+  transaction?: SupplierTransaction;
   onClose: () => void;
 }) {
   const { t } = useLang();
   const { selectedProjectId: scopedProjectId } = useProjectScope();
+  const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
-  const createExpense = useCreateExpense();
-  const { projects, workers, suppliers } = useExpenseFormData();
+  const [form] = Form.useForm<TransactionFormValues>();
+  const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
 
-  const handleSubmit = async (data: ExpenseFormData) => {
-    const expenseData: ExpenseFormData = {
-      ...data,
-      partyType: 'supplier',
-      supplierId: supplier.id,
-      projectId: scopedProjectId ?? data.projectId,
-    };
+  const saveMutation = useMutation({
+    mutationFn: (values: TransactionFormValues) => {
+      const payload = {
+        supplierId: supplier.id,
+        type: values.type,
+        amountUsd: Number(values.amountUsd || 0),
+        amountIqd: Number(values.amountIqd || 0),
+        description: values.description?.trim() || null,
+        date: values.date || null,
+        projectId: scopedProjectId ?? values.projectId ?? null,
+      };
 
-    await createExpense.mutateAsync(expenseData);
-    await erpInvalidation.supplierDetail(supplier.id);
-    onClose();
-  };
+      return transaction ? updateSupplierTransaction(transaction.id, payload) : createSupplierTransaction(payload);
+    },
+    onSuccess: async () => {
+      await erpInvalidation.supplierDetail(supplier.id);
+      onClose();
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
 
-  const handleCancel = () => {
-    onClose();
+  const validateAmountPair = () => {
+    const values = form.getFieldsValue(["amountUsd", "amountIqd"]);
+    const amountUsd = Number(values.amountUsd || 0);
+    const amountIqd = Number(values.amountIqd || 0);
+
+    return amountUsd > 0 || amountIqd > 0
+      ? Promise.resolve()
+      : Promise.reject(new Error(t.requiredField));
   };
 
   return (
     <Modal
       open
-      title={`Nouvelle Dépense - ${supplier.name}`}
-      footer={null}
+      title={transaction ? t.editTransaction : t.newTransaction}
+      okText={transaction ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
       onCancel={onClose}
-      width={800}
+      onOk={() => form.submit()}
     >
-      <ExpenseForm
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        title=""
-        description=""
-        isLoading={createExpense.isPending}
-        projects={projects}
-        workers={workers}
-        suppliers={suppliers}
-        initialData={{
-          partyType: 'supplier',
-          supplierId: supplier.id,
-          projectId: scopedProjectId || undefined,
-          category: 'supplier_payment',
+      <Form<TransactionFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{
+          type: transaction?.type ?? "debit",
+          amountUsd: transaction?.amountUsd ?? 0,
+          amountIqd: transaction?.amountIqd ?? 0,
+          description: transaction?.description ?? undefined,
+          date: transaction?.date ?? new Date().toISOString().slice(0, 10),
+          projectId: scopedProjectId ?? transaction?.projectId ?? undefined,
         }}
-      />
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="type" label={t.type} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                options={[
+                  { label: t.credit, value: "credit" },
+                  { label: t.debit, value: "debit" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinUsd ?? 0}
+                max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                step={0.01}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="amountIqd" label={`${t.amount} IQD`} rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinIqd ?? 0}
+                max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                step={1}
+                style={{ width: "100%" }}
+              />
+            </Form.Item>
+          </Col>
+          {scopedProjectId == null ? (
+            <Col xs={24} md={12}>
+              <Form.Item name="projectId" label={t.txProject} rules={[{ required: true, message: t.requiredField }]}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noProjectOption}
+                  options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
+          <Col xs={24} md={12}>
+            <Form.Item name="date" label={t.date} rules={[{ required: true, message: t.requiredField }]}>
+              <Input type="date" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Form.Item name="description" label={t.description}>
+          <Input />
+        </Form.Item>
+      </Form>
     </Modal>
   );
 }
@@ -204,8 +288,9 @@ export default function SupplierDetail() {
   const { selectedProjectId: scopedProjectId } = useProjectScope();
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<SupplierTransaction | null>(null);
 
   const { data: supplier, isLoading: supplierLoading } = useQuery({
     queryKey: erpKeys.supplier(supplierId),
@@ -377,7 +462,8 @@ export default function SupplierDetail() {
           <Button
             type="primary"
             onClick={() => {
-              setShowExpenseModal(true);
+              setSelectedTransaction(null);
+              setShowTransactionModal(true);
             }}
           >
             {t.addTransaction}
@@ -422,19 +508,29 @@ export default function SupplierDetail() {
                     )}
                   </Typography.Text>
                   {transaction.canManage ? (
-                    <Popconfirm
-                      title={t.deleteTransactionConfirm}
-                      okText={t.remove}
-                      cancelText={t.cancel}
-                      onConfirm={() => deleteMutation.mutate(transaction)}
-                    >
+                    <>
                       <Button
-                        danger
                         type="text"
-                        icon={<Trash2 size={16} />}
-                        loading={deleteMutation.isPending}
+                        icon={<Pencil size={16} />}
+                        onClick={() => {
+                          setSelectedTransaction(transaction);
+                          setShowTransactionModal(true);
+                        }}
                       />
-                    </Popconfirm>
+                      <Popconfirm
+                        title={t.deleteTransactionConfirm}
+                        okText={t.remove}
+                        cancelText={t.cancel}
+                        onConfirm={() => deleteMutation.mutate(transaction)}
+                      >
+                        <Button
+                          danger
+                          type="text"
+                          icon={<Trash2 size={16} />}
+                          loading={deleteMutation.isPending}
+                        />
+                      </Popconfirm>
+                    </>
                   ) : null}
                 </Space>
               </div>
@@ -510,10 +606,14 @@ export default function SupplierDetail() {
         )}
       </Card>
 
-      {showExpenseModal && supplier ? (
-        <ExpenseModal
+      {showTransactionModal && supplier ? (
+        <SupplierTransactionModal
           supplier={{ id: supplier.id, name: supplier.name }}
-          onClose={() => setShowExpenseModal(false)}
+          transaction={selectedTransaction || undefined}
+          onClose={() => {
+            setShowTransactionModal(false);
+            setSelectedTransaction(null);
+          }}
         />
       ) : null}
 

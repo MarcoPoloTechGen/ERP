@@ -146,7 +146,7 @@ export default function Workers() {
   const search = useDeferredValue(searchInput.trim());
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<WorkerRow>({
-    resource: "workers",
+    resource: "app_workers",
     pagination: { pageSize: STANDARD_PAGE_SIZE },
     sorters: { initial: [{ field: "created_at", order: "desc" }] },
     syncWithLocation: false,
@@ -196,7 +196,6 @@ export default function Workers() {
       dataIndex: "name",
       responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 120,
       render: (value: string, worker) => (
         <Space size="small" wrap style={{ width: "100%" }}>
@@ -210,7 +209,6 @@ export default function Workers() {
       dataIndex: "role",
       responsive: ["sm", "md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 80,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
@@ -219,7 +217,6 @@ export default function Workers() {
       dataIndex: "phone",
       responsive: ["md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 100,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },

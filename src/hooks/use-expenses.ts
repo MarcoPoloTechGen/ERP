@@ -1,19 +1,16 @@
-import { useQuery, useQueryClient, QueryKey } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   listAllExpenses, 
   listExpensesByWorker, 
   listExpensesBySupplier, 
   listExpensesByProject,
   erpKeys,
-  type AllExpense 
 } from "@/lib/erp-core";
 
 export function useAllExpenses(options?: {
   partyType?: "worker" | "supplier";
   partyId?: number;
   projectId?: number;
-  category?: string;
 }) {
   return useQuery({
     queryKey: options 

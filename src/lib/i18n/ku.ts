@@ -284,6 +284,7 @@ export function createSoraniTranslations(dir: "ltr" | "rtl"): TranslationShape {
     changeUpdated: "نوێکرایەوە",
     noExpenseLog: "هێشتا هیچ گۆڕانکارییەک بۆ ئەم خەرجییە تۆمارنەکراوە.",
     close: "داخستن",
+    openNavigation: "کردنەوەی ناوبەری",
     closeNavigation: "داخستنی ناوبەری",
     excel: "ئێکسێل",
     unexpectedError: "هەڵەیەکی چاوەڕواننەکراو ڕوویدا.",

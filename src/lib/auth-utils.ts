@@ -26,6 +26,11 @@ function normalizeAuthMessage(message: string | null | undefined) {
   return message?.trim().toLowerCase() ?? "";
 }
 
+function normalizeOptionalAuthParam(value: string | null) {
+  const normalizedValue = normalizeAuthMessage(value);
+  return normalizedValue || null;
+}
+
 function decodeAuthParam(value: string | null) {
   if (!value) {
     return null;
@@ -69,7 +74,7 @@ export function readAuthCallbackParams(urlLike?: string | URL) {
       : new URL(urlLike ?? window.location.href, fallbackOrigin);
 
   return {
-    type: normalizeAuthMessage(getUrlParam(url, "type")),
+    type: normalizeOptionalAuthParam(getUrlParam(url, "type")),
     tokenHash: getUrlParam(url, "token_hash"),
     accessToken: getUrlParam(url, "access_token"),
     errorCode: getUrlParam(url, "error_code"),

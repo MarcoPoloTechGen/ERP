@@ -32,8 +32,8 @@ type RpcReturns<Name extends RpcName> = Database["public"]["Functions"][Name]["R
 type ProfileRow = TableRow<"profiles">;
 type AppSettingsRow = TableRow<"app_settings">;
 type ProjectMembershipRow = TableRow<"project_memberships">;
-type WorkerRow = TableRow<"workers">;
-type SupplierRow = TableRow<"suppliers">;
+type WorkerRow = ViewRow<"app_workers">;
+type SupplierRow = ViewRow<"app_suppliers">;
 type ProjectBuildingRow = TableRow<"project_buildings">;
 type AppProjectRow = ViewRow<"app_projects">;
 type AppProductRow = ViewRow<"app_products">;
@@ -50,57 +50,33 @@ type SupplierWritePayload = Pick<
   TableInsertPayload<"suppliers">,
   "name" | "contact" | "phone" | "email" | "address"
 >;
-type ProductWritePayload = {
-  name: string;
-  supplier_id: number | null;
-  project_id: number | null;
-  building_id: number | null;
-  unit: string | null;
-  unit_price: number | null;
-  currency: Currency;
-  unit_price_usd: number;
-  unit_price_iqd: number;
-};
-type InvoiceWritePayload = {
-  number: string;
-  expense_type: ExpenseType;
-  labor_worker_id: number | null;
-  labor_person_name: string | null;
-  supplier_id: number | null;
-  project_id: number | null;
-  building_id: number | null;
-  product_id: number | null;
-  total_amount: number;
-  paid_amount: number;
-  currency: Currency;
-  total_amount_usd: number;
-  paid_amount_usd: number;
-  total_amount_iqd: number;
-  paid_amount_iqd: number;
-  status: InvoiceStatus;
-  invoice_date: string;
-  due_date: string | null;
-  notes: string | null;
-  image_path: string | null;
-};
-type InvoiceCreatePayload = InvoiceWritePayload & Pick<TableInsertPayload<"invoices">, "created_by">;
-type InvoiceRecordStatusUpdatePayload = Pick<
-  TableUpdatePayload<"invoices">,
-  "record_status" | "deleted_at" | "deleted_by"
+type ProductWritePayload = Pick<
+  TableInsertPayload<"materials">,
+  | "name"
+  | "supplier_id"
+  | "project_id"
+  | "building_id"
+  | "unit"
+  | "unit_price"
+  | "currency"
+  | "unit_price_usd"
+  | "unit_price_iqd"
 >;
 type PartyTransactionWritePayload = {
-  party_type: PartyType;
+  entry_type: "debt" | "payment";
+  entity_type: "worker" | "supplier" | "other";
   worker_id: number | null;
   supplier_id: number | null;
-  type: TransactionType;
+  building_id: number | null;
   amount: number;
   currency: Currency;
   amount_usd: number;
   amount_iqd: number;
-  description: string | null;
+  description: string;
+  notes: string | null;
   date: string;
-  project_id: number | null;
-  expense_category: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
 };
 type IncomeTransactionWritePayload = {
   project_id: number;
@@ -113,10 +89,10 @@ type IncomeTransactionWritePayload = {
 };
 type IncomeTransactionCreatePayload = IncomeTransactionWritePayload &
   Pick<TableInsertPayload<"income_transactions">, "created_by">;
-type IncomeTransactionRecordStatusUpdatePayload = Pick<
-  TableUpdatePayload<"income_transactions">,
-  "record_status" | "deleted_at" | "deleted_by"
->;
+type SoftDeletePayload = {
+  deleted_at: string;
+  deleted_by: string | null;
+};
 type AppSettingsUpsertPayload = Pick<
   TableInsertPayload<"app_settings">,
   | "id"
@@ -133,11 +109,12 @@ type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
 type ProfileSelectedProjectUpdatePayload = Pick<TableUpdatePayload<"profiles">, "selected_project_id">;
 type InvoicePaidUpdatePayload = {
-  paid_amount: number;
-  paid_amount_usd: number;
-  paid_amount_iqd: number;
+  entry_type: "payment";
+  amount: number;
   currency: Currency;
-  status: InvoiceStatus;
+  amount_usd: number;
+  amount_iqd: number;
+  updated_by: string | null;
 };
 type ReplaceUserProjectMembershipsArgs = RpcArgs<"replace_user_project_memberships">;
 type DashboardOverviewRpcResult = RpcReturns<"get_dashboard_overview">;
@@ -1349,6 +1326,61 @@ async function currentUserIsSuperAdmin() {
   return data === true;
 }
 
+async function resolveBuildingId(projectId: number | null, buildingId: number | null) {
+  if (buildingId != null) {
+    return buildingId;
+  }
+
+  if (projectId == null) {
+    throw new Error("Project is required for this transaction.");
+  }
+
+  const { data, error } = await supabase
+    .from("project_buildings")
+    .select("id")
+    .eq("project_id", projectId)
+    .order("is_default", { ascending: false })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const id = readNumber(asRow(data), "id");
+  if (id == null) {
+    throw new Error("Project has no building configured.");
+  }
+
+  return id;
+}
+
+async function replaceTransactionPhoto(transactionId: number, imagePath: string | null, userId: string | null) {
+  const { error: deleteError } = await supabase
+    .from("transaction_photos")
+    .delete()
+    .eq("transaction_id", transactionId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  if (!imagePath) {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("transaction_photos").insert({
+    transaction_id: transactionId,
+    storage_path: imagePath,
+    created_by: userId,
+  });
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+}
+
 async function hydrateInvoices(invoices: Invoice[]) {
   const urlsByPath = await createSignedInvoiceImageUrls(invoices.map((invoice) => invoice.imagePath));
 
@@ -1595,22 +1627,22 @@ function normalizeInvoiceInput(input: InvoiceInput) {
     throw new Error("Supplier is required.");
   }
 
-  const payload: InvoiceWritePayload = {
+  return {
     number: input.number.trim(),
-    expense_type: input.expenseType,
-    labor_worker_id: input.expenseType === "labor" ? input.laborWorkerId : null,
-    labor_person_name: input.expenseType === "labor" ? laborPersonName : null,
-    supplier_id: input.expenseType === "products" ? input.supplierId : null,
-    project_id: input.projectId,
-    building_id: input.buildingId,
-    product_id: input.expenseType === "products" ? input.productId : null,
-    total_amount: totalAmount,
-    paid_amount: paidAmount,
+    expenseType: input.expenseType,
+    laborWorkerId: input.expenseType === "labor" ? input.laborWorkerId : null,
+    laborPersonName: input.expenseType === "labor" ? laborPersonName : null,
+    supplierId: input.expenseType === "products" ? input.supplierId : null,
+    projectId: input.projectId,
+    buildingId: input.buildingId,
+    productId: input.expenseType === "products" ? input.productId : null,
+    totalAmount,
+    paidAmount,
     currency,
-    total_amount_usd: totalAmountUsd,
-    paid_amount_usd: paidAmountUsd,
-    total_amount_iqd: totalAmountIqd,
-    paid_amount_iqd: paidAmountIqd,
+    totalAmountUsd,
+    paidAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
     status: deriveDualCurrencyInvoiceStatus(
       totalAmountUsd,
       paidAmountUsd,
@@ -1618,13 +1650,48 @@ function normalizeInvoiceInput(input: InvoiceInput) {
       paidAmountIqd,
       input.status,
     ),
-    invoice_date: invoiceDate,
-    due_date: input.dueDate,
+    invoiceDate,
+    dueDate: input.dueDate,
     notes: normalizeOptionalText(input.notes),
-    image_path: normalizeOptionalText(input.imagePath),
+    imagePath: normalizeOptionalText(input.imagePath),
+  };
+}
+
+async function buildInvoiceTransactionPayload(
+  input: InvoiceInput,
+  userId: string | null,
+  action: "create" | "update",
+) {
+  const normalized = normalizeInvoiceInput(input);
+  const buildingId = await resolveBuildingId(normalized.projectId, normalized.buildingId);
+  const entryType: PartyTransactionWritePayload["entry_type"] =
+    normalized.status === "paid" ? "payment" : "debt";
+
+  const payload: PartyTransactionWritePayload = {
+    entry_type: entryType,
+    entity_type:
+      normalized.expenseType === "labor"
+        ? "worker"
+        : normalized.expenseType === "products"
+          ? "supplier"
+          : "other",
+    worker_id: normalized.expenseType === "labor" ? normalized.laborWorkerId : null,
+    supplier_id: normalized.expenseType === "products" ? normalized.supplierId : null,
+    building_id: buildingId,
+    amount: normalized.totalAmount,
+    currency: normalized.currency,
+    amount_usd: normalized.totalAmountUsd,
+    amount_iqd: normalized.totalAmountIqd,
+    description: normalized.number,
+    notes: normalized.notes,
+    date: normalized.invoiceDate,
+    ...(action === "create" ? { created_by: userId } : { updated_by: userId }),
   };
 
-  return payload;
+  return {
+    payload,
+    imagePath: normalized.imagePath,
+  };
 }
 
 function normalizePartyTransactionInput(input: {
@@ -1635,8 +1702,7 @@ function normalizePartyTransactionInput(input: {
   amountIqd: number;
   description: string | null;
   date: string | null;
-  projectId: number | null;
-  expenseCategory?: string | null;
+  buildingId: number;
 }) {
   const amountUsd = input.amountUsd ?? 0;
   const amountIqd = input.amountIqd ?? 0;
@@ -1645,31 +1711,25 @@ function normalizePartyTransactionInput(input: {
   assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Transaction amount");
 
   const payload: PartyTransactionWritePayload = {
-    party_type: input.partyType,
+    entry_type: input.type === "credit" ? "debt" : "payment",
+    entity_type: input.partyType,
     worker_id: input.partyType === "worker" ? input.partyId : null,
     supplier_id: input.partyType === "supplier" ? input.partyId : null,
-    type: input.type,
+    building_id: input.buildingId,
     amount: pickPrimaryAmount(amountUsd, amountIqd),
     currency,
     amount_usd: amountUsd,
     amount_iqd: amountIqd,
-    description: normalizeOptionalText(input.description),
+    description: normalizeOptionalText(input.description) ?? defaultTransactionDescription(input.type),
+    notes: null,
     date: input.date ?? new Date().toISOString().slice(0, 10),
-    project_id: input.projectId,
-    expense_category: input.expenseCategory ?? normalizeDefaultExpenseCategory(input.partyType, input.type),
   };
 
   return payload;
 }
 
-function normalizeDefaultExpenseCategory(partyType: PartyType, transactionType: TransactionType): string {
-  if (partyType === "worker") {
-    return transactionType === "debit" ? "salary_payment" : "worker_advance";
-  }
-  if (partyType === "supplier") {
-    return transactionType === "debit" ? "supplier_payment" : "supplier_credit";
-  }
-  return "general";
+function defaultTransactionDescription(transactionType: TransactionType): string {
+  return transactionType === "credit" ? "Credit" : "Debit";
 }
 
 function assertAmountWithinLimit(
@@ -1938,7 +1998,7 @@ export async function replaceUserProjectMemberships(userId: string, projectIds: 
 
 export async function listWorkers() {
   return executeSelect(
-    supabase.from("workers").select("*").order("created_at", { ascending: false }),
+    supabase.from("app_workers").select("*").order("created_at", { ascending: false }),
     normalizeWorker,
   );
 }
@@ -1946,7 +2006,7 @@ export async function listWorkers() {
 export async function getWorker(id: number): Promise<Worker> {
   // Fetch worker data
   const worker = await executeSingle(
-    supabase.from("workers").select("*").eq("id", id).single(),
+    supabase.from("app_workers").select("*").eq("id", id).single(),
     normalizeWorker
   );
 
@@ -1996,13 +2056,13 @@ export async function deleteWorker(id: number) {
 
 export async function listSuppliers() {
   return executeSelect(
-    supabase.from("suppliers").select("*").order("created_at", { ascending: false }),
+    supabase.from("app_suppliers").select("*").order("created_at", { ascending: false }),
     normalizeSupplier,
   );
 }
 
 export async function getSupplier(id: number) {
-  return executeSingle(supabase.from("suppliers").select("*").eq("id", id).single(), normalizeSupplier);
+  return executeSingle(supabase.from("app_suppliers").select("*").eq("id", id).single(), normalizeSupplier);
 }
 
 export async function listSupplierBalances(): Promise<SupplierBalance[]> {
@@ -2192,6 +2252,7 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     amountIqd: input.amountIqd,
     settings,
   });
+  const buildingId = await resolveBuildingId(input.projectId, null);
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
@@ -2200,7 +2261,7 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     amountIqd: input.amountIqd,
     description: input.description,
     date: input.date,
-    projectId: input.projectId,
+    buildingId,
   });
   const { error } = await supabase.from("party_transactions").insert(payload);
 
@@ -2210,6 +2271,8 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
 }
 
 export async function updateWorkerTransaction(id: number, input: WorkerTransactionInput) {
+  const currentUserId = await getCurrentUserId();
+  const buildingId = await resolveBuildingId(input.projectId, null);
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
@@ -2218,15 +2281,14 @@ export async function updateWorkerTransaction(id: number, input: WorkerTransacti
     amountIqd: input.amountIqd,
     description: input.description,
     date: input.date,
-    projectId: input.projectId,
+    buildingId,
   });
   const { error } = await supabase
     .from("party_transactions")
-    .update(payload)
+    .update({ ...payload, updated_by: currentUserId })
     .eq("id", id)
-    .eq("party_type", "worker")
-    .is("source_invoice_id", null)
-    .is("source_kind", null);
+    .eq("entity_type", "worker")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2234,13 +2296,16 @@ export async function updateWorkerTransaction(id: number, input: WorkerTransacti
 }
 
 export async function deleteWorkerTransaction(id: number) {
+  const currentUserId = await getCurrentUserId();
   const { error } = await supabase
     .from("party_transactions")
-    .delete()
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: currentUserId,
+    } satisfies SoftDeletePayload)
     .eq("id", id)
-    .eq("party_type", "worker")
-    .is("source_invoice_id", null)
-    .is("source_kind", null);
+    .eq("entity_type", "worker")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2268,6 +2333,7 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
     amountIqd: input.amountIqd,
     settings,
   });
+  const buildingId = await resolveBuildingId(input.projectId, null);
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
@@ -2276,7 +2342,7 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
     amountIqd: input.amountIqd,
     description: input.description,
     date: input.date,
-    projectId: input.projectId,
+    buildingId,
   });
   const { error } = await supabase.from("party_transactions").insert(payload);
 
@@ -2286,6 +2352,8 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
 }
 
 export async function updateSupplierTransaction(id: number, input: SupplierTransactionInput) {
+  const currentUserId = await getCurrentUserId();
+  const buildingId = await resolveBuildingId(input.projectId, null);
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
@@ -2294,15 +2362,14 @@ export async function updateSupplierTransaction(id: number, input: SupplierTrans
     amountIqd: input.amountIqd,
     description: input.description,
     date: input.date,
-    projectId: input.projectId,
+    buildingId,
   });
   const { error } = await supabase
     .from("party_transactions")
-    .update(payload)
+    .update({ ...payload, updated_by: currentUserId })
     .eq("id", id)
-    .eq("party_type", "supplier")
-    .is("source_invoice_id", null)
-    .is("source_kind", null);
+    .eq("entity_type", "supplier")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2310,13 +2377,16 @@ export async function updateSupplierTransaction(id: number, input: SupplierTrans
 }
 
 export async function deleteSupplierTransaction(id: number) {
+  const currentUserId = await getCurrentUserId();
   const { error } = await supabase
     .from("party_transactions")
-    .delete()
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: currentUserId,
+    } satisfies SoftDeletePayload)
     .eq("id", id)
-    .eq("party_type", "supplier")
-    .is("source_invoice_id", null)
-    .is("source_kind", null);
+    .eq("entity_type", "supplier")
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2332,7 +2402,7 @@ export async function listProducts() {
 
 export async function createProduct(input: ProductInput) {
   const payload = normalizeProductInput(input);
-  const { error } = await supabase.from("products").insert(payload);
+  const { error } = await supabase.from("materials").insert(payload);
 
   if (error) {
     throw new Error(error.message);
@@ -2341,7 +2411,7 @@ export async function createProduct(input: ProductInput) {
 
 export async function updateProduct(id: number, input: ProductInput) {
   const payload = normalizeProductInput(input);
-  const { error } = await supabase.from("products").update(payload).eq("id", id);
+  const { error } = await supabase.from("materials").update(payload).eq("id", id);
 
   if (error) {
     throw new Error(error.message);
@@ -2349,7 +2419,7 @@ export async function updateProduct(id: number, input: ProductInput) {
 }
 
 export async function deleteProduct(id: number) {
-  const { error } = await supabase.from("products").delete().eq("id", id);
+  const { error } = await supabase.from("materials").delete().eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
@@ -2400,44 +2470,55 @@ export async function listInvoiceHistory(invoiceId: number) {
 
 export async function createInvoice(input: InvoiceInput) {
   const currentUserId = await getCurrentUserId();
-  const payload: InvoiceCreatePayload = {
-    ...normalizeInvoiceInput(input),
-    created_by: currentUserId,
-  };
-  const { error } = await supabase.from("invoices").insert(payload);
+  const { payload, imagePath } = await buildInvoiceTransactionPayload(input, currentUserId, "create");
+  const { data, error } = await supabase
+    .from("party_transactions")
+    .insert(payload)
+    .select("id")
+    .single();
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  const transactionId = readNumber(asRow(data), "id");
+  if (transactionId != null) {
+    await replaceTransactionPhoto(transactionId, imagePath, currentUserId);
   }
 }
 
 export async function updateInvoice(id: number, input: InvoiceInput) {
-  const payload: InvoiceWritePayload = normalizeInvoiceInput(input);
+  const currentUserId = await getCurrentUserId();
+  const { payload, imagePath } = await buildInvoiceTransactionPayload(input, currentUserId, "update");
   const { error } = await supabase
-    .from("invoices")
+    .from("party_transactions")
     .update(payload)
     .eq("id", id)
-    .eq("record_status", "active");
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
   }
+
+  await replaceTransactionPhoto(id, imagePath, currentUserId);
 }
 
 export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: number; totalAmountIqd: number }) {
+  const currentUserId = await getCurrentUserId();
   const currency = pickPrimaryCurrency(amounts.totalAmountUsd, amounts.totalAmountIqd);
   const payload: InvoicePaidUpdatePayload = {
-    paid_amount: pickPrimaryAmount(amounts.totalAmountUsd, amounts.totalAmountIqd),
-    paid_amount_usd: amounts.totalAmountUsd,
-    paid_amount_iqd: amounts.totalAmountIqd,
+    entry_type: "payment",
+    amount: pickPrimaryAmount(amounts.totalAmountUsd, amounts.totalAmountIqd),
     currency,
-    status: "paid",
+    amount_usd: amounts.totalAmountUsd,
+    amount_iqd: amounts.totalAmountIqd,
+    updated_by: currentUserId,
   };
   const { error } = await supabase
-    .from("invoices")
+    .from("party_transactions")
     .update(payload)
     .eq("id", id)
-    .eq("record_status", "active");
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2446,7 +2527,8 @@ export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: num
 
 export async function deleteInvoice(id: number) {
   if (await currentUserIsSuperAdmin()) {
-    const { error } = await supabase.from("invoices").delete().eq("id", id);
+    await replaceTransactionPhoto(id, null, null);
+    const { error } = await supabase.from("party_transactions").delete().eq("id", id);
     if (error) {
       throw new Error(error.message);
     }
@@ -2454,16 +2536,15 @@ export async function deleteInvoice(id: number) {
   }
 
   const currentUserId = await getCurrentUserId();
-  const payload: InvoiceRecordStatusUpdatePayload = {
-    record_status: "deleted",
+  const payload: SoftDeletePayload = {
     deleted_at: new Date().toISOString(),
     deleted_by: currentUserId,
   };
   const { error } = await supabase
-    .from("invoices")
+    .from("party_transactions")
     .update(payload)
     .eq("id", id)
-    .eq("record_status", "active");
+    .is("deleted_at", null);
   if (error) {
     throw new Error(error.message);
   }
@@ -2511,6 +2592,7 @@ export async function createIncomeTransaction(input: IncomeTransactionInput) {
 }
 
 export async function updateIncomeTransaction(id: number, input: IncomeTransactionInput) {
+  const currentUserId = await getCurrentUserId();
   const settings = await getAppSettings();
   assertTransactionAmountLimits({
     amountUsd: input.amountUsd,
@@ -2518,7 +2600,11 @@ export async function updateIncomeTransaction(id: number, input: IncomeTransacti
     settings,
   });
   const payload = normalizeIncomeTransactionInput(input);
-  const { error } = await supabase.from("income_transactions").update(payload).eq("id", id);
+  const { error } = await supabase
+    .from("income_transactions")
+    .update({ ...payload, updated_by: currentUserId })
+    .eq("id", id)
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2535,8 +2621,7 @@ export async function deleteIncomeTransaction(id: number) {
   }
 
   const currentUserId = await getCurrentUserId();
-  const payload: IncomeTransactionRecordStatusUpdatePayload = {
-    record_status: "deleted",
+  const payload: SoftDeletePayload = {
     deleted_at: new Date().toISOString(),
     deleted_by: currentUserId,
   };
@@ -2544,7 +2629,7 @@ export async function deleteIncomeTransaction(id: number) {
     .from("income_transactions")
     .update(payload)
     .eq("id", id)
-    .eq("record_status", "active");
+    .is("deleted_at", null);
 
   if (error) {
     throw new Error(error.message);
@@ -2556,7 +2641,6 @@ export async function listAllExpenses(options?: {
   partyType?: PartyType;
   partyId?: number;
   projectId?: number;
-  category?: string;
 }) {
   let query: any = supabase
     .from("all_expenses")
@@ -2570,10 +2654,6 @@ export async function listAllExpenses(options?: {
 
   if (options?.projectId != null) {
     query = query.eq("project_id", options.projectId);
-  }
-
-  if (options?.category) {
-    query = query.eq("category", options.category);
   }
 
   return executeSelect(query, normalizeAllExpense);

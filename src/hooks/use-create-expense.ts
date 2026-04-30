@@ -1,23 +1,19 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { 
-  createWorkerTransaction,
-  createSupplierTransaction,
+import {
   createInvoice,
+  createSupplierTransaction,
+  createWorkerTransaction,
   listProjects,
-  listWorkers,
   listSuppliers,
-  erpKeys
+  listWorkers,
 } from '@/lib/erp-core';
+import type { Currency } from '@/lib/erp-core';
 
-// Type pour les données de dépense
 export interface ExpenseFormData {
-  amount: number;
   amountUsd?: number;
   amountIqd?: number;
-  currency: 'USD' | 'IQD';
-  category: string;
   description?: string;
   date: string;
   projectId?: number;
@@ -26,85 +22,91 @@ export interface ExpenseFormData {
   partyType: 'worker' | 'supplier' | 'general';
 }
 
-// Hook pour créer une dépense unifiée
+function normalizeAmounts(data: ExpenseFormData) {
+  const amountUsd = Number(data.amountUsd || 0);
+  const amountIqd = Number(data.amountIqd || 0);
+  const currency: Currency = amountUsd > 0 || amountIqd === 0 ? 'USD' : 'IQD';
+
+  return {
+    amount: currency === 'USD' ? amountUsd : amountIqd,
+    amountUsd,
+    amountIqd,
+    currency,
+  };
+}
+
 export function useCreateExpense() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (data: ExpenseFormData) => {
-      let result;
+      const amounts = normalizeAmounts(data);
 
-      // Selon le type de partie, créer la transaction appropriée
       if (data.partyType === 'worker' && data.workerId) {
-        // Créer une transaction de travailleur
-        result = await createWorkerTransaction({
+        return createWorkerTransaction({
           workerId: data.workerId,
-          type: 'debit', // Toujours un débit pour les dépenses
-          amountUsd: data.amountUsd || (data.currency === 'USD' ? data.amount : 0),
-          amountIqd: data.amountIqd || (data.currency === 'IQD' ? data.amount : 0),
-          description: data.description,
+          type: 'credit',
+          amountUsd: amounts.amountUsd,
+          amountIqd: amounts.amountIqd,
+          description: data.description ?? null,
           date: data.date,
-          projectId: data.projectId,
-          expenseCategory: data.category,
-        });
-      } else if (data.partyType === 'supplier' && data.supplierId) {
-        // Créer une transaction de fournisseur
-        result = await createSupplierTransaction({
-          supplierId: data.supplierId,
-          type: 'debit', // Toujours un débit pour les dépenses
-          amountUsd: data.amountUsd || (data.currency === 'USD' ? data.amount : 0),
-          amountIqd: data.amountIqd || (data.currency === 'IQD' ? data.amount : 0),
-          description: data.description,
-          date: data.date,
-          projectId: data.projectId,
-          expenseCategory: data.category,
-        });
-      } else {
-        // Créer une facture pour les dépenses générales
-        result = await createInvoice({
-          number: `EXP-${Date.now()}`, // Numéro automatique
-          expenseType: data.category,
-          laborWorkerId: null,
-          laborPersonName: null,
-          supplierId: null,
-          projectId: data.projectId,
-          buildingId: null,
-          productId: null,
-          totalAmount: data.amount,
-          paidAmount: data.amount, // Payé immédiatement
-          currency: data.currency,
-          totalAmountUsd: data.amountUsd || (data.currency === 'USD' ? data.amount : 0),
-          paidAmountUsd: data.amountUsd || (data.currency === 'USD' ? data.amount : 0),
-          totalAmountIqd: data.amountIqd || (data.currency === 'IQD' ? data.amount : 0),
-          paidAmountIqd: data.amountIqd || (data.currency === 'IQD' ? data.amount : 0),
-          notes: data.description,
-          dueDate: data.date,
+          projectId: data.projectId ?? null,
         });
       }
 
-      return result;
+      if (data.partyType === 'supplier' && data.supplierId) {
+        return createSupplierTransaction({
+          supplierId: data.supplierId,
+          type: 'credit',
+          amountUsd: amounts.amountUsd,
+          amountIqd: amounts.amountIqd,
+          description: data.description ?? null,
+          date: data.date,
+          projectId: data.projectId ?? null,
+        });
+      }
+
+      return createInvoice({
+        number: `EXP-${Date.now()}`,
+        expenseType: 'logistics',
+        laborWorkerId: null,
+        laborPersonName: null,
+        supplierId: null,
+        projectId: data.projectId,
+        buildingId: null,
+        productId: null,
+        totalAmount: amounts.amount,
+        paidAmount: amounts.amount,
+        currency: amounts.currency,
+        totalAmountUsd: amounts.amountUsd,
+        paidAmountUsd: amounts.amountUsd,
+        totalAmountIqd: amounts.amountIqd,
+        paidAmountIqd: amounts.amountIqd,
+        status: 'paid',
+        invoiceDate: data.date,
+        notes: data.description ?? null,
+        dueDate: data.date,
+        imagePath: null,
+      });
     },
     onSuccess: () => {
-      toast.success('Dépense créée avec succès');
-      
-      // Invalider les requêtes pertinentes
-      queryClient.invalidateQueries({ queryKey: ['allExpenses'] });
-      queryClient.invalidateQueries({ queryKey: ['workerTransactions'] });
-      queryClient.invalidateQueries({ queryKey: ['supplierTransactions'] });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Depense creee avec succes');
+      void queryClient.invalidateQueries({ queryKey: ['allExpenses'] });
+      void queryClient.invalidateQueries({ queryKey: ['workerTransactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['supplierTransactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
     onError: (error: Error) => {
-      toast.error(`Erreur lors de la création: ${error.message}`);
+      toast.error(`Erreur lors de la creation: ${error.message}`);
     },
   });
 }
 
-// Hook pour charger les données nécessaires au formulaire
 export function useExpenseFormData() {
   const projectsQuery = useQuery({
     queryKey: ['projects'],
     queryFn: listProjects,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
   });
 
   const workersQuery = useQuery({
@@ -128,12 +130,10 @@ export function useExpenseFormData() {
   };
 }
 
-// Hook pour gérer l'état du formulaire de dépense
 export function useExpenseForm(initialData?: Partial<ExpenseFormData>) {
   const [formData, setFormData] = useState<ExpenseFormData>({
-    amount: 0,
-    currency: 'USD',
-    category: 'other',
+    amountUsd: 0,
+    amountIqd: 0,
     date: new Date().toISOString().split('T')[0],
     partyType: 'general',
     ...initialData,
@@ -141,23 +141,20 @@ export function useExpenseForm(initialData?: Partial<ExpenseFormData>) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const updateField = (field: keyof ExpenseFormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Effacer l'erreur quand l'utilisateur corrige
+  const updateField = (field: keyof ExpenseFormData, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field as string]) {
-      setErrors(prev => ({ ...prev, [field as string]: '' }));
+      setErrors((prev) => ({ ...prev, [field as string]: '' }));
     }
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = () => {
     const newErrors: Record<string, string> = {};
+    const amountUsd = Number(formData.amountUsd || 0);
+    const amountIqd = Number(formData.amountIqd || 0);
 
-    if (!formData.amount || formData.amount <= 0) {
-      newErrors.amount = 'Le montant est obligatoire et doit être positif';
-    }
-
-    if (!formData.category) {
-      newErrors.category = 'La catégorie est obligatoire';
+    if (amountUsd <= 0 && amountIqd <= 0) {
+      newErrors.amountUsd = 'Renseigner un montant USD, IQD ou les deux';
     }
 
     if (!formData.date) {
@@ -172,26 +169,14 @@ export function useExpenseForm(initialData?: Partial<ExpenseFormData>) {
       newErrors.supplierId = 'Le fournisseur est obligatoire';
     }
 
-    // Validation des montants en double devise
-    if (formData.currency === 'USD') {
-      if (formData.amountUsd !== undefined && formData.amountUsd <= 0) {
-        newErrors.amountUsd = 'Le montant USD doit être positif';
-      }
-    } else {
-      if (formData.amountIqd !== undefined && formData.amountIqd <= 0) {
-        newErrors.amountIqd = 'Le montant IQD doit être positif';
-      }
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const resetForm = () => {
     setFormData({
-      amount: 0,
-      currency: 'USD',
-      category: 'other',
+      amountUsd: 0,
+      amountIqd: 0,
       date: new Date().toISOString().split('T')[0],
       partyType: 'general',
       ...initialData,

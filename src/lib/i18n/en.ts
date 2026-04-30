@@ -295,6 +295,7 @@ export function createEnglishTranslations(dir: "ltr" | "rtl"): TranslationShape 
     changeDeleted: "Deleted",
     noExpenseLog: "No changes recorded for this expense yet.",
     close: "Close",
+    openNavigation: "Open navigation",
     closeNavigation: "Close navigation",
     excel: "Excel",
     unexpectedError: "An unexpected error occurred.",

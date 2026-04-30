@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
-import { Button, Input, Select, Form, Card, Typography, Space, Row, Col } from 'antd';
+import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Typography } from 'antd';
 
-// Types pour les dépenses
 export interface ExpenseFormData {
-  amount: number;
   amountUsd?: number;
   amountIqd?: number;
-  currency: 'USD' | 'IQD';
-  category: string;
   description?: string;
   date: string;
   projectId?: number;
@@ -28,27 +24,12 @@ export interface ExpenseFormProps {
   suppliers?: Array<{ id: number; name: string }>;
 }
 
-// Catégories de dépenses communes
-const EXPENSE_CATEGORIES = [
-  { value: 'salary_payment', label: 'Paiement Salaire' },
-  { value: 'supplier_payment', label: 'Paiement Fournisseur' },
-  { value: 'material_purchase', label: 'Achat Matériel' },
-  { value: 'services', label: 'Services' },
-  { value: 'transport', label: 'Transport' },
-  { value: 'rent', label: 'Loyer' },
-  { value: 'utilities', label: 'Services Publics' },
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'insurance', label: 'Assurance' },
-  { value: 'taxes', label: 'Taxes' },
-  { value: 'other', label: 'Autre' },
-];
-
 export function ExpenseForm({
   onSubmit,
   onCancel,
   initialData,
-  title = "Nouvelle Dépense",
-  description = "Créez une nouvelle dépense avec les informations requises",
+  title = 'Nouvelle depense',
+  description = 'Creez une nouvelle depense avec les informations requises',
   isLoading = false,
   projects = [],
   workers = [],
@@ -56,29 +37,39 @@ export function ExpenseForm({
 }: ExpenseFormProps) {
   const [form] = Form.useForm();
   const [formData, setFormData] = useState<ExpenseFormData>({
-    amount: 0,
-    currency: 'USD',
-    category: 'other',
+    amountUsd: 0,
+    amountIqd: 0,
     date: new Date().toISOString().split('T')[0],
     partyType: 'general',
     ...initialData,
   });
 
-  const handleSubmit = async (values: any) => {
+  const validateAmountPair = () => {
+    const values = form.getFieldsValue(['amountUsd', 'amountIqd']);
+    const amountUsd = Number(values.amountUsd || 0);
+    const amountIqd = Number(values.amountIqd || 0);
+
+    return amountUsd > 0 || amountIqd > 0
+      ? Promise.resolve()
+      : Promise.reject(new Error('Renseigner un montant USD, IQD ou les deux'));
+  };
+
+  const handleSubmit = async (values: ExpenseFormData) => {
     try {
-      const expenseData: ExpenseFormData = {
+      await onSubmit({
         ...formData,
         ...values,
-        date: values.date?.format('YYYY-MM-DD') || formData.date,
-      };
-      await onSubmit(expenseData);
+        amountUsd: Number(values.amountUsd || 0),
+        amountIqd: Number(values.amountIqd || 0),
+        date: values.date || formData.date,
+      });
     } catch (error) {
       console.error('Erreur lors de la soumission:', error);
     }
   };
 
-  const updateField = (field: keyof ExpenseFormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const updateField = (field: keyof ExpenseFormData, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -88,9 +79,6 @@ export function ExpenseForm({
         layout="vertical"
         onFinish={handleSubmit}
         initialValues={{
-          amount: formData.amount,
-          currency: formData.currency,
-          category: formData.category,
           date: formData.date || undefined,
           partyType: formData.partyType,
           workerId: formData.workerId,
@@ -103,87 +91,29 @@ export function ExpenseForm({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item
-              name="amount"
-              label="Montant *"
-              rules={[{ required: true, message: 'Le montant est obligatoire' }]}
-            >
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                onChange={(e) => updateField('amount', parseFloat(e.target.value) || 0)}
+            <Form.Item name="amountUsd" label="Montant USD" rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={0}
+                step={0.01}
+                style={{ width: '100%' }}
+                onChange={(value) => updateField('amountUsd', Number(value || 0))}
               />
             </Form.Item>
           </Col>
-          
-          <Col xs={24} md={12}>
-            <Form.Item
-              name="currency"
-              label="Devise *"
-              rules={[{ required: true, message: 'La devise est obligatoire' }]}
-            >
-              <Select
-                placeholder="Sélectionner la devise"
-                onChange={(value: 'USD' | 'IQD') => updateField('currency', value)}
-              >
-                <Select.Option value="USD">USD</Select.Option>
-                <Select.Option value="IQD">IQD</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
 
-        <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="amountUsd" label="Montant USD">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                onChange={(e) => updateField('amountUsd', parseFloat(e.target.value) || undefined)}
+            <Form.Item name="amountIqd" label="Montant IQD" rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={0}
+                step={1}
+                style={{ width: '100%' }}
+                onChange={(value) => updateField('amountIqd', Number(value || 0))}
               />
             </Form.Item>
           </Col>
-          
-          <Col xs={24} md={12}>
-            <Form.Item name="amountIqd" label="Montant IQD">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                onChange={(e) => updateField('amountIqd', parseFloat(e.target.value) || undefined)}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
 
-        <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item
-              name="category"
-              label="Catégorie *"
-              rules={[{ required: true, message: 'La catégorie est obligatoire' }]}
-            >
-              <Select
-                placeholder="Sélectionner une catégorie"
-                onChange={(value) => updateField('category', value)}
-              >
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <Select.Option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          
-          <Col xs={24} md={12}>
-            <Form.Item
-              name="date"
-              label="Date *"
-              rules={[{ required: true, message: 'La date est obligatoire' }]}
-            >
+            <Form.Item name="date" label="Date *" rules={[{ required: true, message: 'La date est obligatoire' }]}>
               <Input type="date" style={{ width: '100%' }} />
             </Form.Item>
           </Col>
@@ -195,10 +125,10 @@ export function ExpenseForm({
           rules={[{ required: true, message: 'Le type de partie est obligatoire' }]}
         >
           <Select
-            placeholder="Sélectionner le type de partie"
+            placeholder="Selectionner le type de partie"
             onChange={(value: 'worker' | 'supplier' | 'general') => updateField('partyType', value)}
           >
-            <Select.Option value="general">Général</Select.Option>
+            <Select.Option value="general">General</Select.Option>
             <Select.Option value="worker">Travailleur</Select.Option>
             <Select.Option value="supplier">Fournisseur</Select.Option>
           </Select>
@@ -211,8 +141,8 @@ export function ExpenseForm({
             rules={[{ required: true, message: 'Le travailleur est obligatoire' }]}
           >
             <Select
-              placeholder="Sélectionner un travailleur"
-              onChange={(value) => updateField('workerId', parseInt(value))}
+              placeholder="Selectionner un travailleur"
+              onChange={(value) => updateField('workerId', Number(value))}
             >
               {workers.map((worker) => (
                 <Select.Option key={worker.id} value={worker.id}>
@@ -230,8 +160,8 @@ export function ExpenseForm({
             rules={[{ required: true, message: 'Le fournisseur est obligatoire' }]}
           >
             <Select
-              placeholder="Sélectionner un fournisseur"
-              onChange={(value) => updateField('supplierId', parseInt(value))}
+              placeholder="Selectionner un fournisseur"
+              onChange={(value) => updateField('supplierId', Number(value))}
             >
               {suppliers.map((supplier) => (
                 <Select.Option key={supplier.id} value={supplier.id}>
@@ -244,9 +174,9 @@ export function ExpenseForm({
 
         <Form.Item name="projectId" label="Projet">
           <Select
-            placeholder="Sélectionner un projet (optionnel)"
+            placeholder="Selectionner un projet (optionnel)"
             allowClear
-            onChange={(value) => updateField('projectId', value ? parseInt(value) : undefined)}
+            onChange={(value) => updateField('projectId', value ? Number(value) : undefined)}
           >
             {projects.map((project) => (
               <Select.Option key={project.id} value={project.id}>
@@ -260,19 +190,19 @@ export function ExpenseForm({
           <Input.TextArea
             placeholder="Ajouter une description (optionnel)"
             rows={3}
-            onChange={(e) => updateField('description', e.target.value)}
+            onChange={(event) => updateField('description', event.target.value)}
           />
         </Form.Item>
 
         <Form.Item>
           <Space>
-            {onCancel && (
+            {onCancel ? (
               <Button onClick={onCancel} disabled={isLoading}>
                 Annuler
               </Button>
-            )}
+            ) : null}
             <Button type="primary" htmlType="submit" loading={isLoading}>
-              {isLoading ? 'Création...' : 'Créer la dépense'}
+              {isLoading ? 'Creation...' : 'Creer la depense'}
             </Button>
           </Space>
         </Form.Item>

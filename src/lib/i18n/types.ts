@@ -294,6 +294,7 @@ export type TranslationShape = {
   changeDeleted: string;
   noExpenseLog: string;
   close: string;
+  openNavigation: string;
   closeNavigation: string;
   excel: string;
   unexpectedError: string;

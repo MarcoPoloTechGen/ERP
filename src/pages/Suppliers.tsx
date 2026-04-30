@@ -147,7 +147,7 @@ export default function Suppliers() {
   const search = useDeferredValue(searchInput.trim());
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<SupplierRow>({
-    resource: "suppliers",
+    resource: "app_suppliers",
     pagination: { pageSize: STANDARD_PAGE_SIZE },
     sorters: { initial: [{ field: "created_at", order: "desc" }] },
     syncWithLocation: false,
@@ -179,7 +179,6 @@ export default function Suppliers() {
       dataIndex: "name",
       responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 120,
       render: (value: string) => <Typography.Text strong ellipsis>{value}</Typography.Text>,
     },
@@ -188,7 +187,6 @@ export default function Suppliers() {
       dataIndex: "contact",
       responsive: ["sm", "md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 100,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
@@ -197,7 +195,6 @@ export default function Suppliers() {
       dataIndex: "phone",
       responsive: ["md", "lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 100,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
@@ -206,7 +203,6 @@ export default function Suppliers() {
       dataIndex: "email",
       responsive: ["lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 120,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
@@ -215,7 +211,6 @@ export default function Suppliers() {
       dataIndex: "address",
       responsive: ["lg"],
       ellipsis: true,
-      flex: 1,
       minWidth: 120,
       render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },

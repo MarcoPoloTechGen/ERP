@@ -1,10 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { normalizeError } from "@/lib/error-handler";
+import type { Json } from "@/lib/database.types";
 
 export interface ErrorNotificationData {
   error_type: string;
   error_message: string;
-  error_details?: Record<string, unknown>;
+  error_details?: Json;
   url?: string;
   user_agent?: string;
   app_version?: string;
