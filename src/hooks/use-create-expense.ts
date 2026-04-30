@@ -6,6 +6,7 @@ import {
   createSupplierTransaction,
   createWorkerTransaction,
   listProjects,
+  listProjectBuildings,
   listSuppliers,
   listWorkers,
 } from '@/lib/erp-core';
@@ -17,6 +18,7 @@ export interface ExpenseFormData {
   description?: string;
   date: string;
   projectId?: number;
+  buildingId?: number;
   workerId?: number;
   supplierId?: number;
   partyType: 'worker' | 'supplier' | 'general';
@@ -51,6 +53,7 @@ export function useCreateExpense() {
           description: data.description ?? null,
           date: data.date,
           projectId: data.projectId ?? null,
+          buildingId: data.buildingId ?? null,
         });
       }
 
@@ -63,6 +66,7 @@ export function useCreateExpense() {
           description: data.description ?? null,
           date: data.date,
           projectId: data.projectId ?? null,
+          buildingId: data.buildingId ?? null,
         });
       }
 
@@ -73,7 +77,7 @@ export function useCreateExpense() {
         laborPersonName: null,
         supplierId: null,
         projectId: data.projectId,
-        buildingId: null,
+        buildingId: data.buildingId ?? null,
         productId: null,
         totalAmount: amounts.amount,
         paidAmount: amounts.amount,
@@ -121,12 +125,19 @@ export function useExpenseFormData() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const buildingsQuery = useQuery({
+    queryKey: ['projectBuildings'],
+    queryFn: () => listProjectBuildings(),
+    staleTime: 1000 * 60 * 5,
+  });
+
   return {
     projects: projectsQuery.data || [],
+    buildings: buildingsQuery.data || [],
     workers: workersQuery.data || [],
     suppliers: suppliersQuery.data || [],
-    isLoading: projectsQuery.isLoading || workersQuery.isLoading || suppliersQuery.isLoading,
-    error: projectsQuery.error || workersQuery.error || suppliersQuery.error,
+    isLoading: projectsQuery.isLoading || buildingsQuery.isLoading || workersQuery.isLoading || suppliersQuery.isLoading,
+    error: projectsQuery.error || buildingsQuery.error || workersQuery.error || suppliersQuery.error,
   };
 }
 
@@ -159,6 +170,14 @@ export function useExpenseForm(initialData?: Partial<ExpenseFormData>) {
 
     if (!formData.date) {
       newErrors.date = 'La date est obligatoire';
+    }
+
+    if (!formData.projectId) {
+      newErrors.projectId = 'Le projet est obligatoire';
+    }
+
+    if (!formData.buildingId) {
+      newErrors.buildingId = 'Le batiment est obligatoire';
     }
 
     if (formData.partyType === 'worker' && !formData.workerId) {

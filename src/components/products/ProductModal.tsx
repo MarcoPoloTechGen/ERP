@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { App, Col, Form, Input, InputNumber, Modal, Row, Select } from "antd";
 import { createProduct, updateProduct } from "@/lib/erp";
-import { formatCurrencyLabel } from "@/lib/format";
+import { currencyInputProps, formatCurrencyLabel } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
@@ -136,12 +136,12 @@ export function ProductModal({
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="unitPriceUsd" label={`${t.unitPrice} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="unitPriceIqd" label={`${t.unitPrice} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
+              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
         </Row>

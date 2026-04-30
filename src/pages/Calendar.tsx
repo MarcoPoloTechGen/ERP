@@ -46,10 +46,11 @@ import {
 import { useAuth } from "@/lib/auth";
 import {
   buildExpenseAssignmentOptions,
+  buildingExpenseAssignmentKey,
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
 import { EXPENSE_TYPES, type ExpenseType } from "@/lib/expense-types";
-import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
+import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
@@ -215,7 +216,7 @@ function CalendarEntryModal({
     queryFn: () => listProjectBuildings(),
     enabled: entryType === "expense",
   });
-  const effectiveAssignmentKey = assignmentKey ?? (scopedProjectId != null ? `project:${scopedProjectId}` : undefined);
+  const effectiveAssignmentKey = assignmentKey;
   const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
@@ -247,6 +248,7 @@ function CalendarEntryModal({
     const options = buildExpenseAssignmentOptions({
         projects,
         buildings: projectBuildings,
+        includeProjectWide: false,
         projectWideLabel: t.projectGlobalCost,
       });
 
@@ -254,7 +256,6 @@ function CalendarEntryModal({
       return options;
     }
 
-    const projectPrefix = `project:${scopedProjectId}`;
     const scopedBuildingIds = new Set(
       (projectBuildings ?? [])
         .filter((building) => building.projectId === scopedProjectId)
@@ -264,11 +265,26 @@ function CalendarEntryModal({
       .map((group) => ({
         ...group,
         options: group.options.filter(
-          (option) => option.value === projectPrefix || scopedBuildingIds.has(option.value),
+          (option) => scopedBuildingIds.has(option.value),
         ),
       }))
       .filter((group) => group.options.length > 0);
   }, [projectBuildings, projects, scopedProjectId, t.projectGlobalCost]);
+
+  useEffect(() => {
+    if (entryType !== "expense" || scopedProjectId == null) {
+      return;
+    }
+
+    const currentAssignment = parseExpenseAssignmentKey(form.getFieldValue("assignmentKey"), projectBuildings);
+    if (currentAssignment.projectId === scopedProjectId && currentAssignment.buildingId != null) {
+      return;
+    }
+
+    const firstBuilding = projectBuildings?.find((building) => building.projectId === scopedProjectId);
+    form.setFieldValue("assignmentKey", buildingExpenseAssignmentKey(firstBuilding?.id, scopedProjectId));
+    form.setFieldValue("productId", undefined);
+  }, [entryType, form, projectBuildings, scopedProjectId]);
 
   useEffect(() => {
     if (entryType !== "expense") {
@@ -315,6 +331,10 @@ function CalendarEntryModal({
       }
 
       const assignment = parseExpenseAssignmentKey(values.assignmentKey, projectBuildings);
+      if (assignment.projectId == null || assignment.buildingId == null) {
+        throw new Error(`${t.invoiceAssignment}: ${t.requiredField}`);
+      }
+
       const paidAmountUsd = Number(values.paidAmountUsd ?? 0);
       const remainingAmountUsd = Number(values.remainingAmountUsd ?? 0);
       const paidAmountIqd = Number(values.paidAmountIqd ?? 0);
@@ -399,7 +419,7 @@ function CalendarEntryModal({
           paidAmountIqd: 0,
           remainingAmountIqd: 0,
           invoiceDate: selectedDate,
-          assignmentKey: scopedProjectId != null ? `project:${scopedProjectId}` : undefined,
+          assignmentKey: undefined,
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -445,6 +465,7 @@ function CalendarEntryModal({
                     max={appSettings?.transactionAmountMaxUsd ?? undefined}
                     step={0.01}
                     style={{ width: "100%" }}
+                    {...currencyInputProps("USD")}
                   />
                 </Form.Item>
               </Col>
@@ -455,6 +476,7 @@ function CalendarEntryModal({
                     max={appSettings?.transactionAmountMaxIqd ?? undefined}
                     step={1}
                     style={{ width: "100%" }}
+                    {...currencyInputProps("IQD")}
                   />
                 </Form.Item>
               </Col>
@@ -537,22 +559,22 @@ function CalendarEntryModal({
               ) : null}
               <Col xs={12} md={12}>
                 <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`}>
-                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
                 </Form.Item>
               </Col>
               <Col xs={12} md={12}>
                 <Form.Item name="remainingAmountUsd" label={`${t.remaining_label} ${formatCurrencyLabel("USD")}`}>
-                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
                 </Form.Item>
               </Col>
               <Col xs={12} md={12}>
                 <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
-                  <InputNumber min={0} step={1} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
                 </Form.Item>
               </Col>
               <Col xs={12} md={12}>
                 <Form.Item name="remainingAmountIqd" label={`${t.remaining_label} IQD`}>
-                  <InputNumber min={0} step={1} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>

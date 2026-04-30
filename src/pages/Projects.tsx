@@ -33,7 +33,7 @@ import {
 } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import { formatCurrency, formatDate, formatDateInput } from "@/lib/format";
+import { currencyInputProps, formatCurrency, formatDate, formatDateInput } from "@/lib/format";
 import { canDeleteProjects, hasAdminAccess } from "@/lib/permissions";
 import {
   addContainsSearchFilter,
@@ -209,7 +209,7 @@ function ProjectModal({
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="budget" label={t.budget}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>

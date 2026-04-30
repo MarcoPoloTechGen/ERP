@@ -20,6 +20,7 @@ import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings, updateExchangeRateIqdPer100Usd } from "@/lib/erp";
 import { useLang, type Lang } from "@/lib/i18n";
+import { currencyInputProps, formatCurrency } from "@/lib/format";
 import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { useProjectScope } from "@/lib/project-scope";
 
@@ -96,7 +97,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   });
   const canEditAppSettings = hasAdminAccess(profile?.role);
   const exchangeRateValue = appSettings?.exchangeRateIqdPer100Usd ?? null;
-  const exchangeRateDisplay = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(exchangeRateValue ?? 0);
+  const exchangeRateDisplay = formatCurrency(exchangeRateValue ?? 0, "IQD");
   const exchangeRateMutation = useMutation({
     mutationFn: updateExchangeRateIqdPer100Usd,
     onSuccess: async () => {
@@ -222,7 +223,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {t.exchangeRate}
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.85)", marginBottom: 8 }}>
-          100$ = {exchangeRateValue == null ? "-" : exchangeRateDisplay} IQD
+          100 $ = {exchangeRateValue == null ? "-" : exchangeRateDisplay}
         </div>
         {canEditAppSettings && (
           <Space.Compact style={{ width: "100%" }}>
@@ -233,6 +234,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               value={exchangeRateDraft}
               controls={false}
               style={{ flex: 1 }}
+              {...currencyInputProps("IQD")}
               onChange={(value) => setExchangeRateDraft(typeof value === "number" ? value : null)}
             />
             <Button

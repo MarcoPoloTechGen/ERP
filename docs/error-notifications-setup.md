@@ -23,7 +23,7 @@ send-error-notification (Edge Function)
 ### 1. Appliquer la migration (SQL Editor)
 
 1. Allez sur le **Supabase Dashboard** → **SQL Editor**
-2. Ouvrez le fichier `supabase/migrations/MANUAL_DEPLOY.sql`
+2. Ouvrez le fichier `supabase/manual/MANUAL_DEPLOY.sql`
 3. Copiez tout le contenu
 4. Collez dans le SQL Editor
 5. Cliquez sur **Run**

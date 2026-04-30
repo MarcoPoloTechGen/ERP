@@ -6,7 +6,9 @@ coverage
 .env.local
 .env.*.local
 dev-server*.log
+.codex-vite*.log
 .vercel
+supabase/.temp/
 supabase.exe
 
 .DS_Store

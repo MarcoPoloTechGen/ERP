@@ -234,8 +234,8 @@ select
   p.name as project_name,
   pt.building_id,
   pb.name as building_name,
-  pt.category_id,
-  ec.name as expense_category,
+  null::bigint as category_id,
+  null::text as expense_category,
   null::bigint as source_invoice_id,
   null::text as source_kind,
   pt.created_by,
@@ -255,8 +255,6 @@ left join public.project_buildings as pb
   on pb.id = pt.building_id
 left join public.projects as p
   on p.id = pb.project_id
-left join public.expense_categories as ec
-  on ec.id = pt.category_id
 left join public.profiles as created_profile
   on created_profile.id = pt.created_by
 where pt.deleted_at is null;
@@ -298,7 +296,7 @@ select
   pt.building_id,
   pb.name as building_name,
   null::bigint as product_id,
-  ec.name as product_name,
+  null::text as product_name,
   pt.amount as total_amount,
   case when pt.entry_type = 'payment' then pt.amount else 0 end::numeric as paid_amount,
   case when pt.entry_type = 'debt' then pt.amount else 0 end::numeric as remaining_amount,
@@ -343,8 +341,6 @@ left join public.project_buildings as pb
   on pb.id = pt.building_id
 left join public.projects as p
   on p.id = pb.project_id
-left join public.expense_categories as ec
-  on ec.id = pt.category_id
 left join public.profiles as created_profile
   on created_profile.id = pt.created_by
 left join lateral (
@@ -379,7 +375,7 @@ select
   pth.old_building_id as building_id,
   pb.name as building_name,
   null::bigint as product_id,
-  ec.name as product_name,
+  null::text as product_name,
   pth.old_amount as total_amount,
   case when pth.old_entry_type = 'payment' then pth.old_amount else 0 end::numeric as paid_amount,
   case when pth.old_entry_type = 'debt' then pth.old_amount else 0 end::numeric as remaining_amount,
@@ -422,8 +418,6 @@ left join public.project_buildings as pb
   on pb.id = pth.old_building_id
 left join public.projects as p
   on p.id = pb.project_id
-left join public.expense_categories as ec
-  on ec.id = pth.old_category_id
 left join public.profiles as changed_profile
   on changed_profile.id = pth.changed_by;
 

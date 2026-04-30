@@ -20,6 +20,7 @@ import {
 } from "@/lib/notifications/error-notification";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
+import { currencyInputProps } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import { hasAdminAccess, isSuperAdmin } from "@/lib/permissions";
 import { deleteCompanyLogo, uploadCompanyLogo } from "@/lib/supabase";
@@ -221,10 +222,11 @@ export default function Admin() {
       transactionLimitsDraft.transactionAmountMaxIqd != null &&
       transactionLimitsDraft.transactionAmountMinIqd > transactionLimitsDraft.transactionAmountMaxIqd);
 
-  function updateTransactionLimitDraft(key: keyof TransactionAmountLimitsInput, value: number | null) {
+  function updateTransactionLimitDraft(key: keyof TransactionAmountLimitsInput, value: string | number | null) {
+    const parsedValue = typeof value === "number" ? value : value ? Number(value) : null;
     setTransactionLimitsDraft((current) => ({
       ...current,
-      [key]: typeof value === "number" ? value : null,
+      [key]: typeof parsedValue === "number" && Number.isFinite(parsedValue) ? parsedValue : null,
     }));
   }
 
@@ -332,6 +334,7 @@ export default function Admin() {
                   step={0.01}
                   value={transactionLimitsDraft.transactionAmountMinUsd}
                   style={{ width: "100%" }}
+                  {...currencyInputProps("USD")}
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMinUsd", value)}
                 />
               </label>
@@ -342,6 +345,7 @@ export default function Admin() {
                   step={0.01}
                   value={transactionLimitsDraft.transactionAmountMaxUsd}
                   style={{ width: "100%" }}
+                  {...currencyInputProps("USD")}
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMaxUsd", value)}
                 />
               </label>
@@ -353,6 +357,7 @@ export default function Admin() {
                   precision={0}
                   value={transactionLimitsDraft.transactionAmountMinIqd}
                   style={{ width: "100%" }}
+                  {...currencyInputProps("IQD")}
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMinIqd", value)}
                 />
               </label>
@@ -364,6 +369,7 @@ export default function Admin() {
                   precision={0}
                   value={transactionLimitsDraft.transactionAmountMaxIqd}
                   style={{ width: "100%" }}
+                  {...currencyInputProps("IQD")}
                   onChange={(value) => updateTransactionLimitDraft("transactionAmountMaxIqd", value)}
                 />
               </label>

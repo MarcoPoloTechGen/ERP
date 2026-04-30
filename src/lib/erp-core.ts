@@ -67,7 +67,7 @@ type PartyTransactionWritePayload = {
   entity_type: "worker" | "supplier" | "other";
   worker_id: number | null;
   supplier_id: number | null;
-  building_id: number | null;
+  building_id: number;
   amount: number;
   currency: Currency;
   amount_usd: number;
@@ -325,6 +325,8 @@ export interface WorkerTransaction {
   date: string | null;
   projectId: number | null;
   projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   sourceInvoiceId: number | null;
   sourceKind: string | null;
   createdBy: string | null;
@@ -345,6 +347,8 @@ export interface SupplierTransaction {
   date: string | null;
   projectId: number | null;
   projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   sourceInvoiceId: number | null;
   sourceKind: string | null;
   createdBy: string | null;
@@ -557,6 +561,7 @@ export interface WorkerTransactionInput {
   description: string | null;
   date: string | null;
   projectId: number | null;
+  buildingId: number | null;
 }
 
 export interface SupplierTransactionInput {
@@ -569,6 +574,7 @@ export interface SupplierTransactionInput {
   description: string | null;
   date: string | null;
   projectId: number | null;
+  buildingId: number | null;
 }
 
 export interface IncomeTransactionInput {
@@ -1038,6 +1044,8 @@ function normalizePartyTransactionRow(row: AppPartyTransactionRow): WorkerTransa
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
+    buildingId: readNumber(row, "building_id", "buildingId"),
+    buildingName: readString(row, "building_name", "buildingName"),
     sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
     sourceKind: readString(row, "source_kind", "sourceKind"),
     createdBy: readString(row, "created_by", "createdBy"),
@@ -1069,6 +1077,8 @@ function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierT
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
+    buildingId: readNumber(row, "building_id", "buildingId"),
+    buildingName: readString(row, "building_name", "buildingName"),
     sourceInvoiceId: readNumber(row, "source_invoice_id", "sourceInvoiceId"),
     sourceKind: readString(row, "source_kind", "sourceKind"),
     createdBy: readString(row, "created_by", "createdBy"),
@@ -1327,21 +1337,19 @@ async function currentUserIsSuperAdmin() {
 }
 
 async function resolveBuildingId(projectId: number | null, buildingId: number | null) {
-  if (buildingId != null) {
-    return buildingId;
-  }
-
   if (projectId == null) {
     throw new Error("Project is required for this transaction.");
+  }
+
+  if (buildingId == null) {
+    throw new Error("Building is required for this transaction.");
   }
 
   const { data, error } = await supabase
     .from("project_buildings")
     .select("id")
+    .eq("id", buildingId)
     .eq("project_id", projectId)
-    .order("is_default", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(1)
     .maybeSingle();
 
   if (error) {
@@ -1350,7 +1358,7 @@ async function resolveBuildingId(projectId: number | null, buildingId: number | 
 
   const id = readNumber(asRow(data), "id");
   if (id == null) {
-    throw new Error("Project has no building configured.");
+    throw new Error("Building must belong to the selected project.");
   }
 
   return id;
@@ -2252,7 +2260,7 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     amountIqd: input.amountIqd,
     settings,
   });
-  const buildingId = await resolveBuildingId(input.projectId, null);
+  const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
@@ -2272,7 +2280,7 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
 
 export async function updateWorkerTransaction(id: number, input: WorkerTransactionInput) {
   const currentUserId = await getCurrentUserId();
-  const buildingId = await resolveBuildingId(input.projectId, null);
+  const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
@@ -2333,7 +2341,7 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
     amountIqd: input.amountIqd,
     settings,
   });
-  const buildingId = await resolveBuildingId(input.projectId, null);
+  const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
@@ -2353,7 +2361,7 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
 
 export async function updateSupplierTransaction(id: number, input: SupplierTransactionInput) {
   const currentUserId = await getCurrentUserId();
-  const buildingId = await resolveBuildingId(input.projectId, null);
+  const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",

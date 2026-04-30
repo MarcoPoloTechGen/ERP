@@ -5,6 +5,8 @@ const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
   IQD: "IQD",
 };
 
+const MONEY_LOCALE = "fr-FR";
+
 function getActiveLocale() {
   if (
     typeof document !== "undefined" &&
@@ -21,12 +23,7 @@ function getActiveLocale() {
 }
 
 export function formatCurrency(amount: number, currency: Currency = "USD") {
-  return new Intl.NumberFormat(getActiveLocale(), {
-    style: "currency",
-    currency,
-    currencyDisplay: currency === "USD" ? "narrowSymbol" : "code",
-    maximumFractionDigits: currency === "IQD" ? 0 : 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
 }
 
 export function formatCurrencyLabel(currency: Currency) {
@@ -34,10 +31,61 @@ export function formatCurrencyLabel(currency: Currency) {
 }
 
 function formatCurrencyNumber(amount: number, currency: Currency) {
-  return new Intl.NumberFormat(getActiveLocale(), {
+  return new Intl.NumberFormat(MONEY_LOCALE, {
     maximumFractionDigits: currency === "IQD" ? 0 : 2,
-    minimumFractionDigits: currency === "IQD" ? 0 : 2,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  })
+    .format(Number.isFinite(amount) ? amount : 0)
+    .replace(/[\u00a0\u202f]/g, " ");
+}
+
+export function formatCurrencyInputValue(value: string | number | undefined, currency: Currency) {
+  if (value == null || value === "") {
+    return "";
+  }
+
+  const amount = typeof value === "number" ? value : Number(parseCurrencyInputValue(value));
+  if (!Number.isFinite(amount)) {
+    return "";
+  }
+
+  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
+}
+
+export function parseCurrencyInputValue(value: string | undefined) {
+  const cleanValue = value?.replace(/[^\d,.-]/g, "") ?? "";
+  if (cleanValue === "" || cleanValue === "-") {
+    return "";
+  }
+
+  const lastComma = cleanValue.lastIndexOf(",");
+  const lastDot = cleanValue.lastIndexOf(".");
+  const decimalSeparator =
+    lastComma >= 0 && lastDot >= 0
+      ? lastComma > lastDot
+        ? ","
+        : "."
+      : lastComma >= 0 && cleanValue.length - lastComma - 1 !== 3
+        ? ","
+        : lastDot >= 0 && cleanValue.length - lastDot - 1 !== 3
+          ? "."
+          : null;
+
+  if (decimalSeparator === ",") {
+    return cleanValue.replace(/\./g, "").replace(",", ".");
+  }
+
+  if (decimalSeparator === ".") {
+    return cleanValue.replace(/,/g, "");
+  }
+
+  return cleanValue.replace(/[,.]/g, "");
+}
+
+export function currencyInputProps(currency: Currency) {
+  return {
+    formatter: (value: string | number | undefined) => formatCurrencyInputValue(value, currency),
+    parser: parseCurrencyInputValue,
+  };
 }
 
 function isolateLtr(value: string) {

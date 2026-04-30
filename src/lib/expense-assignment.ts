@@ -72,10 +72,12 @@ export function parseExpenseAssignmentKey(
 export function buildExpenseAssignmentOptions({
   projects = [],
   buildings = [],
+  includeProjectWide = true,
   projectWideLabel,
 }: {
   projects?: Project[];
   buildings?: ProjectBuilding[];
+  includeProjectWide?: boolean;
   projectWideLabel: string;
 }): ExpenseAssignmentOptionGroup[] {
   const buildingsByProject = new Map<number, ProjectBuilding[]>();
@@ -89,11 +91,13 @@ export function buildExpenseAssignmentOptions({
   return projects.map((project) => ({
     label: project.name,
     options: [
-      { label: `${project.name} - ${projectWideLabel}`, value: projectExpenseAssignmentKey(project.id) },
+      includeProjectWide
+        ? { label: `${project.name} - ${projectWideLabel}`, value: projectExpenseAssignmentKey(project.id) }
+        : null,
       ...(buildingsByProject.get(project.id) ?? []).map((building) => ({
         label: `${project.name} - ${building.name}`,
         value: buildingExpenseAssignmentKey(building.id, building.projectId),
       })),
-    ].filter((option): option is { label: string; value: ExpenseAssignmentKey } => Boolean(option.value)),
+    ].filter((option): option is { label: string; value: ExpenseAssignmentKey } => Boolean(option?.value)),
   }));
 }

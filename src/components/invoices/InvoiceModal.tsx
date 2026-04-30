@@ -3,9 +3,14 @@ import { useMutation } from "@tanstack/react-query";
 import { App, Button, Col, Form, Image as AntImage, Input, InputNumber, Modal, Row, Select, Space, Typography, Upload } from "antd";
 import { Image as ImageIcon } from "lucide-react";
 import { createInvoice, updateInvoice, type InvoiceStatus } from "@/lib/erp";
-import { buildExpenseAssignmentOptions, expenseAssignmentKeyFromRecord, parseExpenseAssignmentKey } from "@/lib/expense-assignment";
+import {
+  buildExpenseAssignmentOptions,
+  buildingExpenseAssignmentKey,
+  expenseAssignmentKeyFromRecord,
+  parseExpenseAssignmentKey,
+} from "@/lib/expense-assignment";
 import { EXPENSE_TYPES, asExpenseType, type ExpenseType } from "@/lib/expense-types";
-import { formatCurrencyLabel, formatDateInput } from "@/lib/format";
+import { currencyInputProps, formatCurrencyLabel, formatDateInput } from "@/lib/format";
 import { asCurrency, toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
@@ -112,7 +117,7 @@ export function InvoiceModal({
   const { data: products } = useProducts();
   const { data: workers } = useWorkers();
   const { data: projectBuildings } = useProjectBuildings();
-  const effectiveAssignmentKey = assignmentKey ?? (scopedProjectId != null ? `project:${scopedProjectId}` : undefined);
+  const effectiveAssignmentKey = assignmentKey;
   const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
@@ -179,6 +184,7 @@ export function InvoiceModal({
     const options = buildExpenseAssignmentOptions({
         projects,
         buildings: projectBuildings,
+        includeProjectWide: false,
         projectWideLabel: t.projectGlobalCost,
       });
 
@@ -186,7 +192,6 @@ export function InvoiceModal({
       return options;
     }
 
-    const projectPrefix = `project:${scopedProjectId}`;
     const scopedBuildingIds = new Set(
       (projectBuildings ?? [])
         .filter((building) => building.projectId === scopedProjectId)
@@ -196,7 +201,7 @@ export function InvoiceModal({
       .map((group) => ({
         ...group,
         options: group.options.filter(
-          (option) => option.value === projectPrefix || scopedBuildingIds.has(option.value),
+          (option) => scopedBuildingIds.has(option.value),
         ),
       }))
       .filter((group) => group.options.length > 0);
@@ -208,8 +213,9 @@ export function InvoiceModal({
     }
 
     const currentAssignment = parseExpenseAssignmentKey(form.getFieldValue("assignmentKey"), projectBuildings);
-    if (currentAssignment.projectId !== scopedProjectId) {
-      form.setFieldValue("assignmentKey", `project:${scopedProjectId}`);
+    if (currentAssignment.projectId !== scopedProjectId || currentAssignment.buildingId == null) {
+      const firstBuilding = projectBuildings?.find((building) => building.projectId === scopedProjectId);
+      form.setFieldValue("assignmentKey", buildingExpenseAssignmentKey(firstBuilding?.id, scopedProjectId));
       form.setFieldValue("productId", undefined);
     }
   }, [form, projectBuildings, scopedProjectId]);
@@ -245,6 +251,10 @@ export function InvoiceModal({
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
       const assignment = parseExpenseAssignmentKey(values.assignmentKey, projectBuildings);
+      if (assignment.projectId == null || assignment.buildingId == null) {
+        throw new Error(`${t.invoiceAssignment}: ${t.requiredField}`);
+      }
+
       const paidAmountUsd = Number(values.paidAmountUsd || 0);
       const remainingAmountUsd = Number(values.remainingAmountUsd || 0);
       const paidAmountIqd = Number(values.paidAmountIqd || 0);
@@ -356,9 +366,7 @@ export function InvoiceModal({
           laborWorkerId: invoice?.labor_worker_id ?? undefined,
           supplierId: invoice?.supplier_id ?? undefined,
           assignmentKey:
-            scopedProjectId != null && !invoice
-              ? `project:${scopedProjectId}`
-              : expenseAssignmentKeyFromRecord(invoice?.project_id, invoice?.building_id),
+            invoice ? expenseAssignmentKeyFromRecord(invoice.project_id, invoice.building_id) : undefined,
           productId: invoice?.product_id ?? undefined,
           paidAmountUsd: invoice?.paid_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.paid_amount ?? 0 : 0),
           remainingAmountUsd:
@@ -441,22 +449,22 @@ export function InvoiceModal({
           ) : null}
           <Col xs={12} md={12}>
             <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={12}>
             <Form.Item name="remainingAmountUsd" label={`${t.remaining_label} ${formatCurrencyLabel("USD")}`}>
-              <InputNumber min={0} step={0.01} style={{ width: "100%" }} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("USD")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={12}>
             <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
+              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={12}>
             <Form.Item name="remainingAmountIqd" label={`${t.remaining_label} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} />
+              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>

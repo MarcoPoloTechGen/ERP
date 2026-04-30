@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, FileText, Pencil, Trash2, TrendingDown, TrendingUp } from "lucide-react";
@@ -29,6 +29,7 @@ import {
   erpKeys,
   getAppSettings,
   getSupplier,
+  listProjectBuildings,
   listInvoices,
   listProjects,
   listSupplierTransactions,
@@ -37,7 +38,7 @@ import {
   type TransactionType,
   type SupplierTransaction,
 } from "@/lib/erp";
-import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
+import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
@@ -58,6 +59,7 @@ type TransactionFormValues = {
   description?: string;
   date?: string;
   projectId?: number;
+  buildingId?: number;
 };
 
 function SupplierFormModal({
@@ -166,8 +168,18 @@ function SupplierTransactionModal({
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<TransactionFormValues>();
+  const selectedProjectId = Form.useWatch("projectId", form);
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const { data: projectBuildings } = useQuery({
+    queryKey: erpKeys.projectBuildings(0),
+    queryFn: () => listProjectBuildings(),
+  });
   const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
+  const effectiveProjectId = scopedProjectId ?? selectedProjectId;
+  const buildingOptions = useMemo(
+    () => (projectBuildings ?? []).filter((building) => building.projectId === effectiveProjectId),
+    [effectiveProjectId, projectBuildings],
+  );
 
   const saveMutation = useMutation({
     mutationFn: (values: TransactionFormValues) => {
@@ -179,6 +191,7 @@ function SupplierTransactionModal({
         description: values.description?.trim() || null,
         date: values.date || null,
         projectId: scopedProjectId ?? values.projectId ?? null,
+        buildingId: values.buildingId ?? null,
       };
 
       return transaction ? updateSupplierTransaction(transaction.id, payload) : createSupplierTransaction(payload);
@@ -200,6 +213,23 @@ function SupplierTransactionModal({
       : Promise.reject(new Error(t.requiredField));
   };
 
+  useEffect(() => {
+    const currentBuildingId = form.getFieldValue("buildingId");
+
+    if (effectiveProjectId == null) {
+      if (currentBuildingId != null) {
+        form.setFieldValue("buildingId", undefined);
+      }
+      return;
+    }
+
+    if (currentBuildingId != null && buildingOptions.some((building) => building.id === currentBuildingId)) {
+      return;
+    }
+
+    form.setFieldValue("buildingId", buildingOptions.length === 1 ? buildingOptions[0].id : undefined);
+  }, [buildingOptions, effectiveProjectId, form]);
+
   return (
     <Modal
       open
@@ -220,6 +250,7 @@ function SupplierTransactionModal({
           description: transaction?.description ?? undefined,
           date: transaction?.date ?? new Date().toISOString().slice(0, 10),
           projectId: scopedProjectId ?? transaction?.projectId ?? undefined,
+          buildingId: transaction?.buildingId ?? undefined,
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -241,6 +272,7 @@ function SupplierTransactionModal({
                 max={appSettings?.transactionAmountMaxUsd ?? undefined}
                 step={0.01}
                 style={{ width: "100%" }}
+                {...currencyInputProps("USD")}
               />
             </Form.Item>
           </Col>
@@ -251,6 +283,7 @@ function SupplierTransactionModal({
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
                 step={1}
                 style={{ width: "100%" }}
+                {...currencyInputProps("IQD")}
               />
             </Form.Item>
           </Col>
@@ -258,15 +291,26 @@ function SupplierTransactionModal({
             <Col xs={24} md={12}>
               <Form.Item name="projectId" label={t.txProject} rules={[{ required: true, message: t.requiredField }]}>
                 <Select
-                  allowClear
                   showSearch
                   optionFilterProp="label"
                   placeholder={t.noProjectOption}
+                  onChange={() => form.setFieldValue("buildingId", undefined)}
                   options={projects?.map((project) => ({ label: project.name, value: project.id }))}
                 />
               </Form.Item>
             </Col>
           ) : null}
+          <Col xs={24} md={12}>
+            <Form.Item name="buildingId" label={t.buildingLabel} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder={t.noneOption}
+                disabled={effectiveProjectId == null}
+                options={buildingOptions.map((building) => ({ label: building.name, value: building.id }))}
+              />
+            </Form.Item>
+          </Col>
           <Col xs={24} md={12}>
             <Form.Item name="date" label={t.date} rules={[{ required: true, message: t.requiredField }]}>
               <Input type="date" />
@@ -381,7 +425,7 @@ export default function SupplierDetail() {
     buildingName:
       transaction.sourceInvoiceId != null
         ? invoicesById.get(transaction.sourceInvoiceId)?.buildingName ?? t.projectGlobalCost
-        : transaction.projectName,
+        : transaction.buildingName ?? transaction.projectName,
   }));
 
   if (supplierLoading || !supplier) {
@@ -494,7 +538,7 @@ export default function SupplierDetail() {
                     </Typography.Text>
                     <div>
                       <Typography.Text type="secondary">
-                        {[formatDate(transaction.date), transaction.projectName].filter(Boolean).join(" | ")}
+                        {[formatDate(transaction.date), transaction.projectName, transaction.buildingName].filter(Boolean).join(" | ")}
                       </Typography.Text>
                     </div>
                   </div>

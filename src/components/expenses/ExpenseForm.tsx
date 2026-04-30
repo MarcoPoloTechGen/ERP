@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Typography } from 'antd';
+import { currencyInputProps } from '@/lib/format';
 
 export interface ExpenseFormData {
   amountUsd?: number;
@@ -7,6 +8,7 @@ export interface ExpenseFormData {
   description?: string;
   date: string;
   projectId?: number;
+  buildingId?: number;
   workerId?: number;
   supplierId?: number;
   partyType: 'worker' | 'supplier' | 'general';
@@ -20,6 +22,7 @@ export interface ExpenseFormProps {
   description?: string;
   isLoading?: boolean;
   projects?: Array<{ id: number; name: string }>;
+  buildings?: Array<{ id: number; name: string; projectId: number }>;
   workers?: Array<{ id: number; name: string }>;
   suppliers?: Array<{ id: number; name: string }>;
 }
@@ -32,6 +35,7 @@ export function ExpenseForm({
   description = 'Creez une nouvelle depense avec les informations requises',
   isLoading = false,
   projects = [],
+  buildings = [],
   workers = [],
   suppliers = [],
 }: ExpenseFormProps) {
@@ -84,6 +88,7 @@ export function ExpenseForm({
           workerId: formData.workerId,
           supplierId: formData.supplierId,
           projectId: formData.projectId,
+          buildingId: formData.buildingId,
           amountUsd: formData.amountUsd,
           amountIqd: formData.amountIqd,
           description: formData.description,
@@ -96,6 +101,7 @@ export function ExpenseForm({
                 min={0}
                 step={0.01}
                 style={{ width: '100%' }}
+                {...currencyInputProps('USD')}
                 onChange={(value) => updateField('amountUsd', Number(value || 0))}
               />
             </Form.Item>
@@ -107,6 +113,7 @@ export function ExpenseForm({
                 min={0}
                 step={1}
                 style={{ width: '100%' }}
+                {...currencyInputProps('IQD')}
                 onChange={(value) => updateField('amountIqd', Number(value || 0))}
               />
             </Form.Item>
@@ -172,17 +179,36 @@ export function ExpenseForm({
           </Form.Item>
         )}
 
-        <Form.Item name="projectId" label="Projet">
+        <Form.Item name="projectId" label="Projet *" rules={[{ required: true, message: 'Le projet est obligatoire' }]}>
           <Select
-            placeholder="Selectionner un projet (optionnel)"
-            allowClear
-            onChange={(value) => updateField('projectId', value ? Number(value) : undefined)}
+            placeholder="Selectionner un projet"
+            onChange={(value) => {
+              updateField('projectId', value ? Number(value) : undefined);
+              updateField('buildingId', undefined);
+              form.setFieldValue('buildingId', undefined);
+            }}
           >
             {projects.map((project) => (
               <Select.Option key={project.id} value={project.id}>
                 {project.name}
               </Select.Option>
             ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item name="buildingId" label="Batiment *" rules={[{ required: true, message: 'Le batiment est obligatoire' }]}>
+          <Select
+            placeholder="Selectionner un batiment"
+            disabled={!formData.projectId}
+            onChange={(value) => updateField('buildingId', value ? Number(value) : undefined)}
+          >
+            {buildings
+              .filter((building) => building.projectId === formData.projectId)
+              .map((building) => (
+                <Select.Option key={building.id} value={building.id}>
+                  {building.name}
+                </Select.Option>
+              ))}
           </Select>
         </Form.Item>
 

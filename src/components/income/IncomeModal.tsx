@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Col, Form, Input, InputNumber, Modal, Row, Select } from "antd";
 import { createIncomeTransaction, erpKeys, getAppSettings, updateIncomeTransaction } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
-import { formatCurrencyLabel, formatDateInput } from "@/lib/format";
+import { currencyInputProps, formatCurrencyLabel, formatDateInput } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
@@ -113,6 +113,7 @@ export function IncomeModal({
                 max={appSettings?.transactionAmountMaxUsd ?? undefined}
                 step={0.01}
                 style={{ width: "100%" }}
+                {...currencyInputProps("USD")}
               />
             </Form.Item>
           </Col>
@@ -123,6 +124,7 @@ export function IncomeModal({
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
                 step={1}
                 style={{ width: "100%" }}
+                {...currencyInputProps("IQD")}
               />
             </Form.Item>
           </Col>

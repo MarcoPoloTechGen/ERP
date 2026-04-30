@@ -4,6 +4,65 @@ import App from "./App";
 import { getStoredLang, getTranslationsForLang } from "@/lib/i18n";
 import "./index.css";
 
+const chunkReloadKey = "erp:chunk-reload-attempted";
+const dynamicImportFailurePatterns = [
+  "Failed to fetch dynamically imported module",
+  "Importing a module script failed",
+  "error loading dynamically imported module",
+  "Loading chunk",
+  "ChunkLoadError",
+];
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "";
+}
+
+function isDynamicImportFailure(error: unknown) {
+  const message = getErrorMessage(error);
+  return dynamicImportFailurePatterns.some((pattern) => message.includes(pattern));
+}
+
+async function clearBrowserRuntimeCaches() {
+  const tasks: Promise<unknown>[] = [];
+
+  if ("serviceWorker" in navigator) {
+    tasks.push(
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister()))),
+    );
+  }
+
+  if ("caches" in window) {
+    tasks.push(caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))));
+  }
+
+  await Promise.allSettled(tasks);
+}
+
+function reloadAfterChunkFailure() {
+  if (sessionStorage.getItem(chunkReloadKey)) {
+    return false;
+  }
+
+  sessionStorage.setItem(chunkReloadKey, String(Date.now()));
+  void clearBrowserRuntimeCaches().finally(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("refresh", String(Date.now()));
+    window.location.replace(url);
+  });
+
+  return true;
+}
+
 function renderFatalError(message: string, details?: string) {
   const rootElement = document.getElementById("root");
   if (!rootElement) {
@@ -27,6 +86,18 @@ function renderFatalError(message: string, details?: string) {
 }
 
 window.addEventListener("error", (event) => {
+  if (isDynamicImportFailure(event.error) || isDynamicImportFailure(event.message)) {
+    if (!reloadAfterChunkFailure()) {
+      renderFatalError(
+        getTranslationsForLang(getStoredLang()).jsRenderBlocked,
+        event.error instanceof Error ? event.error.message : event.message,
+      );
+    }
+
+    event.preventDefault();
+    return;
+  }
+
   renderFatalError(
     getTranslationsForLang(getStoredLang()).jsRenderBlocked,
     event.error instanceof Error ? event.error.message : undefined,
@@ -34,6 +105,11 @@ window.addEventListener("error", (event) => {
 });
 
 window.addEventListener("unhandledrejection", (event) => {
+  if (isDynamicImportFailure(event.reason) && reloadAfterChunkFailure()) {
+    event.preventDefault();
+    return;
+  }
+
   const t = getTranslationsForLang(getStoredLang());
   const reason =
     event.reason instanceof Error
@@ -48,6 +124,8 @@ window.addEventListener("unhandledrejection", (event) => {
   );
 });
 
+void clearBrowserRuntimeCaches();
+
 try {
   const rootElement = document.getElementById("root");
   if (!rootElement) {
@@ -55,13 +133,6 @@ try {
   }
 
   createRoot(rootElement).render(<App />);
-
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      const registrationUrl = new URL("sw.js", new URL(import.meta.env.BASE_URL, window.location.origin));
-      void navigator.serviceWorker.register(registrationUrl);
-    });
-  }
 } catch (error) {
   renderFatalError(
     getTranslationsForLang(getStoredLang()).initialRenderFailed,
