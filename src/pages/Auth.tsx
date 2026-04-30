@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Form, Input, Segmented, Space, Typography } from "antd";
+import { Alert, Button, Form, Input, Segmented, Space, Typography } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { isEmailRateLimitErrorMessage, localizeAuthErrorMessage } from "@/lib/auth-utils";

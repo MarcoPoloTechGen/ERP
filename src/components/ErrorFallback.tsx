@@ -1,5 +1,5 @@
 import { Alert, Button } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { RefreshCw } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 
 interface ErrorFallbackProps {
@@ -19,7 +19,7 @@ export function ErrorFallback({ error, onRetry }: ErrorFallbackProps) {
         onRetry ? (
           <Button
             danger
-            icon={<ReloadOutlined />}
+            icon={<RefreshCw size={14} />}
             onClick={onRetry}
             size="small"
           >

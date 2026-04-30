@@ -21,7 +21,6 @@ export async function sendErrorNotification(
 ): Promise<void> {
   try {
     const normalizedError = normalizeError(error);
-    const { data: userData } = await supabase.auth.getUser();
 
     const notificationData: ErrorNotificationData = {
       error_type: normalizedError.type,

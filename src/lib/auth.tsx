@@ -90,7 +90,7 @@ async function loadProfileSafely(nextSession: Session | null) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const initialAuthCallback = readAuthCallbackParams();
+  const initialAuthCallback = useMemo(() => readAuthCallbackParams(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.clearTimeout(bootstrapGuardId);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialAuthCallback]);
 
   const value = useMemo(
     () => ({
