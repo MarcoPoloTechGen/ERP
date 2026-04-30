@@ -5,7 +5,17 @@ import { App as AntdApp, ConfigProvider, Result, Spin, Alert, Typography, Space 
 import { Refine } from "@refinedev/core";
 import { useNotificationProvider } from "@refinedev/antd";
 import { dataProvider, liveProvider } from "@refinedev/supabase";
-import { Component, lazy, Suspense, type ErrorInfo, type ReactNode, useEffect, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  type ComponentType,
+  type ErrorInfo,
+  type LazyExoticComponent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import Layout from "@/components/Layout";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -14,6 +24,7 @@ import { refineResources } from "@/lib/refine";
 import { LangProvider, getStoredLang, getTranslationsForLang, useLang } from "@/lib/i18n";
 import { ProjectScopeProvider } from "@/lib/project-scope";
 import { supabase, supabaseConfigError } from "@/lib/supabase";
+import { isDynamicImportFailure, reloadAfterChunkFailure } from "@/lib/chunk-recovery";
 
 // AI note: UI copy in this app must stay English or Kurdish only. Never add French text.
 import { handleQueryError, handleMutationError, shouldRetryError, getRetryDelay } from "@/lib/error-handler";
@@ -45,20 +56,32 @@ const queryClient = new QueryClient({
   },
 });
 
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Admin = lazy(() => import("@/pages/Admin"));
-const CalendarPage = lazy(() => import("@/pages/Calendar"));
-const Income = lazy(() => import("@/pages/Income"));
-const InvoiceDetail = lazy(() => import("@/pages/InvoiceDetail"));
-const Invoices = lazy(() => import("@/pages/Invoices"));
-const Products = lazy(() => import("@/pages/Products"));
-const ProjectDetail = lazy(() => import("@/pages/ProjectDetail"));
-const Projects = lazy(() => import("@/pages/Projects"));
-const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
-const SupplierDetail = lazy(() => import("@/pages/SupplierDetail"));
-const Suppliers = lazy(() => import("@/pages/Suppliers"));
-const WorkerDetail = lazy(() => import("@/pages/WorkerDetail"));
-const Workers = lazy(() => import("@/pages/Workers"));
+function lazyPage<T extends ComponentType<unknown>>(loader: () => Promise<{ default: T }>): LazyExoticComponent<T> {
+  return lazy(() =>
+    loader().catch((error: unknown) => {
+      if (isDynamicImportFailure(error) && reloadAfterChunkFailure()) {
+        return new Promise<{ default: T }>(() => {});
+      }
+
+      throw error;
+    }),
+  );
+}
+
+const Dashboard = lazyPage(() => import("@/pages/Dashboard"));
+const Admin = lazyPage(() => import("@/pages/Admin"));
+const CalendarPage = lazyPage(() => import("@/pages/Calendar"));
+const Income = lazyPage(() => import("@/pages/Income"));
+const InvoiceDetail = lazyPage(() => import("@/pages/InvoiceDetail"));
+const Invoices = lazyPage(() => import("@/pages/Invoices"));
+const Products = lazyPage(() => import("@/pages/Products"));
+const ProjectDetail = lazyPage(() => import("@/pages/ProjectDetail"));
+const Projects = lazyPage(() => import("@/pages/Projects"));
+const ResetPassword = lazyPage(() => import("@/pages/ResetPassword"));
+const SupplierDetail = lazyPage(() => import("@/pages/SupplierDetail"));
+const Suppliers = lazyPage(() => import("@/pages/Suppliers"));
+const WorkerDetail = lazyPage(() => import("@/pages/WorkerDetail"));
+const Workers = lazyPage(() => import("@/pages/Workers"));
 
 class AppErrorBoundary extends Component<
   { children: ReactNode },

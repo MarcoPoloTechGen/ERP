@@ -25,6 +25,13 @@ html, body {
   padding: 0;
 }
 
+.erp-currency-input-ltr,
+.erp-currency-input-ltr input {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: isolate;
+}
+
 /* FullCalendar overrides */
 .erp-calendar .fc {
   --fc-border-color: #e5e0d5;

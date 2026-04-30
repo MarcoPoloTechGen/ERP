@@ -6,6 +6,7 @@ const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
 };
 
 const MONEY_LOCALE = "fr-FR";
+const MONEY_INPUT_CLASS_NAME = "erp-currency-input-ltr";
 
 function getActiveLocale() {
   if (
@@ -23,7 +24,7 @@ function getActiveLocale() {
 }
 
 export function formatCurrency(amount: number, currency: Currency = "USD") {
-  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
+  return isolateLtr(formatCurrencyText(amount, currency));
 }
 
 export function formatCurrencyLabel(currency: Currency) {
@@ -38,6 +39,10 @@ function formatCurrencyNumber(amount: number, currency: Currency) {
     .replace(/[\u00a0\u202f]/g, " ");
 }
 
+function formatCurrencyText(amount: number, currency: Currency) {
+  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
+}
+
 export function formatCurrencyInputValue(value: string | number | undefined, currency: Currency) {
   if (value == null || value === "") {
     return "";
@@ -48,7 +53,7 @@ export function formatCurrencyInputValue(value: string | number | undefined, cur
     return "";
   }
 
-  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
+  return isolateLtr(formatCurrencyText(amount, currency));
 }
 
 export function parseCurrencyInputValue(value: string | undefined) {
@@ -83,6 +88,8 @@ export function parseCurrencyInputValue(value: string | undefined) {
 
 export function currencyInputProps(currency: Currency) {
   return {
+    className: MONEY_INPUT_CLASS_NAME,
+    dir: "ltr" as const,
     formatter: (value: string | number | undefined) => formatCurrencyInputValue(value, currency),
     parser: parseCurrencyInputValue,
   };
@@ -99,15 +106,13 @@ export function formatCurrencyPair(
   const usd = Number.isFinite(amounts.usd) ? Number(amounts.usd) : 0;
   const iqd = Number.isFinite(amounts.iqd) ? Number(amounts.iqd) : 0;
   const parts = [
-    !options.hideZero || usd !== 0 ? `${formatCurrencyNumber(usd, "USD")} ${formatCurrencyLabel("USD")}` : null,
-    !options.hideZero || iqd !== 0 ? `${formatCurrencyNumber(iqd, "IQD")} ${formatCurrencyLabel("IQD")}` : null,
+    !options.hideZero || usd !== 0 ? formatCurrencyText(usd, "USD") : null,
+    !options.hideZero || iqd !== 0 ? formatCurrencyText(iqd, "IQD") : null,
   ].filter(Boolean);
 
   return parts.length
     ? isolateLtr(parts.join(" / "))
-    : isolateLtr(
-        `${formatCurrencyNumber(0, "USD")} ${formatCurrencyLabel("USD")} / ${formatCurrencyNumber(0, "IQD")} ${formatCurrencyLabel("IQD")}`,
-      );
+    : isolateLtr(`${formatCurrencyText(0, "USD")} / ${formatCurrencyText(0, "IQD")}`);
 }
 
 export function formatDate(value: string | Date | null | undefined) {

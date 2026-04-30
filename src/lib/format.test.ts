@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  currencyInputProps,
   formatCurrency,
   formatCurrencyInputValue,
   formatCurrencyPair,
@@ -8,18 +9,29 @@ import {
   parseCurrencyInputValue,
 } from "./format";
 
+const LTR_ISOLATE_START = "\u2066";
+const LTR_ISOLATE_END = "\u2069";
+
 describe("format helpers", () => {
   it("formats currencies with the correct precision", () => {
-    expect(formatCurrency(123456, "USD")).toBe("123 456 $");
-    expect(formatCurrency(1234.56, "USD")).toBe("1 234,56 $");
-    expect(formatCurrency(1200, "IQD")).toBe("1 200 IQD");
+    expect(formatCurrency(123456, "USD")).toBe(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1234.56, "USD")).toBe(`${LTR_ISOLATE_START}1 234,56 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1200, "IQD")).toBe(`${LTR_ISOLATE_START}1 200 IQD${LTR_ISOLATE_END}`);
   });
 
   it("formats and parses currency input values", () => {
-    expect(formatCurrencyInputValue(123456, "USD")).toBe("123 456 $");
-    expect(formatCurrencyInputValue(123456, "IQD")).toBe("123 456 IQD");
+    expect(formatCurrencyInputValue(123456, "USD")).toBe(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`);
+    expect(formatCurrencyInputValue(123456, "IQD")).toBe(`${LTR_ISOLATE_START}123 456 IQD${LTR_ISOLATE_END}`);
     expect(parseCurrencyInputValue("123 456 $")).toBe("123456");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
+    expect(parseCurrencyInputValue(formatCurrencyInputValue(123456, "USD"))).toBe("123456");
+  });
+
+  it("keeps currency inputs left-to-right in rtl layouts", () => {
+    expect(currencyInputProps("USD")).toMatchObject({
+      className: "erp-currency-input-ltr",
+      dir: "ltr",
+    });
   });
 
   it("formats currency pairs without mixing currencies", () => {
