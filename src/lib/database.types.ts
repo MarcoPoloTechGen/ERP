@@ -441,6 +441,8 @@ export type Database = {
           changed_by: string | null
           id: number
           old_amount: number
+          old_amount_iqd: number | null
+          old_amount_usd: number | null
           old_building_id: number
           old_category_id: number | null
           old_currency: string
@@ -449,7 +451,11 @@ export type Database = {
           old_entity_type: string
           old_entry_type: string
           old_notes: string | null
+          old_paid_amount_iqd: number | null
+          old_paid_amount_usd: number | null
           old_supplier_id: number | null
+          old_total_amount_iqd: number | null
+          old_total_amount_usd: number | null
           old_worker_id: number | null
           transaction_id: number
         }
@@ -459,6 +465,8 @@ export type Database = {
           changed_by?: string | null
           id?: number
           old_amount: number
+          old_amount_iqd?: number | null
+          old_amount_usd?: number | null
           old_building_id: number
           old_category_id?: number | null
           old_currency: string
@@ -467,7 +475,11 @@ export type Database = {
           old_entity_type: string
           old_entry_type: string
           old_notes?: string | null
+          old_paid_amount_iqd?: number | null
+          old_paid_amount_usd?: number | null
           old_supplier_id?: number | null
+          old_total_amount_iqd?: number | null
+          old_total_amount_usd?: number | null
           old_worker_id?: number | null
           transaction_id: number
         }
@@ -477,6 +489,8 @@ export type Database = {
           changed_by?: string | null
           id?: number
           old_amount?: number
+          old_amount_iqd?: number | null
+          old_amount_usd?: number | null
           old_building_id?: number
           old_category_id?: number | null
           old_currency?: string
@@ -485,7 +499,11 @@ export type Database = {
           old_entity_type?: string
           old_entry_type?: string
           old_notes?: string | null
+          old_paid_amount_iqd?: number | null
+          old_paid_amount_usd?: number | null
           old_supplier_id?: number | null
+          old_total_amount_iqd?: number | null
+          old_total_amount_usd?: number | null
           old_worker_id?: number | null
           transaction_id?: number
         }
@@ -559,7 +577,11 @@ export type Database = {
           entry_type: string
           id: number
           notes: string | null
+          paid_amount_iqd: number
+          paid_amount_usd: number
           supplier_id: number | null
+          total_amount_iqd: number
+          total_amount_usd: number
           updated_at: string | null
           updated_by: string | null
           worker_id: number | null
@@ -581,7 +603,11 @@ export type Database = {
           entry_type: string
           id?: number
           notes?: string | null
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           supplier_id?: number | null
+          total_amount_iqd?: number
+          total_amount_usd?: number
           updated_at?: string | null
           updated_by?: string | null
           worker_id?: number | null
@@ -603,7 +629,11 @@ export type Database = {
           entry_type?: string
           id?: number
           notes?: string | null
+          paid_amount_iqd?: number
+          paid_amount_usd?: number
           supplier_id?: number | null
+          total_amount_iqd?: number
+          total_amount_usd?: number
           updated_at?: string | null
           updated_by?: string | null
           worker_id?: number | null
@@ -1542,12 +1572,16 @@ export type Database = {
           id: number | null
           notes: string | null
           party_type: string | null
+          paid_amount_iqd: number | null
+          paid_amount_usd: number | null
           project_id: number | null
           project_name: string | null
           source_invoice_id: number | null
           source_kind: string | null
           supplier_id: number | null
           supplier_name: string | null
+          total_amount_iqd: number | null
+          total_amount_usd: number | null
           type: string | null
           updated_at: string | null
           updated_by: string | null
@@ -1762,12 +1796,16 @@ export type Database = {
           id: number | null
           notes: string | null
           party_type: string | null
+          paid_amount_iqd: number | null
+          paid_amount_usd: number | null
           project_id: number | null
           project_name: string | null
           source_invoice_id: number | null
           source_kind: string | null
           supplier_id: number | null
           supplier_name: string | null
+          total_amount_iqd: number | null
+          total_amount_usd: number | null
           type: string | null
           updated_at: string | null
           updated_by: string | null
@@ -1911,12 +1949,16 @@ export type Database = {
           id: number | null
           notes: string | null
           party_type: string | null
+          paid_amount_iqd: number | null
+          paid_amount_usd: number | null
           project_id: number | null
           project_name: string | null
           source_invoice_id: number | null
           source_kind: string | null
           supplier_id: number | null
           supplier_name: string | null
+          total_amount_iqd: number | null
+          total_amount_usd: number | null
           type: string | null
           updated_at: string | null
           updated_by: string | null

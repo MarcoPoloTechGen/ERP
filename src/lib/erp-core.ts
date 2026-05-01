@@ -72,6 +72,10 @@ type PartyTransactionWritePayload = {
   currency: Currency;
   amount_usd: number;
   amount_iqd: number;
+  total_amount_usd: number;
+  paid_amount_usd: number;
+  total_amount_iqd: number;
+  paid_amount_iqd: number;
   description: string;
   notes: string | null;
   date: string;
@@ -114,6 +118,10 @@ type InvoicePaidUpdatePayload = {
   currency: Currency;
   amount_usd: number;
   amount_iqd: number;
+  total_amount_usd: number;
+  paid_amount_usd: number;
+  total_amount_iqd: number;
+  paid_amount_iqd: number;
   updated_by: string | null;
 };
 type ReplaceUserProjectMembershipsArgs = RpcArgs<"replace_user_project_memberships">;
@@ -321,6 +329,10 @@ export interface WorkerTransaction {
   currency: Currency;
   amountUsd: number;
   amountIqd: number;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -343,6 +355,10 @@ export interface SupplierTransaction {
   currency: Currency;
   amountUsd: number;
   amountIqd: number;
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -553,11 +569,15 @@ export interface InvoiceInput {
 
 export interface WorkerTransactionInput {
   workerId: number;
-  type: TransactionType;
+  type?: TransactionType;
   amount?: number;
   currency?: Currency;
-  amountUsd: number;
-  amountIqd: number;
+  amountUsd?: number;
+  amountIqd?: number;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -566,11 +586,15 @@ export interface WorkerTransactionInput {
 
 export interface SupplierTransactionInput {
   supplierId: number;
-  type: TransactionType;
+  type?: TransactionType;
   amount?: number;
   currency?: Currency;
-  amountUsd: number;
-  amountIqd: number;
+  amountUsd?: number;
+  amountIqd?: number;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
   description: string | null;
   date: string | null;
   projectId: number | null;
@@ -1031,6 +1055,10 @@ function normalizePartyTransactionRow(row: AppPartyTransactionRow): WorkerTransa
     ["amount", "amount"],
     currency,
   );
+  const totalAmountUsd = readNumber(row, "total_amount_usd", "totalAmountUsd") ?? (readString(row, "type") === "credit" ? amountUsd : 0);
+  const paidAmountUsd = readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? (readString(row, "type") === "debit" ? amountUsd : 0);
+  const totalAmountIqd = readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? (readString(row, "type") === "credit" ? amountIqd : 0);
+  const paidAmountIqd = readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? (readString(row, "type") === "debit" ? amountIqd : 0);
 
   return {
     id: readId(row, "id"),
@@ -1040,6 +1068,10 @@ function normalizePartyTransactionRow(row: AppPartyTransactionRow): WorkerTransa
     currency,
     amountUsd,
     amountIqd,
+    totalAmountUsd,
+    paidAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
     description: readString(row, "description"),
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
@@ -1064,6 +1096,10 @@ function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierT
     ["amount"],
     currency,
   );
+  const totalAmountUsd = readNumber(row, "total_amount_usd", "totalAmountUsd") ?? (readString(row, "type") === "credit" ? amountUsd : 0);
+  const paidAmountUsd = readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? (readString(row, "type") === "debit" ? amountUsd : 0);
+  const totalAmountIqd = readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? (readString(row, "type") === "credit" ? amountIqd : 0);
+  const paidAmountIqd = readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? (readString(row, "type") === "debit" ? amountIqd : 0);
 
   return {
     id: readId(row, "id"),
@@ -1073,6 +1109,10 @@ function normalizeSupplierTransaction(row: AppSupplierTransactionRow): SupplierT
     currency,
     amountUsd,
     amountIqd,
+    totalAmountUsd,
+    paidAmountUsd,
+    totalAmountIqd,
+    paidAmountIqd,
     description: readString(row, "description"),
     date: readDate(row, "date"),
     projectId: readNumber(row, "project_id", "projectId"),
@@ -1476,24 +1516,12 @@ async function getDashboardOverviewFallback(projectId?: number | null): Promise<
         balance: worker.balance,
         balanceUsd: worker.balanceUsd,
         balanceIqd: worker.balanceIqd,
-        totalCredit: relatedTransactions
-          .filter((transaction) => transaction.type === "credit")
-          .reduce((total, transaction) => total + transaction.amount, 0),
-        totalDebit: relatedTransactions
-          .filter((transaction) => transaction.type === "debit")
-          .reduce((total, transaction) => total + transaction.amount, 0),
-        totalCreditUsd: relatedTransactions
-          .filter((transaction) => transaction.type === "credit")
-          .reduce((total, transaction) => total + transaction.amountUsd, 0),
-        totalDebitUsd: relatedTransactions
-          .filter((transaction) => transaction.type === "debit")
-          .reduce((total, transaction) => total + transaction.amountUsd, 0),
-        totalCreditIqd: relatedTransactions
-          .filter((transaction) => transaction.type === "credit")
-          .reduce((total, transaction) => total + transaction.amountIqd, 0),
-        totalDebitIqd: relatedTransactions
-          .filter((transaction) => transaction.type === "debit")
-          .reduce((total, transaction) => total + transaction.amountIqd, 0),
+        totalCredit: relatedTransactions.reduce((total, transaction) => total + transaction.totalAmountUsd, 0),
+        totalDebit: relatedTransactions.reduce((total, transaction) => total + transaction.paidAmountUsd, 0),
+        totalCreditUsd: relatedTransactions.reduce((total, transaction) => total + transaction.totalAmountUsd, 0),
+        totalDebitUsd: relatedTransactions.reduce((total, transaction) => total + transaction.paidAmountUsd, 0),
+        totalCreditIqd: relatedTransactions.reduce((total, transaction) => total + transaction.totalAmountIqd, 0),
+        totalDebitIqd: relatedTransactions.reduce((total, transaction) => total + transaction.paidAmountIqd, 0),
       };
     })
     .sort(
@@ -1674,7 +1702,6 @@ async function buildInvoiceTransactionPayload(
   const buildingId = await resolveBuildingId(normalized.projectId, normalized.buildingId);
   const entryType: PartyTransactionWritePayload["entry_type"] =
     normalized.status === "paid" ? "payment" : "debt";
-
   const payload: PartyTransactionWritePayload = {
     entry_type: entryType,
     entity_type:
@@ -1690,6 +1717,10 @@ async function buildInvoiceTransactionPayload(
     currency: normalized.currency,
     amount_usd: normalized.totalAmountUsd,
     amount_iqd: normalized.totalAmountIqd,
+    total_amount_usd: normalized.totalAmountUsd,
+    paid_amount_usd: normalized.paidAmountUsd,
+    total_amount_iqd: normalized.totalAmountIqd,
+    paid_amount_iqd: normalized.paidAmountIqd,
     description: normalized.number,
     notes: normalized.notes,
     date: normalized.invoiceDate,
@@ -1705,21 +1736,33 @@ async function buildInvoiceTransactionPayload(
 function normalizePartyTransactionInput(input: {
   partyId: number;
   partyType: PartyType;
-  type: TransactionType;
-  amountUsd: number;
-  amountIqd: number;
+  type?: TransactionType;
+  amountUsd?: number;
+  amountIqd?: number;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
   description: string | null;
   date: string | null;
   buildingId: number;
 }) {
-  const amountUsd = input.amountUsd ?? 0;
-  const amountIqd = input.amountIqd ?? 0;
+  const legacyAmountUsd = input.amountUsd ?? 0;
+  const legacyAmountIqd = input.amountIqd ?? 0;
+  const totalAmountUsd = input.totalAmountUsd ?? (input.type === "credit" ? legacyAmountUsd : 0);
+  const paidAmountUsd = input.paidAmountUsd ?? (input.type === "debit" ? legacyAmountUsd : 0);
+  const totalAmountIqd = input.totalAmountIqd ?? (input.type === "credit" ? legacyAmountIqd : 0);
+  const paidAmountIqd = input.paidAmountIqd ?? (input.type === "debit" ? legacyAmountIqd : 0);
+  const amountUsd = Math.max(totalAmountUsd, paidAmountUsd);
+  const amountIqd = Math.max(totalAmountIqd, paidAmountIqd);
   const currency = pickPrimaryCurrency(amountUsd, amountIqd);
+  const isMostlyPaid = paidAmountUsd + paidAmountIqd > totalAmountUsd + totalAmountIqd;
+  const legacyType: TransactionType = isMostlyPaid ? "debit" : "credit";
 
   assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Transaction amount");
 
   const payload: PartyTransactionWritePayload = {
-    entry_type: input.type === "credit" ? "debt" : "payment",
+    entry_type: legacyType === "credit" ? "debt" : "payment",
     entity_type: input.partyType,
     worker_id: input.partyType === "worker" ? input.partyId : null,
     supplier_id: input.partyType === "supplier" ? input.partyId : null,
@@ -1728,7 +1771,11 @@ function normalizePartyTransactionInput(input: {
     currency,
     amount_usd: amountUsd,
     amount_iqd: amountIqd,
-    description: normalizeOptionalText(input.description) ?? defaultTransactionDescription(input.type),
+    total_amount_usd: totalAmountUsd,
+    paid_amount_usd: paidAmountUsd,
+    total_amount_iqd: totalAmountIqd,
+    paid_amount_iqd: paidAmountIqd,
+    description: normalizeOptionalText(input.description) ?? defaultTransactionDescription(legacyType),
     notes: null,
     date: input.date ?? new Date().toISOString().slice(0, 10),
   };
@@ -1776,6 +1823,20 @@ function assertTransactionAmountLimits(input: {
     input.settings.transactionAmountMaxIqd,
     "Transaction amount IQD",
   );
+}
+
+function transactionLimitAmounts(input: {
+  amountUsd?: number;
+  amountIqd?: number;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
+}) {
+  return {
+    amountUsd: Math.max(input.amountUsd ?? 0, input.totalAmountUsd ?? 0, input.paidAmountUsd ?? 0),
+    amountIqd: Math.max(input.amountIqd ?? 0, input.totalAmountIqd ?? 0, input.paidAmountIqd ?? 0),
+  };
 }
 
 function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
@@ -2021,13 +2082,13 @@ export async function getWorker(id: number): Promise<Worker> {
   // Fetch worker transactions to calculate balance
   const transactions = await listWorkerTransactions(id);
 
-  // Calculate balance from transactions (credit - debit)
+  // Balance is the total billed/owed minus what has been paid.
   const balanceUsd = transactions.reduce(
-    (sum, t) => sum + (t.type === "credit" ? t.amountUsd : -t.amountUsd),
+    (sum, t) => sum + t.totalAmountUsd - t.paidAmountUsd,
     0
   );
   const balanceIqd = transactions.reduce(
-    (sum, t) => sum + (t.type === "credit" ? t.amountIqd : -t.amountIqd),
+    (sum, t) => sum + t.totalAmountIqd - t.paidAmountIqd,
     0
   );
 
@@ -2077,15 +2138,15 @@ export async function listSupplierBalances(): Promise<SupplierBalance[]> {
   const transactionBalances = await executeSelect(
     supabase
       .from("app_supplier_transactions")
-      .select("supplier_id,type,amount_usd,amount_iqd"),
+      .select("supplier_id,total_amount_usd,paid_amount_usd,total_amount_iqd,paid_amount_iqd"),
     (row: Row) => ({
       supplierId: readNumber(row, "supplier_id", "supplierId"),
       balanceUsd:
-        (readString(row, "type") === "debit" ? -1 : 1) *
-        (readNumber(row, "amount_usd", "amountUsd") ?? 0),
+        (readNumber(row, "total_amount_usd", "totalAmountUsd") ?? 0) -
+        (readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? 0),
       balanceIqd:
-        (readString(row, "type") === "debit" ? -1 : 1) *
-        (readNumber(row, "amount_iqd", "amountIqd") ?? 0),
+        (readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? 0) -
+        (readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? 0),
     }),
   );
   const balancesBySupplier = new Map<number, { balanceUsd: number; balanceIqd: number }>();
@@ -2113,16 +2174,16 @@ export async function listWorkerBalances(): Promise<WorkerBalance[]> {
   const transactionBalances = await executeSelect(
     supabase
       .from("app_party_transactions")
-      .select("worker_id,type,amount_usd,amount_iqd")
+      .select("worker_id,total_amount_usd,paid_amount_usd,total_amount_iqd,paid_amount_iqd")
       .eq("party_type", "worker"),
     (row: Row) => ({
       workerId: readNumber(row, "worker_id", "workerId"),
       balanceUsd:
-        (readString(row, "type") === "credit" ? 1 : -1) *
-        (readNumber(row, "amount_usd", "amountUsd") ?? 0),
+        (readNumber(row, "total_amount_usd", "totalAmountUsd") ?? 0) -
+        (readNumber(row, "paid_amount_usd", "paidAmountUsd") ?? 0),
       balanceIqd:
-        (readString(row, "type") === "credit" ? 1 : -1) *
-        (readNumber(row, "amount_iqd", "amountIqd") ?? 0),
+        (readNumber(row, "total_amount_iqd", "totalAmountIqd") ?? 0) -
+        (readNumber(row, "paid_amount_iqd", "paidAmountIqd") ?? 0),
     }),
   );
   const balancesByWorker = new Map<number, { balanceUsd: number; balanceIqd: number }>();
@@ -2255,9 +2316,10 @@ export async function listWorkerTransactions(workerId?: number) {
 
 export async function createWorkerTransaction(input: WorkerTransactionInput) {
   const settings = await getAppSettings();
+  const limitAmounts = transactionLimitAmounts(input);
   assertTransactionAmountLimits({
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
+    amountUsd: limitAmounts.amountUsd,
+    amountIqd: limitAmounts.amountIqd,
     settings,
   });
   const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
@@ -2267,6 +2329,10 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
     type: input.type,
     amountUsd: input.amountUsd,
     amountIqd: input.amountIqd,
+    totalAmountUsd: input.totalAmountUsd,
+    paidAmountUsd: input.paidAmountUsd,
+    totalAmountIqd: input.totalAmountIqd,
+    paidAmountIqd: input.paidAmountIqd,
     description: input.description,
     date: input.date,
     buildingId,
@@ -2287,6 +2353,10 @@ export async function updateWorkerTransaction(id: number, input: WorkerTransacti
     type: input.type,
     amountUsd: input.amountUsd,
     amountIqd: input.amountIqd,
+    totalAmountUsd: input.totalAmountUsd,
+    paidAmountUsd: input.paidAmountUsd,
+    totalAmountIqd: input.totalAmountIqd,
+    paidAmountIqd: input.paidAmountIqd,
     description: input.description,
     date: input.date,
     buildingId,
@@ -2336,9 +2406,10 @@ export async function listSupplierTransactions(supplierId?: number) {
 
 export async function createSupplierTransaction(input: SupplierTransactionInput) {
   const settings = await getAppSettings();
+  const limitAmounts = transactionLimitAmounts(input);
   assertTransactionAmountLimits({
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
+    amountUsd: limitAmounts.amountUsd,
+    amountIqd: limitAmounts.amountIqd,
     settings,
   });
   const buildingId = await resolveBuildingId(input.projectId, input.buildingId);
@@ -2348,6 +2419,10 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
     type: input.type,
     amountUsd: input.amountUsd,
     amountIqd: input.amountIqd,
+    totalAmountUsd: input.totalAmountUsd,
+    paidAmountUsd: input.paidAmountUsd,
+    totalAmountIqd: input.totalAmountIqd,
+    paidAmountIqd: input.paidAmountIqd,
     description: input.description,
     date: input.date,
     buildingId,
@@ -2368,6 +2443,10 @@ export async function updateSupplierTransaction(id: number, input: SupplierTrans
     type: input.type,
     amountUsd: input.amountUsd,
     amountIqd: input.amountIqd,
+    totalAmountUsd: input.totalAmountUsd,
+    paidAmountUsd: input.paidAmountUsd,
+    totalAmountIqd: input.totalAmountIqd,
+    paidAmountIqd: input.paidAmountIqd,
     description: input.description,
     date: input.date,
     buildingId,
@@ -2520,6 +2599,10 @@ export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: num
     currency,
     amount_usd: amounts.totalAmountUsd,
     amount_iqd: amounts.totalAmountIqd,
+    total_amount_usd: amounts.totalAmountUsd,
+    paid_amount_usd: amounts.totalAmountUsd,
+    total_amount_iqd: amounts.totalAmountIqd,
+    paid_amount_iqd: amounts.totalAmountIqd,
     updated_by: currentUserId,
   };
   const { error } = await supabase

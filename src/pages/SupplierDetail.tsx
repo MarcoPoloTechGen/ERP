@@ -35,7 +35,6 @@ import {
   listSupplierTransactions,
   updateSupplierTransaction,
   updateSupplier,
-  type TransactionType,
   type SupplierTransaction,
 } from "@/lib/erp";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
@@ -53,9 +52,10 @@ type SupplierFormValues = {
 };
 
 type TransactionFormValues = {
-  type: TransactionType;
-  amountUsd?: number;
-  amountIqd?: number;
+  totalAmountUsd?: number;
+  paidAmountUsd?: number;
+  totalAmountIqd?: number;
+  paidAmountIqd?: number;
   description?: string;
   date?: string;
   projectId?: number;
@@ -185,9 +185,10 @@ function SupplierTransactionModal({
     mutationFn: (values: TransactionFormValues) => {
       const payload = {
         supplierId: supplier.id,
-        type: values.type,
-        amountUsd: Number(values.amountUsd || 0),
-        amountIqd: Number(values.amountIqd || 0),
+        totalAmountUsd: Number(values.totalAmountUsd || 0),
+        paidAmountUsd: Number(values.paidAmountUsd || 0),
+        totalAmountIqd: Number(values.totalAmountIqd || 0),
+        paidAmountIqd: Number(values.paidAmountIqd || 0),
         description: values.description?.trim() || null,
         date: values.date || null,
         projectId: scopedProjectId ?? values.projectId ?? null,
@@ -204,9 +205,9 @@ function SupplierTransactionModal({
   });
 
   const validateAmountPair = () => {
-    const values = form.getFieldsValue(["amountUsd", "amountIqd"]);
-    const amountUsd = Number(values.amountUsd || 0);
-    const amountIqd = Number(values.amountIqd || 0);
+    const values = form.getFieldsValue(["totalAmountUsd", "paidAmountUsd", "totalAmountIqd", "paidAmountIqd"]);
+    const amountUsd = Number(values.totalAmountUsd || 0) + Number(values.paidAmountUsd || 0);
+    const amountIqd = Number(values.totalAmountIqd || 0) + Number(values.paidAmountIqd || 0);
 
     return amountUsd > 0 || amountIqd > 0
       ? Promise.resolve()
@@ -244,9 +245,10 @@ function SupplierTransactionModal({
         form={form}
         layout="vertical"
         initialValues={{
-          type: transaction?.type ?? "debit",
-          amountUsd: transaction?.amountUsd ?? 0,
-          amountIqd: transaction?.amountIqd ?? 0,
+          totalAmountUsd: transaction?.totalAmountUsd ?? 0,
+          paidAmountUsd: transaction?.paidAmountUsd ?? 0,
+          totalAmountIqd: transaction?.totalAmountIqd ?? 0,
+          paidAmountIqd: transaction?.paidAmountIqd ?? 0,
           description: transaction?.description ?? undefined,
           date: transaction?.date ?? new Date().toISOString().slice(0, 10),
           projectId: scopedProjectId ?? transaction?.projectId ?? undefined,
@@ -256,17 +258,7 @@ function SupplierTransactionModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="type" label={t.type} rules={[{ required: true, message: t.requiredField }]}>
-              <Select
-                options={[
-                  { label: t.credit, value: "credit" },
-                  { label: t.debit, value: "debit" },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="amountUsd" label={`${t.amount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
               <InputNumber
                 min={appSettings?.transactionAmountMinUsd ?? 0}
                 max={appSettings?.transactionAmountMaxUsd ?? undefined}
@@ -277,7 +269,29 @@ function SupplierTransactionModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="amountIqd" label={`${t.amount} IQD`} rules={[{ validator: validateAmountPair }]}>
+            <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinUsd ?? 0}
+                max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                step={0.01}
+                style={{ width: "100%" }}
+                {...currencyInputProps("USD")}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
+              <InputNumber
+                min={appSettings?.transactionAmountMinIqd ?? 0}
+                max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                step={1}
+                style={{ width: "100%" }}
+                {...currencyInputProps("IQD")}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
@@ -391,42 +405,36 @@ export default function SupplierDetail() {
   const invoicesById = new Map((invoices ?? []).map((invoice) => [invoice.id, invoice]));
   const balance = transactionRows.reduce(
     (totals, transaction) => ({
-      usd: totals.usd + (transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd),
-      iqd: totals.iqd + (transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd),
+      usd: totals.usd + transaction.totalAmountUsd - transaction.paidAmountUsd,
+      iqd: totals.iqd + transaction.totalAmountIqd - transaction.paidAmountIqd,
     }),
     { usd: 0, iqd: 0 },
   );
   const creditTotals = transactionRows.reduce(
-    (totals, transaction) =>
-      transaction.type === "credit"
-        ? {
-            usd: totals.usd + transaction.amountUsd,
-            iqd: totals.iqd + transaction.amountIqd,
-          }
-        : totals,
+    (totals, transaction) => ({
+      usd: totals.usd + transaction.totalAmountUsd,
+      iqd: totals.iqd + transaction.totalAmountIqd,
+    }),
     { usd: 0, iqd: 0 },
   );
   const debitTotals = transactionRows.reduce(
-    (totals, transaction) =>
-      transaction.type === "debit"
-        ? {
-            usd: totals.usd + transaction.amountUsd,
-            iqd: totals.iqd + transaction.amountIqd,
-          }
-        : totals,
+    (totals, transaction) => ({
+      usd: totals.usd + transaction.paidAmountUsd,
+      iqd: totals.iqd + transaction.paidAmountIqd,
+    }),
     { usd: 0, iqd: 0 },
   );
   const chartEntries = transactionRows.map((transaction) => ({
     id: transaction.id,
     date: transaction.date,
-    creditUsd: transaction.type === "credit" ? transaction.amountUsd : 0,
-    creditIqd: transaction.type === "credit" ? transaction.amountIqd : 0,
-    debitUsd: transaction.type === "debit" ? transaction.amountUsd : 0,
-    debitIqd: transaction.type === "debit" ? transaction.amountIqd : 0,
-    balanceDeltaUsd: transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd,
-    balanceDeltaIqd: transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd,
-    transactionUsd: transaction.type === "credit" ? transaction.amountUsd : -transaction.amountUsd,
-    transactionIqd: transaction.type === "credit" ? transaction.amountIqd : -transaction.amountIqd,
+    creditUsd: transaction.totalAmountUsd,
+    creditIqd: transaction.totalAmountIqd,
+    debitUsd: transaction.paidAmountUsd,
+    debitIqd: transaction.paidAmountIqd,
+    balanceDeltaUsd: transaction.totalAmountUsd - transaction.paidAmountUsd,
+    balanceDeltaIqd: transaction.totalAmountIqd - transaction.paidAmountIqd,
+    transactionUsd: transaction.totalAmountUsd - transaction.paidAmountUsd,
+    transactionIqd: transaction.totalAmountIqd - transaction.paidAmountIqd,
     buildingName:
       transaction.sourceInvoiceId != null
         ? invoicesById.get(transaction.sourceInvoiceId)?.buildingName ?? t.projectGlobalCost
@@ -502,7 +510,7 @@ export default function SupplierDetail() {
           emptyDescription={t.noTransactions}
           entries={chartEntries}
           exchangeRateIqdPer100Usd={appSettings?.exchangeRateIqdPer100Usd}
-          title={t.debitCredit}
+          title={t.transactions}
         />
       )}
 
@@ -529,31 +537,43 @@ export default function SupplierDetail() {
         <Empty description={t.noTransactions} />
       ) : (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-          {visibleTransactions.map((transaction) => (
+          {visibleTransactions.map((transaction) => {
+            const balanceDelta = {
+              usd: transaction.totalAmountUsd - transaction.paidAmountUsd,
+              iqd: transaction.totalAmountIqd - transaction.paidAmountIqd,
+            };
+            const isPositive = balanceDelta.usd >= 0 && balanceDelta.iqd >= 0;
+
+            return (
             <Card key={transaction.id} size="small">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                 <Space>
-                  {transaction.type === "credit" ? (
+                  {isPositive ? (
                     <TrendingUp size={18} color="#047857" />
                   ) : (
                     <TrendingDown size={18} color="#be123c" />
                   )}
                   <div>
                     <Typography.Text strong>
-                      {transaction.description ?? (transaction.type === "credit" ? t.creditLabel : t.debitLabel)}
+                      {transaction.description ?? t.transactions}
                     </Typography.Text>
                     <div>
                       <Typography.Text type="secondary">
                         {[formatDate(transaction.date), transaction.projectName, transaction.buildingName].filter(Boolean).join(" | ")}
                       </Typography.Text>
                     </div>
+                    <div>
+                      <Typography.Text type="secondary">
+                        {t.totalAmount}: {formatCurrencyPair({ usd: transaction.totalAmountUsd, iqd: transaction.totalAmountIqd }, { hideZero: true })} | {t.paidAmount}: {formatCurrencyPair({ usd: transaction.paidAmountUsd, iqd: transaction.paidAmountIqd }, { hideZero: true })}
+                      </Typography.Text>
+                    </div>
                   </div>
                 </Space>
                 <Space size="small">
-                  <Typography.Text strong type={transaction.type === "credit" ? "success" : "danger"}>
-                    {transaction.type === "credit" ? "+" : "-"}
+                  <Typography.Text strong type={isPositive ? "success" : "danger"}>
+                    {isPositive ? "+" : "-"}
                     {formatCurrencyPair(
-                      { usd: transaction.amountUsd, iqd: transaction.amountIqd },
+                      { usd: Math.abs(balanceDelta.usd), iqd: Math.abs(balanceDelta.iqd) },
                       { hideZero: true },
                     )}
                   </Typography.Text>
@@ -585,7 +605,8 @@ export default function SupplierDetail() {
                 </Space>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </Space>
       )}
 
