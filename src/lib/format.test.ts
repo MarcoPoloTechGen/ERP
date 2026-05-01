@@ -20,8 +20,8 @@ describe("format helpers", () => {
   });
 
   it("formats and parses currency input values", () => {
-    expect(formatCurrencyInputValue(123456, "USD")).toBe("123 456 $");
-    expect(formatCurrencyInputValue(123456, "IQD")).toBe("123 456 IQD");
+    expect(formatCurrencyInputValue(123456)).toBe("123 456");
+    expect(formatCurrencyInputValue(1234.56)).toBe("1 235");
     expect(parseCurrencyInputValue("123 456 $")).toBe("123456");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
     expect(parseCurrencyInputValue(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`)).toBe("123456");
@@ -30,7 +30,10 @@ describe("format helpers", () => {
   it("keeps currency inputs left-to-right in rtl layouts", () => {
     expect(currencyInputProps("USD")).toMatchObject({
       className: "erp-currency-input-ltr",
+      "data-currency": "USD",
       dir: "ltr",
+      precision: 0,
+      step: 1,
     });
   });
 

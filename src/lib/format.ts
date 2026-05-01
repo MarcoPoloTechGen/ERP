@@ -39,11 +39,19 @@ function formatCurrencyNumber(amount: number, currency: Currency) {
     .replace(/[\u00a0\u202f]/g, " ");
 }
 
+function formatCurrencyInputNumber(amount: number) {
+  return new Intl.NumberFormat(MONEY_LOCALE, {
+    maximumFractionDigits: 0,
+  })
+    .format(Number.isFinite(amount) ? amount : 0)
+    .replace(/[\u00a0\u202f]/g, " ");
+}
+
 function formatCurrencyText(amount: number, currency: Currency) {
   return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
 }
 
-export function formatCurrencyInputValue(value: string | number | undefined, currency: Currency) {
+export function formatCurrencyInputValue(value: string | number | undefined) {
   if (value == null || value === "") {
     return "";
   }
@@ -53,7 +61,7 @@ export function formatCurrencyInputValue(value: string | number | undefined, cur
     return "";
   }
 
-  return formatCurrencyText(amount, currency);
+  return formatCurrencyInputNumber(amount);
 }
 
 export function parseCurrencyInputValue(value: string | undefined) {
@@ -89,9 +97,12 @@ export function parseCurrencyInputValue(value: string | undefined) {
 export function currencyInputProps(currency: Currency) {
   return {
     className: MONEY_INPUT_CLASS_NAME,
+    "data-currency": currency,
     dir: "ltr" as const,
-    formatter: (value: string | number | undefined) => formatCurrencyInputValue(value, currency),
+    formatter: formatCurrencyInputValue,
     parser: parseCurrencyInputValue,
+    precision: 0,
+    step: 1,
   };
 }
 
