@@ -45,6 +45,40 @@ export async function listSpecialities(): Promise<Speciality[]> {
     .filter((speciality) => Number.isFinite(speciality.id) && speciality.name.length > 0);
 }
 
+export async function createSpeciality(name: string) {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error("Speciality name is required.");
+  }
+
+  const { error } = await supabase.from("specialities").insert({ name: trimmedName });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function updateSpeciality(id: number, name: string) {
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error("Speciality name is required.");
+  }
+
+  const { error } = await supabase.from("specialities").update({ name: trimmedName }).eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteSpeciality(id: number) {
+  const { error } = await supabase.from("specialities").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function getWorkerSpecialities(workerId: number): Promise<WorkerSpeciality[]> {
   const { data, error } = await supabase
     .from("worker_specialities")

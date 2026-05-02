@@ -5,8 +5,14 @@ const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
   IQD: "IQD",
 };
 
-const MONEY_LOCALE = "fr-FR";
+const MONEY_LOCALE = "en-US";
 const MONEY_INPUT_CLASS_NAME = "erp-currency-input-ltr";
+const MONEY_FRACTION_DIGITS = 2;
+
+const CURRENCY_NUMBER_FORMATTER = new Intl.NumberFormat(MONEY_LOCALE, {
+  minimumFractionDigits: MONEY_FRACTION_DIGITS,
+  maximumFractionDigits: MONEY_FRACTION_DIGITS,
+});
 
 function getActiveLocale() {
   if (
@@ -31,24 +37,16 @@ export function formatCurrencyLabel(currency: Currency) {
   return CURRENCY_DISPLAY_LABELS[currency];
 }
 
-function formatCurrencyNumber(amount: number, currency: Currency) {
-  return new Intl.NumberFormat(MONEY_LOCALE, {
-    maximumFractionDigits: currency === "IQD" ? 0 : 2,
-  })
-    .format(Number.isFinite(amount) ? amount : 0)
-    .replace(/[\u00a0\u202f]/g, " ");
+function formatCurrencyNumber(amount: number) {
+  return CURRENCY_NUMBER_FORMATTER.format(Number.isFinite(amount) ? amount : 0);
 }
 
 function formatCurrencyInputNumber(amount: number) {
-  return new Intl.NumberFormat(MONEY_LOCALE, {
-    maximumFractionDigits: 0,
-  })
-    .format(Number.isFinite(amount) ? amount : 0)
-    .replace(/[\u00a0\u202f]/g, " ");
+  return formatCurrencyNumber(amount);
 }
 
 function formatCurrencyText(amount: number, currency: Currency) {
-  return `${formatCurrencyNumber(amount, currency)} ${formatCurrencyLabel(currency)}`;
+  return `${formatCurrencyNumber(amount)} ${formatCurrencyLabel(currency)}`;
 }
 
 export function formatCurrencyInputValue(value: string | number | undefined) {
@@ -65,7 +63,7 @@ export function formatCurrencyInputValue(value: string | number | undefined) {
 }
 
 export function parseCurrencyInputValue(value: string | undefined) {
-  const cleanValue = value?.replace(/[^\d,.-]/g, "") ?? "";
+  const cleanValue = normalizeCurrencyInputDigits(value ?? "").replace(/[^\d,.-]/g, "");
   if (cleanValue === "" || cleanValue === "-") {
     return "";
   }
@@ -101,9 +99,17 @@ export function currencyInputProps(currency: Currency) {
     dir: "ltr" as const,
     formatter: formatCurrencyInputValue,
     parser: parseCurrencyInputValue,
-    precision: 0,
-    step: 1,
+    precision: MONEY_FRACTION_DIGITS,
+    step: 0.01,
   };
+}
+
+function normalizeCurrencyInputDigits(value: string) {
+  return value.replace(/[\u0660-\u0669\u06f0-\u06f9]/g, (digit) => {
+    const codePoint = digit.charCodeAt(0);
+    const zeroCodePoint = codePoint >= 0x06f0 ? 0x06f0 : 0x0660;
+    return String(codePoint - zeroCodePoint);
+  });
 }
 
 function isolateLtr(value: string) {

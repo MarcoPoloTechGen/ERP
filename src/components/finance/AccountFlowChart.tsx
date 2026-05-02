@@ -81,7 +81,7 @@ function currencyAmount(value: number, currencyKey: CurrencyKey) {
 }
 
 function axisAmount(value: number) {
-  const amount = new Intl.NumberFormat(undefined, {
+  const amount = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 1,
     notation: "compact",
   }).format(Number.isFinite(value) ? value : 0);

@@ -353,8 +353,7 @@ export default function Admin() {
                 <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.minIqd}</span>
                 <InputNumber
                   min={0}
-                  step={1}
-                  precision={0}
+                  step={0.01}
                   value={transactionLimitsDraft.transactionAmountMinIqd}
                   style={{ width: "100%" }}
                   {...currencyInputProps("IQD")}
@@ -365,8 +364,7 @@ export default function Admin() {
                 <span style={{ display: "block", fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{t.maxIqd}</span>
                 <InputNumber
                   min={0}
-                  step={1}
-                  precision={0}
+                  step={0.01}
                   value={transactionLimitsDraft.transactionAmountMaxIqd}
                   style={{ width: "100%" }}
                   {...currencyInputProps("IQD")}

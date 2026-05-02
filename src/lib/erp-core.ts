@@ -49,7 +49,7 @@ type AppAllExpenseRow = ViewRow<"all_expenses">;
 type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
 
-type WorkerWritePayload = Pick<TableInsertPayload<"workers">, "name" | "role" | "category" | "phone">;
+type WorkerWritePayload = Pick<TableInsertPayload<"workers">, "name" | "role" | "category" | "phone" | "notes">;
 type SupplierWritePayload = {
   name: string;
   contact: string | null;
@@ -175,9 +175,10 @@ export interface ProjectMembership {
 export interface Worker {
   id: number;
   name: string;
-  role: string;
+  role: string | null;
   category: string | null;
   phone: string | null;
+  notes: string | null;
   balance: number;
   balanceUsd: number;
   balanceIqd: number;
@@ -512,9 +513,10 @@ export interface DashboardOverview {
 
 export interface WorkerInput {
   name: string;
-  role: string;
+  role: string | null;
   category: string | null;
   phone: string | null;
+  notes: string | null;
 }
 
 export interface SupplierInput {
@@ -831,9 +833,10 @@ function normalizeWorker(row: WorkerRow): Worker {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed worker",
-    role: readString(row, "role") ?? "-",
+    role: readString(row, "role"),
     category: readString(row, "category"),
     phone: readString(row, "phone"),
+    notes: readString(row, "notes"),
     balance,
     balanceUsd: readNumber(row, "balance_usd", "balanceUsd") ?? balance,
     balanceIqd: readNumber(row, "balance_iqd", "balanceIqd") ?? 0,
@@ -1591,9 +1594,10 @@ async function getDashboardOverviewFallback(projectId?: number | null): Promise<
 function normalizeWorkerInput(input: WorkerInput): WorkerWritePayload {
   return {
     name: input.name.trim(),
-    role: input.role.trim(),
+    role: normalizeOptionalText(input.role),
     category: normalizeOptionalText(input.category),
     phone: normalizeOptionalText(input.phone),
+    notes: normalizeOptionalText(input.notes),
   };
 }
 

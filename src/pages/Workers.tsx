@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Row,
   Select,
   Space,
@@ -19,13 +20,15 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { Download, FileSpreadsheet, Plus } from "lucide-react";
+import { Download, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import {
+  createSpeciality,
   createWorker,
+  deleteSpeciality,
   erpKeys,
   listSpecialities,
   listWorkerBalances,
-  listWorkers,
+  updateSpeciality,
   updateWorkerSpecialities,
   type Speciality,
 } from "@/lib/erp";
@@ -33,7 +36,6 @@ import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
-  addEqualFilter,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
@@ -46,6 +48,7 @@ type WorkerRow = {
   role: string | null;
   category: string | null;
   phone: string | null;
+  notes: string | null;
   balance: number | null;
   balance_usd: number | null;
   balance_iqd: number | null;
@@ -54,17 +57,154 @@ type WorkerRow = {
 
 type WorkerFormValues = {
   name: string;
-  role: string;
-  category?: string;
   phone?: string;
+  notes?: string;
   specialityIds?: number[];
 };
 
-function buildFilters(search: string, category: string) {
+type SpecialityFormValues = {
+  name: string;
+};
+
+function buildFilters(search: string) {
   const filters: CrudFilters = [];
-  addContainsSearchFilter(filters, ["name", "role", "category", "phone"], search);
-  addEqualFilter(filters, "category", category);
+  addContainsSearchFilter(filters, ["name", "phone", "notes"], search);
   return filters;
+}
+
+function SpecialityModal({
+  speciality,
+  onClose,
+}: {
+  speciality?: Speciality;
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [form] = Form.useForm<SpecialityFormValues>();
+
+  const saveMutation = useMutation({
+    mutationFn: (values: SpecialityFormValues) =>
+      speciality ? updateSpeciality(speciality.id, values.name) : createSpeciality(values.name),
+    onSuccess: async () => {
+      await erpInvalidation.specialities();
+      message.success(t.saved);
+      onClose();
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Modal
+      open
+      title={speciality ? t.editSpeciality : t.addSpeciality}
+      okText={speciality ? t.save : t.create}
+      cancelText={t.cancel}
+      confirmLoading={saveMutation.isPending}
+      onCancel={onClose}
+      onOk={() => form.submit()}
+    >
+      <Form<SpecialityFormValues>
+        form={form}
+        layout="vertical"
+        initialValues={{ name: speciality?.name ?? "" }}
+        onFinish={(values) => saveMutation.mutate(values)}
+      >
+        <Form.Item name="name" label={t.specialityName} rules={[{ required: true, message: t.requiredField }]}>
+          <Input />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+function SpecialitiesManager() {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [editedSpeciality, setEditedSpeciality] = useState<Speciality | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const { data: specialities = [], isLoading } = useQuery({
+    queryKey: erpKeys.specialities,
+    queryFn: listSpecialities,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (speciality: Speciality) => deleteSpeciality(speciality.id),
+    onSuccess: async () => {
+      await erpInvalidation.specialities();
+      message.success(t.deleted);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Card
+      size="small"
+      title={t.manageSpecialities}
+      extra={
+        <Button
+          icon={<Plus size={16} />}
+          onClick={() => {
+            setEditedSpeciality(null);
+            setShowModal(true);
+          }}
+        >
+          {t.addSpeciality}
+        </Button>
+      }
+    >
+      {isLoading ? (
+        <Typography.Text type="secondary">{t.loading}</Typography.Text>
+      ) : specialities.length ? (
+        <Space wrap>
+          {specialities.map((speciality) => (
+            <Tag key={speciality.id} style={{ alignItems: "center", display: "inline-flex", gap: 4, padding: "4px 6px" }}>
+              <span>{speciality.name}</span>
+              <Button
+                aria-label={t.editSpeciality}
+                icon={<Pencil size={12} />}
+                size="small"
+                type="text"
+                onClick={() => {
+                  setEditedSpeciality(speciality);
+                  setShowModal(true);
+                }}
+              />
+              <Popconfirm
+                title={t.deleteSpecialityConfirm}
+                okText={t.remove}
+                cancelText={t.cancel}
+                onConfirm={() => deleteMutation.mutate(speciality)}
+              >
+                <Button
+                  aria-label={t.remove}
+                  danger
+                  icon={<Trash2 size={12} />}
+                  loading={deleteMutation.isPending}
+                  size="small"
+                  type="text"
+                />
+              </Popconfirm>
+            </Tag>
+          ))}
+        </Space>
+      ) : (
+        <Typography.Text type="secondary">{t.noSpecialities}</Typography.Text>
+      )}
+
+      {showModal ? (
+        <SpecialityModal
+          speciality={editedSpeciality ?? undefined}
+          onClose={() => {
+            setShowModal(false);
+            setEditedSpeciality(null);
+          }}
+        />
+      ) : null}
+    </Card>
+  );
 }
 
 function WorkerModal({
@@ -87,9 +227,10 @@ function WorkerModal({
     mutationFn: async (values: WorkerFormValues) => {
       const payload = {
         name: values.name.trim(),
-        role: values.role.trim(),
-        category: values.category?.trim() || null,
+        role: null,
+        category: null,
         phone: values.phone?.trim() || null,
+        notes: values.notes?.trim() || null,
       };
 
       const workerId = await createWorker(payload);
@@ -120,9 +261,8 @@ function WorkerModal({
         layout="vertical"
         initialValues={{
           name: "",
-          role: "",
-          category: "",
           phone: "",
+          notes: "",
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -131,16 +271,6 @@ function WorkerModal({
         </Form.Item>
 
         <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="role" label={t.role} rules={[{ required: true, message: t.roleRequired }]}>
-              <Input placeholder={t.rolePlaceholder} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="category" label={t.category}>
-              <Input placeholder={t.categoryPlaceholder} />
-            </Form.Item>
-          </Col>
           <Col xs={24} md={12}>
             <Form.Item name="phone" label={t.phone}>
               <Input placeholder={t.phonePlaceholder} />
@@ -165,6 +295,9 @@ function WorkerModal({
         <Typography.Text type="secondary" style={{ display: "block", marginTop: -16 }}>
           {t.specialitiesHelp}
         </Typography.Text>
+        <Form.Item name="notes" label={t.remarks} style={{ marginTop: 16 }}>
+          <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} placeholder={t.remarksPlaceholder} />
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -173,7 +306,6 @@ function WorkerModal({
 export default function Workers() {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchInput, setSearchInput] = useState("");
   const search = useDeferredValue(searchInput.trim());
 
@@ -184,27 +316,15 @@ export default function Workers() {
     syncWithLocation: false,
   });
 
-  const { data: allWorkers } = useQuery({
-    queryKey: erpKeys.workers,
-    queryFn: listWorkers,
-  });
-
   const { data: workerBalanceRows } = useQuery({
     queryKey: erpKeys.workerBalances,
     queryFn: listWorkerBalances,
   });
 
-  const categories = useMemo(() => {
-    const values = Array.from(
-      new Set((allWorkers ?? []).map((worker) => worker.category).filter(Boolean) as string[]),
-    );
-    return values.sort((left, right) => left.localeCompare(right));
-  }, [allWorkers]);
-
   useEffect(() => {
     setCurrentPage(1);
-    setFilters(buildFilters(search, categoryFilter), "replace");
-  }, [categoryFilter, search, setCurrentPage, setFilters]);
+    setFilters(buildFilters(search), "replace");
+  }, [search, setCurrentPage, setFilters]);
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
 
@@ -221,7 +341,7 @@ export default function Workers() {
   const workerBalance = (worker: WorkerRow) => workerBalances.get(worker.id) ?? { usd: 0, iqd: 0 };
   const balanceUsdValue = (worker: WorkerRow) => workerBalance(worker).usd;
   const balanceIqdValue = (worker: WorkerRow) => workerBalance(worker).iqd;
-  const hasFilters = Boolean(searchInput || categoryFilter !== "all");
+  const hasFilters = Boolean(searchInput);
   const columns: TableProps<WorkerRow>["columns"] = [
     {
       title: t.name,
@@ -229,20 +349,11 @@ export default function Workers() {
       responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
       minWidth: 120,
-      render: (value: string, worker) => (
+      render: (value: string) => (
         <Space size="small" wrap style={{ width: "100%" }}>
           <Typography.Text strong ellipsis>{value}</Typography.Text>
-          {worker.category ? <Tag color="blue" style={{ marginLeft: "auto" }}>{worker.category}</Tag> : null}
         </Space>
       ),
-    },
-    {
-      title: t.role,
-      dataIndex: "role",
-      responsive: ["sm", "md", "lg"],
-      ellipsis: true,
-      minWidth: 80,
-      render: (value: string | null) => <Typography.Text ellipsis>{value ?? "-"}</Typography.Text>,
     },
     {
       title: t.phone,
@@ -279,9 +390,8 @@ export default function Workers() {
     const fileBase = t.workersTitle;
     const exportRows = rows.map((worker) => ({
       [t.name]: worker.name,
-      [t.role]: worker.role ?? "",
-      [t.category]: worker.category ?? "",
       [t.phone]: worker.phone ?? "",
+      [t.remarks]: worker.notes ?? "",
       [`${t.balance} ${formatCurrencyLabel("USD")}`]: balanceUsdValue(worker),
       [`${t.balance} IQD`]: balanceIqdValue(worker),
       [t.status]: balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes,
@@ -325,9 +435,11 @@ export default function Workers() {
         </Col>
       </Row>
 
+      <SpecialitiesManager />
+
       <Card size="small">
         <Row gutter={[16, 16]}>
-          <Col xs={24} lg={14}>
+          <Col xs={24} md={18} lg={20}>
             <Input
               allowClear
               value={searchInput}
@@ -335,24 +447,12 @@ export default function Workers() {
               placeholder={`${t.search} ${t.workers.toLowerCase()}`}
             />
           </Col>
-          <Col xs={24} md={12} lg={6}>
-            <Select
-              value={categoryFilter}
-              style={{ width: "100%" }}
-              onChange={setCategoryFilter}
-              options={[
-                { label: t.allCategories, value: "all" },
-                ...categories.map((category) => ({ label: category, value: category })),
-              ]}
-            />
-          </Col>
-          <Col xs={24} md={12} lg={4}>
+          <Col xs={24} md={6} lg={4}>
             <Button
               block
               disabled={!hasFilters}
               onClick={() => {
                 setSearchInput("");
-                setCategoryFilter("all");
               }}
             >
               {t.clearFilters}

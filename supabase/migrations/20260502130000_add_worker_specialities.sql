@@ -11,23 +11,26 @@ create table if not exists public.worker_specialities (
   primary key (worker_id, speciality_id)
 );
 
--- RLS policies for specialities
 alter table public.specialities enable row level security;
+alter table public.worker_specialities enable row level security;
 
+drop policy if exists "Allow read access for all users" on public.specialities;
 create policy "Allow read access for all users" on public.specialities
   for select using (true);
 
--- RLS policies for worker_specialities
-alter table public.worker_specialities enable row level security;
-
+drop policy if exists "Allow read access for all users" on public.worker_specialities;
 create policy "Allow read access for all users" on public.worker_specialities
   for select using (true);
 
+drop policy if exists "Allow insert for authenticated users" on public.worker_specialities;
 create policy "Allow insert for authenticated users" on public.worker_specialities
   for insert with check (auth.role() = 'authenticated');
 
+drop policy if exists "Allow update for authenticated users" on public.worker_specialities;
 create policy "Allow update for authenticated users" on public.worker_specialities
-  for update using (auth.role() = 'authenticated');
+  for update using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
+drop policy if exists "Allow delete for authenticated users" on public.worker_specialities;
 create policy "Allow delete for authenticated users" on public.worker_specialities
   for delete using (auth.role() = 'authenticated');

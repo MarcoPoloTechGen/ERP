@@ -21,6 +21,7 @@ import {
   Typography,
 } from "antd";
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
+import { ModalTitle } from "@/components/ModalTitle";
 import { invoiceStatusColor, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
 import {
   createSupplierTransaction,
@@ -170,6 +171,9 @@ function SupplierTransactionModal({
   const [form] = Form.useForm<TransactionFormValues>();
   const selectedProjectId = Form.useWatch("projectId", form);
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const lockedProjectLabel = scopedProjectId == null
+    ? null
+    : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(0),
     queryFn: () => listProjectBuildings(),
@@ -234,7 +238,7 @@ function SupplierTransactionModal({
   return (
     <Modal
       open
-      title={transaction ? t.editTransaction : t.newTransaction}
+      title={<ModalTitle title={transaction ? t.editTransaction : t.newTransaction} lockedLabel={lockedProjectLabel} />}
       okText={transaction ? t.save : t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
@@ -284,7 +288,7 @@ function SupplierTransactionModal({
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={1}
+                step={0.01}
                 style={{ width: "100%" }}
                 {...currencyInputProps("IQD")}
               />
@@ -295,7 +299,7 @@ function SupplierTransactionModal({
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={1}
+                step={0.01}
                 style={{ width: "100%" }}
                 {...currencyInputProps("IQD")}
               />

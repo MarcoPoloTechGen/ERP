@@ -32,6 +32,27 @@ html, body {
   unicode-bidi: isolate;
 }
 
+.erp-modal-title {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: calc(100vw - 96px);
+}
+
+.erp-modal-title-text,
+.erp-modal-title-locked {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.erp-modal-title-locked {
+  color: inherit;
+  font-weight: inherit;
+  overflow-wrap: anywhere;
+}
+
 /* FullCalendar overrides */
 .erp-calendar .fc {
   --fc-border-color: #e5e0d5;

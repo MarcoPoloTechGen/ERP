@@ -52,6 +52,7 @@ export function useErpInvalidation() {
           erpKeys.supplierTransactionsList,
         ]),
       products: () => invalidateGroup(queryClient, [erpKeys.products, erpKeys.dashboard]),
+      specialities: () => invalidateGroup(queryClient, [erpKeys.specialities]),
       projects: () =>
         invalidateGroup(queryClient, [
           erpKeys.projects,

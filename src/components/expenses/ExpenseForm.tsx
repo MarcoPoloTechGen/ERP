@@ -111,7 +111,7 @@ export function ExpenseForm({
             <Form.Item name="amountIqd" label="Montant IQD" rules={[{ validator: validateAmountPair }]}>
               <InputNumber
                 min={0}
-                step={1}
+                step={0.01}
                 style={{ width: '100%' }}
                 {...currencyInputProps('IQD')}
                 onChange={(value) => updateField('amountIqd', Number(value || 0))}

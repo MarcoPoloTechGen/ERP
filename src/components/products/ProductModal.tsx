@@ -8,6 +8,7 @@ import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 import { useProjectBuildings, useProjects } from "@/hooks/use-projects";
 import { useSuppliers } from "@/hooks/use-suppliers";
+import { ModalTitle } from "@/components/ModalTitle";
 import type { ProductFormValues, ProductRow } from "@/components/products/product-shared";
 
 export function ProductModal({
@@ -25,10 +26,13 @@ export function ProductModal({
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<ProductFormValues>();
   const projectId = Form.useWatch("projectId", form);
-  const selectedProjectId = typeof projectId === "number" ? projectId : undefined;
+  const selectedProjectId = scopedProjectId ?? (typeof projectId === "number" ? projectId : undefined);
 
   const { data: suppliers } = useSuppliers();
   const { data: projects } = useProjects();
+  const lockedProjectLabel = scopedProjectId == null
+    ? null
+    : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
   const { data: buildings } = useProjectBuildings(selectedProjectId, selectedProjectId != null);
 
   const saveMutation = useMutation({
@@ -65,7 +69,7 @@ export function ProductModal({
   return (
     <Modal
       open
-      title={product ? t.editProduct : t.newProduct}
+      title={<ModalTitle title={product ? t.editProduct : t.newProduct} lockedLabel={lockedProjectLabel} />}
       okText={product ? t.save : t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
@@ -105,18 +109,20 @@ export function ProductModal({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="projectId" label={t.projectOption}>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                onChange={() => form.setFieldValue("buildingId", undefined)}
-                options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-              />
-            </Form.Item>
-          </Col>
+          {scopedProjectId == null ? (
+            <Col xs={24} md={12}>
+              <Form.Item name="projectId" label={t.projectOption}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  onChange={() => form.setFieldValue("buildingId", undefined)}
+                  options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
           <Col xs={24} md={12}>
             <Form.Item name="buildingId" label={t.buildingLabel}>
               <Select
@@ -141,7 +147,7 @@ export function ProductModal({
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="unitPriceIqd" label={`${t.unitPrice} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
         </Row>

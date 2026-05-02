@@ -17,7 +17,6 @@ import {
   Select,
   Skeleton,
   Space,
-  Tag,
   Typography,
 } from "antd";
 import {
@@ -39,6 +38,7 @@ import {
   type WorkerTransaction,
 } from "@/lib/erp";
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
+import { ModalTitle } from "@/components/ModalTitle";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useLang } from "@/lib/i18n";
@@ -58,9 +58,8 @@ type TransactionFormValues = {
 
 type WorkerFormValues = {
   name: string;
-  role: string;
-  category?: string;
   phone?: string;
+  notes?: string;
   specialityIds?: number[];
 };
 
@@ -90,6 +89,9 @@ function WorkerTransactionModal({
   const [form] = Form.useForm<TransactionFormValues>();
   const selectedProjectId = Form.useWatch("projectId", form);
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const lockedProjectLabel = scopedProjectId == null
+    ? null
+    : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(0),
     queryFn: () => listProjectBuildings(),
@@ -154,7 +156,7 @@ function WorkerTransactionModal({
   return (
     <Modal
       open
-      title={transaction ? t.editTransaction : t.newTransaction}
+      title={<ModalTitle title={transaction ? t.editTransaction : t.newTransaction} lockedLabel={lockedProjectLabel} />}
       okText={transaction ? t.save : t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
@@ -204,7 +206,7 @@ function WorkerTransactionModal({
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={1}
+                step={0.01}
                 style={{ width: "100%" }}
                 {...currencyInputProps("IQD")}
               />
@@ -215,7 +217,7 @@ function WorkerTransactionModal({
               <InputNumber
                 min={appSettings?.transactionAmountMinIqd ?? 0}
                 max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={1}
+                step={0.01}
                 style={{ width: "100%" }}
                 {...currencyInputProps("IQD")}
               />
@@ -263,7 +265,7 @@ function WorkerFormModal({
   worker,
   onClose,
 }: {
-  worker: { id: number; name: string; role: string | null; category: string | null; phone: string | null };
+  worker: { id: number; name: string; phone: string | null; notes: string | null };
   onClose: () => void;
 }) {
   const { t } = useLang();
@@ -290,9 +292,10 @@ function WorkerFormModal({
     mutationFn: async (values: WorkerFormValues) => {
       const payload = {
         name: values.name.trim(),
-        role: values.role.trim(),
-        category: values.category?.trim() || null,
+        role: null,
+        category: null,
         phone: values.phone?.trim() || null,
+        notes: values.notes?.trim() || null,
       };
 
       await updateWorker(worker.id, payload);
@@ -321,9 +324,8 @@ function WorkerFormModal({
         layout="vertical"
         initialValues={{
           name: worker.name,
-          role: worker.role ?? "",
-          category: worker.category ?? "",
           phone: worker.phone ?? "",
+          notes: worker.notes ?? "",
         }}
         onFinish={(values) => saveMutation.mutate(values)}
       >
@@ -332,16 +334,6 @@ function WorkerFormModal({
         </Form.Item>
 
         <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="role" label={t.role} rules={[{ required: true, message: t.roleRequired }]}>
-              <Input placeholder={t.rolePlaceholder} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="category" label={t.category}>
-              <Input placeholder={t.categoryPlaceholder} />
-            </Form.Item>
-          </Col>
           <Col xs={24} md={12}>
             <Form.Item name="phone" label={t.phone}>
               <Input placeholder={t.phonePlaceholder} />
@@ -366,6 +358,9 @@ function WorkerFormModal({
         <Typography.Text type="secondary" style={{ display: "block", marginTop: -16 }}>
           {t.specialitiesHelp}
         </Typography.Text>
+        <Form.Item name="notes" label={t.remarks} style={{ marginTop: 16 }}>
+          <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} placeholder={t.remarksPlaceholder} />
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -549,11 +544,15 @@ export default function WorkerDetail() {
             <Typography.Title level={2} style={{ margin: 0 }}>
               {worker.name}
             </Typography.Title>
-            {worker.category ? <Tag color="blue">{worker.category}</Tag> : null}
           </Space>
           <div>
-            <Typography.Text type="secondary">{[worker.role, worker.phone].filter(Boolean).join(" | ")}</Typography.Text>
+            <Typography.Text type="secondary">{worker.phone ?? "-"}</Typography.Text>
           </div>
+          {worker.notes ? (
+            <div>
+              <Typography.Text type="secondary">{worker.notes}</Typography.Text>
+            </div>
+          ) : null}
         </Col>
         <Col flex="none">
           <Space>

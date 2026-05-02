@@ -69,6 +69,35 @@ export function parseExpenseAssignmentKey(
   return { projectId: null, buildingId: null };
 }
 
+export function formatExpenseAssignmentLabel({
+  assignment,
+  buildings = [],
+  buildingFallback,
+  projects = [],
+  projectFallback,
+  projectWideLabel,
+}: {
+  assignment: ExpenseAssignment;
+  buildings?: ProjectBuilding[];
+  buildingFallback: string;
+  projects?: Project[];
+  projectFallback: string;
+  projectWideLabel: string;
+}) {
+  if (assignment.projectId == null) {
+    return null;
+  }
+
+  const projectName = projects.find((project) => project.id === assignment.projectId)?.name ?? projectFallback;
+
+  if (assignment.buildingId == null) {
+    return `${projectName} - ${projectWideLabel}`;
+  }
+
+  const buildingName = buildings.find((building) => building.id === assignment.buildingId)?.name ?? buildingFallback;
+  return `${projectName} - ${buildingName}`;
+}
+
 export function buildExpenseAssignmentOptions({
   projects = [],
   buildings = [],

@@ -14,17 +14,23 @@ const LTR_ISOLATE_END = "\u2069";
 
 describe("format helpers", () => {
   it("formats currencies with the correct precision", () => {
-    expect(formatCurrency(123456, "USD")).toBe(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`);
-    expect(formatCurrency(1234.56, "USD")).toBe(`${LTR_ISOLATE_START}1 234,56 $${LTR_ISOLATE_END}`);
-    expect(formatCurrency(1200, "IQD")).toBe(`${LTR_ISOLATE_START}1 200 IQD${LTR_ISOLATE_END}`);
+    expect(formatCurrency(123456, "USD")).toBe(`${LTR_ISOLATE_START}123,456.00 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1234.56, "USD")).toBe(`${LTR_ISOLATE_START}1,234.56 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1200, "IQD")).toBe(`${LTR_ISOLATE_START}1,200.00 IQD${LTR_ISOLATE_END}`);
+    expect(formatCurrency(155_000_000_000, "IQD")).toBe(
+      `${LTR_ISOLATE_START}155,000,000,000.00 IQD${LTR_ISOLATE_END}`,
+    );
   });
 
   it("formats and parses currency input values", () => {
-    expect(formatCurrencyInputValue(123456)).toBe("123 456");
-    expect(formatCurrencyInputValue(1234.56)).toBe("1 235");
-    expect(parseCurrencyInputValue("123 456 $")).toBe("123456");
+    expect(formatCurrencyInputValue(123456)).toBe("123,456.00");
+    expect(formatCurrencyInputValue(1234.56)).toBe("1,234.56");
+    expect(formatCurrencyInputValue(155_000_000_000)).toBe("155,000,000,000.00");
+    expect(parseCurrencyInputValue("123,456.00 $")).toBe("123456.00");
+    expect(parseCurrencyInputValue("1,234.56 $")).toBe("1234.56");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
-    expect(parseCurrencyInputValue(`${LTR_ISOLATE_START}123 456 $${LTR_ISOLATE_END}`)).toBe("123456");
+    expect(parseCurrencyInputValue("\u0661\u0665\u0665,\u0660\u0660\u0660,\u0660\u0660\u0660,\u0660\u0660\u0660.\u0660\u0660 IQD")).toBe("155000000000.00");
+    expect(parseCurrencyInputValue(`${LTR_ISOLATE_START}123,456.00 $${LTR_ISOLATE_END}`)).toBe("123456.00");
   });
 
   it("keeps currency inputs left-to-right in rtl layouts", () => {
@@ -32,8 +38,8 @@ describe("format helpers", () => {
       className: "erp-currency-input-ltr",
       "data-currency": "USD",
       dir: "ltr",
-      precision: 0,
-      step: 1,
+      precision: 2,
+      step: 0.01,
     });
   });
 
@@ -41,7 +47,7 @@ describe("format helpers", () => {
     expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).toContain("/");
     expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).toContain("$");
     expect(formatCurrencyPair({ usd: 10, iqd: 1250 })).not.toContain("USD");
-    expect(formatCurrencyPair({ usd: 0, iqd: 1250 }, { hideZero: true })).not.toContain("0.00");
+    expect(formatCurrencyPair({ usd: 0, iqd: 1250 }, { hideZero: true })).not.toContain("$");
   });
 
   it("formats dates safely", () => {

@@ -6,6 +6,7 @@ import {
   App,
   Alert,
   Button,
+  Segmented,
   Image as AntImage,
   Space,
   Table,
@@ -18,6 +19,7 @@ import FinancePageHeader from "@/components/finance/FinancePageHeader";
 import FinanceRowActions from "@/components/finance/FinanceRowActions";
 import ProjectExpenseVisualization from "@/components/finance/ProjectExpenseVisualization";
 import { standardPagination } from "@/components/finance/table";
+import { IncomeModal } from "@/components/income/IncomeModal";
 import { InvoiceModal } from "@/components/invoices/InvoiceModal";
 import {
   expenseTypeLabel,
@@ -31,6 +33,7 @@ import {
   type InvoiceStatus,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import type { ExpenseAssignment } from "@/lib/expense-assignment";
 import { asExpenseType } from "@/lib/expense-types";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
 import {
@@ -103,9 +106,8 @@ export default function Invoices() {
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
-  const [initialInvoiceAssignment, setInitialInvoiceAssignment] = useState<
-    { projectId: number; buildingId: number } | undefined
-  >();
+  const [initialInvoiceAssignment, setInitialInvoiceAssignment] = useState<ExpenseAssignment | undefined>();
+  const [buildingTransactionKind, setBuildingTransactionKind] = useState<"expense" | "income">("expense");
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
@@ -327,6 +329,7 @@ export default function Invoices() {
           onEdit={() => {
             setSelectedInvoice(invoice);
             setInitialInvoiceAssignment(undefined);
+            setBuildingTransactionKind("expense");
             setOpen(true);
           }}
         />
@@ -375,6 +378,18 @@ export default function Invoices() {
     exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
+  const buildingTransactionSelector = initialInvoiceAssignment ? (
+    <Segmented<"expense" | "income">
+      block
+      options={[
+        { label: t.expenses, value: "expense" },
+        { label: t.income, value: "income" },
+      ]}
+      value={buildingTransactionKind}
+      onChange={setBuildingTransactionKind}
+    />
+  ) : null;
+
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <FinancePageHeader
@@ -386,6 +401,7 @@ export default function Invoices() {
         onAdd={() => {
           setSelectedInvoice(undefined);
           setInitialInvoiceAssignment(undefined);
+          setBuildingTransactionKind("expense");
           setOpen(true);
         }}
         onExportCsv={() => exportInvoices("csv")}
@@ -421,6 +437,7 @@ export default function Invoices() {
         onAddTransaction={(assignment) => {
           setSelectedInvoice(undefined);
           setInitialInvoiceAssignment(assignment);
+          setBuildingTransactionKind("expense");
           setOpen(true);
         }}
         onProjectChange={setVisualizationProjectId}
@@ -485,13 +502,32 @@ export default function Invoices() {
         pagination={standardPagination(tableProps.pagination, (total) => `${total} ${t.expenses.toLowerCase()}`)}
       />
 
-      {open ? (
+      {open && initialInvoiceAssignment && buildingTransactionKind === "income" ? (
+        <IncomeModal
+          headerExtra={buildingTransactionSelector}
+          income={null}
+          initialAssignment={initialInvoiceAssignment}
+          open
+          onClose={() => {
+            setOpen(false);
+            setSelectedInvoice(undefined);
+            setInitialInvoiceAssignment(undefined);
+            setBuildingTransactionKind("expense");
+          }}
+          onSaved={() => {
+            void erpInvalidation.income();
+          }}
+        />
+      ) : open ? (
         <InvoiceModal
+          headerExtra={buildingTransactionSelector}
           invoice={selectedInvoice}
           initialAssignment={initialInvoiceAssignment}
           onClose={() => {
             setOpen(false);
+            setSelectedInvoice(undefined);
             setInitialInvoiceAssignment(undefined);
+            setBuildingTransactionKind("expense");
           }}
           onSaved={() => {
             void tableQuery.refetch();

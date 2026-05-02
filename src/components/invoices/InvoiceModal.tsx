@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { App, Button, Col, Form, Image as AntImage, Input, InputNumber, Modal, Row, Select, Space, Typography, Upload } from "antd";
 import { Image as ImageIcon } from "lucide-react";
@@ -7,6 +7,7 @@ import {
   buildExpenseAssignmentOptions,
   buildingExpenseAssignmentKey,
   expenseAssignmentKeyFromRecord,
+  formatExpenseAssignmentLabel,
   parseExpenseAssignmentKey,
   type ExpenseAssignment,
 } from "@/lib/expense-assignment";
@@ -21,6 +22,7 @@ import { useProjectBuildings, useProjects } from "@/hooks/use-projects";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import { useWorkers } from "@/hooks/use-workers";
 import { createSignedInvoiceImageUrl, deleteInvoiceImageByUrl, uploadInvoiceImage } from "@/lib/supabase";
+import { ModalTitle } from "@/components/ModalTitle";
 import { expenseTypeLabel, type InvoiceFormValues, type InvoiceRow } from "@/components/invoices/invoice-shared";
 
 function buildGeneratedExpenseTitle({
@@ -92,11 +94,13 @@ function InvoiceImageField({
 }
 
 export function InvoiceModal({
+  headerExtra,
   invoice,
   initialAssignment,
   onClose,
   onSaved,
 }: {
+  headerExtra?: ReactNode;
   invoice?: InvoiceRow;
   initialAssignment?: ExpenseAssignment;
   onClose: () => void;
@@ -120,14 +124,27 @@ export function InvoiceModal({
   const { data: products } = useProducts();
   const { data: workers } = useWorkers();
   const { data: projectBuildings } = useProjectBuildings();
-  const effectiveAssignmentKey = assignmentKey;
   const initialAssignmentKey =
     invoice == null && initialAssignment?.projectId != null && initialAssignment.buildingId != null
       ? buildingExpenseAssignmentKey(initialAssignment.buildingId, initialAssignment.projectId)
       : undefined;
+  const effectiveAssignmentKey =
+    assignmentKey ?? (invoice ? expenseAssignmentKeyFromRecord(invoice.project_id, invoice.building_id) : initialAssignmentKey);
   const assignmentLocked = initialAssignmentKey != null;
   const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
+  const lockedAssignmentLabel = assignmentLocked
+    ? formatExpenseAssignmentLabel({
+        assignment: selectedAssignment,
+        buildings: projectBuildings ?? [],
+        buildingFallback: t.buildingLabel,
+        projects: projects ?? [],
+        projectFallback: t.projectOption,
+        projectWideLabel: t.projectGlobalCost,
+      })
+    : scopedProjectId == null
+      ? null
+      : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -258,7 +275,7 @@ export function InvoiceModal({
 
   const saveMutation = useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
-      const assignment = parseExpenseAssignmentKey(values.assignmentKey, projectBuildings);
+      const assignment = parseExpenseAssignmentKey(values.assignmentKey ?? initialAssignmentKey, projectBuildings);
       if (assignment.projectId == null || assignment.buildingId == null) {
         throw new Error(`${t.invoiceAssignment}: ${t.requiredField}`);
       }
@@ -359,13 +376,14 @@ export function InvoiceModal({
     <Modal
       open
       width={860}
-      title={invoice ? t.editInvoice : t.newInvoice}
+      title={<ModalTitle title={invoice ? t.editInvoice : t.newInvoice} lockedLabel={lockedAssignmentLabel} />}
       okText={invoice ? t.save : t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
       onCancel={onClose}
       onOk={() => form.submit()}
     >
+      {headerExtra ? <div style={{ marginBottom: 16 }}>{headerExtra}</div> : null}
       <Form<InvoiceFormValues>
         form={form}
         layout="vertical"
@@ -399,18 +417,19 @@ export function InvoiceModal({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="assignmentKey" label={t.invoiceAssignment} rules={[{ required: true, message: t.requiredField }]}>
-              <Select
-                disabled={assignmentLocked}
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                onChange={() => form.setFieldValue("productId", undefined)}
-                options={assignmentOptions}
-              />
-            </Form.Item>
-          </Col>
+          {assignmentLocked ? null : (
+            <Col xs={24} md={12}>
+              <Form.Item name="assignmentKey" label={t.invoiceAssignment} rules={[{ required: true, message: t.requiredField }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t.noneOption}
+                  onChange={() => form.setFieldValue("productId", undefined)}
+                  options={assignmentOptions}
+                />
+              </Form.Item>
+            </Col>
+          )}
           {expenseType === "labor" ? (
             <Col xs={24} md={12}>
               <Form.Item
@@ -468,12 +487,12 @@ export function InvoiceModal({
           </Col>
           <Col xs={12} md={12}>
             <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
           <Col xs={12} md={12}>
             <Form.Item name="remainingAmountIqd" label={`${t.remaining_label} IQD`}>
-              <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
+              <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>

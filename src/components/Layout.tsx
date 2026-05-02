@@ -230,7 +230,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <InputNumber
               min={MIN_EXCHANGE_RATE_IQD_PER_100_USD}
               max={MAX_EXCHANGE_RATE_IQD_PER_100_USD}
-              precision={0}
               value={exchangeRateDraft}
               controls={false}
               style={{ flex: 1 }}

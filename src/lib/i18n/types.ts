@@ -111,7 +111,14 @@ export type TranslationShape = {
   specialitiesPlaceholder: string;
   specialitiesHelp: string;
   noSpecialities: string;
+  manageSpecialities: string;
+  addSpeciality: string;
+  editSpeciality: string;
+  specialityName: string;
+  deleteSpecialityConfirm: string;
   phone: string;
+  remarks: string;
+  remarksPlaceholder: string;
   balance: string;
   toReceive: string;
   owes: string;

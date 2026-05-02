@@ -49,6 +49,7 @@ import {
   buildingExpenseAssignmentKey,
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
+import { ModalTitle } from "@/components/ModalTitle";
 import { EXPENSE_TYPES, type ExpenseType } from "@/lib/expense-types";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
@@ -209,6 +210,9 @@ function CalendarEntryModal({
   const supplierId = Form.useWatch("supplierId", form);
 
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
+  const lockedProjectLabel = scopedProjectId == null
+    ? null
+    : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
   const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
   const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
@@ -425,7 +429,7 @@ function CalendarEntryModal({
     <Modal
       open
       width={860}
-      title={modalTitle}
+      title={<ModalTitle title={modalTitle} lockedLabel={lockedProjectLabel} />}
       okText={t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
@@ -472,22 +476,23 @@ function CalendarEntryModal({
 
           {entryType === "income" ? (
             <>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="projectId"
-                  label={t.projectOption}
-                  rules={[{ required: true, message: t.requiredField }]}
-                >
-                  <Select
-                    disabled={scopedProjectId != null}
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder={t.noneOption}
-                    onChange={() => form.setFieldValue("buildingId", undefined)}
-                    options={projects?.map((project) => ({ label: project.name, value: project.id }))}
-                  />
-                </Form.Item>
-              </Col>
+              {scopedProjectId == null ? (
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="projectId"
+                    label={t.projectOption}
+                    rules={[{ required: true, message: t.requiredField }]}
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={t.noneOption}
+                      onChange={() => form.setFieldValue("buildingId", undefined)}
+                      options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                    />
+                  </Form.Item>
+                </Col>
+              ) : null}
               <Col xs={24} md={12}>
                 <Form.Item
                   name="buildingId"
@@ -519,7 +524,7 @@ function CalendarEntryModal({
                   <InputNumber
                     min={appSettings?.transactionAmountMinIqd ?? 0}
                     max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                    step={1}
+                    step={0.01}
                     style={{ width: "100%" }}
                     {...currencyInputProps("IQD")}
                   />
@@ -614,12 +619,12 @@ function CalendarEntryModal({
               </Col>
               <Col xs={12} md={12}>
                 <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`}>
-                  <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
+                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
                 </Form.Item>
               </Col>
               <Col xs={12} md={12}>
                 <Form.Item name="remainingAmountIqd" label={`${t.remaining_label} IQD`}>
-                  <InputNumber min={0} step={1} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
+                  <InputNumber min={0} step={0.01} style={{ width: "100%" }} {...currencyInputProps("IQD")} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
