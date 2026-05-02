@@ -117,11 +117,19 @@ export default function Dashboard() {
 
       <Card title={t.financialSummary} extra={<Typography.Text type="secondary">{t.paymentProgress}</Typography.Text>}>
         <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
+          <Col xs={12} md={8}>
             <Card size="small">
               <Typography.Text type="secondary">{t.totalInvoiced}</Typography.Text>
               <Typography.Title level={4} style={{ marginBottom: 0 }}>
                 {formatCurrencyPair({ usd: data.totalInvoiceAmountUsd, iqd: data.totalInvoiceAmountIqd })}
+              </Typography.Title>
+            </Card>
+          </Col>
+          <Col xs={12} md={8}>
+            <Card size="small">
+              <Typography.Text type="warning">{t.remaining}</Typography.Text>
+              <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                {formatCurrencyPair({ usd: data.remainingAmountUsd, iqd: data.remainingAmountIqd })}
               </Typography.Title>
             </Card>
           </Col>
@@ -130,14 +138,6 @@ export default function Dashboard() {
               <Typography.Text type="success">{t.amountPaid}</Typography.Text>
               <Typography.Title level={4} style={{ marginBottom: 0 }}>
                 {formatCurrencyPair({ usd: data.totalPaidAmountUsd, iqd: data.totalPaidAmountIqd })}
-              </Typography.Title>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small">
-              <Typography.Text type="warning">{t.remaining}</Typography.Text>
-              <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                {formatCurrencyPair({ usd: data.remainingAmountUsd, iqd: data.remainingAmountIqd })}
               </Typography.Title>
             </Card>
           </Col>
@@ -247,14 +247,22 @@ export default function Dashboard() {
                             <Typography.Text type="secondary">{invoice.supplierName ?? t.noSupplier}</Typography.Text>
                           </div>
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <Typography.Text strong>
-                            {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
-                          </Typography.Text>
-                          <div>
+                        <div className="erp-invoice-amount-pair" style={{ minWidth: 260 }}>
+                          <div className="erp-invoice-amount-cell">
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.totalAmount}</Typography.Text>
+                            <div>
+                              <Typography.Text strong>
+                                {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                              </Typography.Text>
+                            </div>
+                          </div>
+                          <div className="erp-invoice-amount-cell">
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.remaining}</Typography.Text>
+                            <div>
                             <Typography.Text type="danger">
                               {formatCurrencyPair({ usd: invoice.remainingUsd, iqd: invoice.remainingIqd }, { hideZero: true })}
                             </Typography.Text>
+                            </div>
                           </div>
                         </div>
                       </div>

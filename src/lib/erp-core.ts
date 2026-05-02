@@ -617,6 +617,7 @@ export const erpKeys = {
   workers: ["workers"] as const,
   worker: (id: number) => ["worker", id] as const,
   specialities: ["specialities"] as const,
+  workerSpecialitiesList: ["workerSpecialities"] as const,
   workerSpecialities: (workerId: number) => ["worker", workerId, "specialities"] as const,
   workerTransactionsList: ["workerTransactions"] as const,
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,

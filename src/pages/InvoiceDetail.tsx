@@ -156,12 +156,22 @@ export default function InvoiceDetail() {
       <Card title={t.financialSummaryInv}>
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Row gutter={[16, 16]}>
-            <Col xs={24} md={8}>
+            <Col xs={12} md={8}>
               <Card size="small">
                 <Typography.Text type="secondary">{t.totalAmount}</Typography.Text>
                 <div>
                   <Typography.Text strong>
                     {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                  </Typography.Text>
+                </div>
+              </Card>
+            </Col>
+            <Col xs={12} md={8}>
+              <Card size="small">
+                <Typography.Text type="warning">{t.remaining_label}</Typography.Text>
+                <div>
+                  <Typography.Text strong>
+                    {formatCurrencyPair({ usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd })}
                   </Typography.Text>
                 </div>
               </Card>
@@ -172,16 +182,6 @@ export default function InvoiceDetail() {
                 <div>
                   <Typography.Text strong>
                     {formatCurrencyPair({ usd: invoice.paidAmountUsd, iqd: invoice.paidAmountIqd })}
-                  </Typography.Text>
-                </div>
-              </Card>
-            </Col>
-            <Col xs={24} md={8}>
-              <Card size="small">
-                <Typography.Text type="warning">{t.remaining_label}</Typography.Text>
-                <div>
-                  <Typography.Text strong>
-                    {formatCurrencyPair({ usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd })}
                   </Typography.Text>
                 </div>
               </Card>
@@ -240,16 +240,16 @@ export default function InvoiceDetail() {
                 render: (_value, row) => formatCurrencyPair({ usd: row.totalAmountUsd, iqd: row.totalAmountIqd }),
               },
               {
-                title: t.paidAmount,
-                dataIndex: "paidAmountUsd",
-                align: "right",
-                render: (_value, row) => formatCurrencyPair({ usd: row.paidAmountUsd, iqd: row.paidAmountIqd }),
-              },
-              {
                 title: t.remaining_label,
                 dataIndex: "remainingAmountUsd",
                 align: "right",
                 render: (_value, row) => formatCurrencyPair({ usd: row.remainingAmountUsd, iqd: row.remainingAmountIqd }),
+              },
+              {
+                title: t.paidAmount,
+                dataIndex: "paidAmountUsd",
+                align: "right",
+                render: (_value, row) => formatCurrencyPair({ usd: row.paidAmountUsd, iqd: row.paidAmountIqd }),
               },
               { title: t.invoiceDate, dataIndex: "invoiceDate", render: (value) => formatDate(value) },
               { title: t.dueDate, dataIndex: "dueDate", render: (value) => formatDate(value) },

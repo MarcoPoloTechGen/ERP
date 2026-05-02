@@ -32,6 +32,10 @@ html, body {
   unicode-bidi: isolate;
 }
 
+.ant-input-number .ant-input-number-handler-wrap {
+  display: none;
+}
+
 .erp-modal-title {
   display: inline-flex;
   align-items: baseline;
@@ -51,6 +55,23 @@ html, body {
   color: inherit;
   font-weight: inherit;
   overflow-wrap: anywhere;
+}
+
+.erp-invoice-amount-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.erp-invoice-amount-cell {
+  min-width: 0;
+  text-align: right;
+}
+
+.erp-invoice-amount-cell .ant-typography {
+  max-width: 100%;
 }
 
 /* FullCalendar overrides */

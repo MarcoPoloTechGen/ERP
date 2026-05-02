@@ -14,18 +14,18 @@ const LTR_ISOLATE_END = "\u2069";
 
 describe("format helpers", () => {
   it("formats currencies with the correct precision", () => {
-    expect(formatCurrency(123456, "USD")).toBe(`${LTR_ISOLATE_START}123,456.00 $${LTR_ISOLATE_END}`);
-    expect(formatCurrency(1234.56, "USD")).toBe(`${LTR_ISOLATE_START}1,234.56 $${LTR_ISOLATE_END}`);
-    expect(formatCurrency(1200, "IQD")).toBe(`${LTR_ISOLATE_START}1,200.00 IQD${LTR_ISOLATE_END}`);
+    expect(formatCurrency(123456, "USD")).toBe(`${LTR_ISOLATE_START}123,456 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1234.56, "USD")).toBe(`${LTR_ISOLATE_START}1,235 $${LTR_ISOLATE_END}`);
+    expect(formatCurrency(1200, "IQD")).toBe(`${LTR_ISOLATE_START}1,200 IQD${LTR_ISOLATE_END}`);
     expect(formatCurrency(155_000_000_000, "IQD")).toBe(
-      `${LTR_ISOLATE_START}155,000,000,000.00 IQD${LTR_ISOLATE_END}`,
+      `${LTR_ISOLATE_START}155,000,000,000 IQD${LTR_ISOLATE_END}`,
     );
   });
 
   it("formats and parses currency input values", () => {
-    expect(formatCurrencyInputValue(123456)).toBe("123,456.00");
-    expect(formatCurrencyInputValue(1234.56)).toBe("1,234.56");
-    expect(formatCurrencyInputValue(155_000_000_000)).toBe("155,000,000,000.00");
+    expect(formatCurrencyInputValue(123456)).toBe("123,456");
+    expect(formatCurrencyInputValue(1234.56)).toBe("1,235");
+    expect(formatCurrencyInputValue(155_000_000_000)).toBe("155,000,000,000");
     expect(parseCurrencyInputValue("123,456.00 $")).toBe("123456.00");
     expect(parseCurrencyInputValue("1,234.56 $")).toBe("1234.56");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
@@ -38,8 +38,9 @@ describe("format helpers", () => {
       className: "erp-currency-input-ltr",
       "data-currency": "USD",
       dir: "ltr",
-      precision: 2,
-      step: 0.01,
+      precision: 0,
+      step: 1,
+      controls: false,
     });
   });
 

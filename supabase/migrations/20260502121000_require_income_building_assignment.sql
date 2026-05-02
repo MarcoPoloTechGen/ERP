@@ -248,6 +248,9 @@ create trigger trg_log_income_transaction_history
 after insert or update on public.income_transactions
 for each row execute function public.log_income_transaction_history();
 
+drop view if exists public.app_income_transaction_history;
+drop view if exists public.app_income_transactions;
+
 create or replace view public.app_income_transactions
 with (security_invoker = true)
 as
@@ -285,7 +288,11 @@ as
 select
   ith.id,
   ith.income_transaction_id,
-  case when ith.change_type = 'delete' then 'deleted' else ith.change_type end::text as change_type,
+  case
+    when ith.change_type = 'delete' then 'deleted'
+    when ith.change_type = 'update' then 'updated'
+    else ith.change_type
+  end::text as change_type,
   coalesce(ith.project_id, ith.old_project_id) as project_id,
   coalesce(ith.project_name, p.name) as project_name,
   coalesce(ith.old_building_id, ith.building_id) as building_id,

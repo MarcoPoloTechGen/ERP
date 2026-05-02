@@ -15,6 +15,10 @@ type WorkerSpecialityRow = {
   specialities?: { name?: string | null } | { name?: string | null }[] | null;
 };
 
+type WorkerSpecialitiesByWorkerRow = WorkerSpecialityRow & {
+  worker_id: number | null;
+};
+
 function readSpecialityName(value: WorkerSpecialityRow["specialities"]) {
   if (Array.isArray(value)) {
     return value[0]?.name?.trim() ?? "";
@@ -96,6 +100,46 @@ export async function getWorkerSpecialities(workerId: number): Promise<WorkerSpe
       name: readSpecialityName(row.specialities),
     }))
     .filter((speciality) => Number.isFinite(speciality.specialityId));
+}
+
+export async function listWorkerSpecialitiesByWorker(workerIds: number[]): Promise<Record<number, WorkerSpeciality[]>> {
+  const selectedWorkerIds = uniqueFiniteIds(workerIds);
+
+  if (!selectedWorkerIds.length) {
+    return {};
+  }
+
+  const { data, error } = await supabase
+    .from("worker_specialities")
+    .select("worker_id, speciality_id, specialities(name)")
+    .in("worker_id", selectedWorkerIds)
+    .order("worker_id", { ascending: true })
+    .order("speciality_id", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const specialitiesByWorker: Record<number, WorkerSpeciality[]> = Object.fromEntries(
+    selectedWorkerIds.map((workerId) => [workerId, []]),
+  );
+
+  for (const row of (data ?? []) as WorkerSpecialitiesByWorkerRow[]) {
+    const workerId = Number(row.worker_id);
+    const specialityId = Number(row.speciality_id);
+
+    if (!Number.isFinite(workerId) || !Number.isFinite(specialityId)) {
+      continue;
+    }
+
+    specialitiesByWorker[workerId] ??= [];
+    specialitiesByWorker[workerId].push({
+      specialityId,
+      name: readSpecialityName(row.specialities),
+    });
+  }
+
+  return specialitiesByWorker;
 }
 
 export async function createWorkerSpeciality(payload: { workerId: number; specialityId: number }) {

@@ -12,6 +12,8 @@ type ExpenseSection = {
   invoices: Invoice[];
   totalUsd: number;
   totalIqd: number;
+  remainingUsd: number;
+  remainingIqd: number;
 };
 
 type ExpenseAssignment = {
@@ -63,6 +65,8 @@ function buildSection({
     invoices: [...invoices].sort(compareInvoicesByDate),
     totalUsd: invoices.reduce((total, invoice) => total + invoice.totalAmountUsd, 0),
     totalIqd: invoices.reduce((total, invoice) => total + invoice.totalAmountIqd, 0),
+    remainingUsd: invoices.reduce((total, invoice) => total + invoice.remainingAmountUsd, 0),
+    remainingIqd: invoices.reduce((total, invoice) => total + invoice.remainingAmountIqd, 0),
   };
 }
 
@@ -133,6 +137,7 @@ function ExpensePanel({
   addTransactionLabel,
   columns,
   section,
+  remainingLabel,
   totalLabel,
   emptyText,
   onAddTransaction,
@@ -140,6 +145,7 @@ function ExpensePanel({
   addTransactionLabel: string;
   columns: TableProps<Invoice>["columns"];
   section: ExpenseSection;
+  remainingLabel: string;
   totalLabel: string;
   emptyText: string;
   onAddTransaction?: (assignment: ExpenseAssignment) => void;
@@ -178,15 +184,29 @@ function ExpensePanel({
         locale={{ emptyText }}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 320 }}
+        scroll={{ x: 460 }}
         size="small"
       />
 
-      <div style={{ display: "flex", minHeight: 48, alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid #e5e0d5", background: "#fff", padding: "8px 12px" }}>
-        <Typography.Text strong>{totalLabel}</Typography.Text>
-        <Typography.Text strong style={{ textAlign: "right" }}>
-          {formatCurrencyPair({ usd: section.totalUsd, iqd: section.totalIqd })}
-        </Typography.Text>
+      <div style={{ borderTop: "1px solid #e5e0d5", background: "#fff", padding: "8px 12px" }}>
+        <div className="erp-invoice-amount-pair">
+          <div className="erp-invoice-amount-cell">
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{totalLabel}</Typography.Text>
+            <div>
+              <Typography.Text strong>
+                {formatCurrencyPair({ usd: section.totalUsd, iqd: section.totalIqd })}
+              </Typography.Text>
+            </div>
+          </div>
+          <div className="erp-invoice-amount-cell">
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{remainingLabel}</Typography.Text>
+            <div>
+              <Typography.Text strong type="warning">
+                {formatCurrencyPair({ usd: section.remainingUsd, iqd: section.remainingIqd }, { hideZero: true })}
+              </Typography.Text>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -226,12 +246,30 @@ export default function ProjectExpenseVisualization({
           <Typography.Text ellipsis={{ tooltip: invoice.number }} strong>
             {invoice.number}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {formatCurrencyPair(
-              { usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd },
-              { hideZero: true },
-            )}
-          </Typography.Text>
+          <div className="erp-invoice-amount-pair" style={{ marginTop: 2 }}>
+            <div className="erp-invoice-amount-cell">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.totalAmount}</Typography.Text>
+              <div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatCurrencyPair(
+                    { usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd },
+                    { hideZero: true },
+                  )}
+                </Typography.Text>
+              </div>
+            </div>
+            <div className="erp-invoice-amount-cell">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.remaining_label}</Typography.Text>
+              <div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {formatCurrencyPair(
+                    { usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd },
+                    { hideZero: true },
+                  )}
+                </Typography.Text>
+              </div>
+            </div>
+          </div>
         </Space>
       ),
     },
@@ -271,6 +309,7 @@ export default function ProjectExpenseVisualization({
               columns={columns}
               emptyText={t.noExpenses}
               onAddTransaction={onAddTransaction}
+              remainingLabel={t.remaining_label}
               section={section}
               totalLabel={t.totalAmount}
             />

@@ -7,7 +7,7 @@ const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
 
 const MONEY_LOCALE = "en-US";
 const MONEY_INPUT_CLASS_NAME = "erp-currency-input-ltr";
-const MONEY_FRACTION_DIGITS = 2;
+const MONEY_FRACTION_DIGITS = 0;
 
 const CURRENCY_NUMBER_FORMATTER = new Intl.NumberFormat(MONEY_LOCALE, {
   minimumFractionDigits: MONEY_FRACTION_DIGITS,
@@ -100,7 +100,8 @@ export function currencyInputProps(currency: Currency) {
     formatter: formatCurrencyInputValue,
     parser: parseCurrencyInputValue,
     precision: MONEY_FRACTION_DIGITS,
-    step: 0.01,
+    step: 1,
+    controls: false,
   };
 }
 

@@ -26,6 +26,7 @@ import {
   createWorker,
   deleteSpeciality,
   erpKeys,
+  listWorkerSpecialitiesByWorker,
   listSpecialities,
   listWorkerBalances,
   updateSpeciality,
@@ -327,6 +328,10 @@ export default function Workers() {
   }, [search, setCurrentPage, setFilters]);
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const workerIds = useMemo(
+    () => Array.from(new Set(rows.map((worker) => worker.id).filter((id) => Number.isFinite(id)))),
+    [rows],
+  );
 
   const workerBalances = useMemo(() => {
     const balancesByWorker = new Map<number, { usd: number; iqd: number }>();
@@ -337,6 +342,12 @@ export default function Workers() {
 
     return balancesByWorker;
   }, [workerBalanceRows]);
+
+  const { data: workerSpecialitiesByWorker = {} } = useQuery({
+    queryKey: [...erpKeys.workerSpecialitiesList, workerIds],
+    queryFn: () => listWorkerSpecialitiesByWorker(workerIds),
+    enabled: workerIds.length > 0,
+  });
 
   const workerBalance = (worker: WorkerRow) => workerBalances.get(worker.id) ?? { usd: 0, iqd: 0 };
   const balanceUsdValue = (worker: WorkerRow) => workerBalance(worker).usd;
@@ -349,9 +360,20 @@ export default function Workers() {
       responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
       minWidth: 120,
-      render: (value: string) => (
-        <Space size="small" wrap style={{ width: "100%" }}>
-          <Typography.Text strong ellipsis>{value}</Typography.Text>
+      render: (value: string, worker) => (
+        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+          <Typography.Text strong ellipsis>
+            {value}
+          </Typography.Text>
+          {workerSpecialitiesByWorker[worker.id]?.length ? (
+            <Space size={[4, 4]} wrap>
+              {workerSpecialitiesByWorker[worker.id].map((speciality) => (
+                <Tag key={speciality.specialityId} style={{ marginInlineEnd: 0 }}>
+                  {speciality.name}
+                </Tag>
+              ))}
+            </Space>
+          ) : null}
         </Space>
       ),
     },

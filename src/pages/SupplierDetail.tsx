@@ -650,24 +650,33 @@ export default function SupplierDetail() {
                         </Typography.Text>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <Typography.Text strong>
-                        {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
-                      </Typography.Text>
+                    <div style={{ minWidth: 280 }}>
+                      <div className="erp-invoice-amount-pair">
+                        <div className="erp-invoice-amount-cell">
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.totalAmount}</Typography.Text>
+                          <div>
+                            <Typography.Text strong>
+                              {formatCurrencyPair({ usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd })}
+                            </Typography.Text>
+                          </div>
+                        </div>
+                        <div className="erp-invoice-amount-cell">
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.remaining_label}</Typography.Text>
+                          <div>
+                            <Typography.Text type="secondary">
+                              {formatCurrencyPair(
+                                { usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd },
+                                { hideZero: true },
+                              )}
+                            </Typography.Text>
+                          </div>
+                        </div>
+                      </div>
                       <div>
                         <Typography.Text type="secondary">
                           {t.paidAmount}:{" "}
                           {formatCurrencyPair(
                             { usd: invoice.paidAmountUsd, iqd: invoice.paidAmountIqd },
-                            { hideZero: true },
-                          )}
-                        </Typography.Text>
-                      </div>
-                      <div>
-                        <Typography.Text type="secondary">
-                          {t.remaining_label}:{" "}
-                          {formatCurrencyPair(
-                            { usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd },
                             { hideZero: true },
                           )}
                         </Typography.Text>
