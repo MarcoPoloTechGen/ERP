@@ -50,6 +50,7 @@ import {
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
+import { useIncomeTransactions } from "@/hooks/use-income";
 import { useInvoices } from "@/hooks/use-invoices";
 import { useProjectBuildings, useProjects } from "@/hooks/use-projects";
 import { useSuppliers } from "@/hooks/use-suppliers";
@@ -124,6 +125,7 @@ export default function Invoices() {
   const { data: projects } = useProjects();
   const { data: suppliers } = useSuppliers();
   const allInvoicesQuery = useInvoices();
+  const allIncomesQuery = useIncomeTransactions();
 
   useEffect(() => {
     if (!projects?.length) {
@@ -408,16 +410,17 @@ export default function Invoices() {
         onExportExcel={() => exportInvoices("xlsx")}
       />
 
-      {allInvoicesQuery.isError || visualizationBuildingsQuery.isError ? (
+      {allInvoicesQuery.isError || allIncomesQuery.isError || visualizationBuildingsQuery.isError ? (
         <Alert
           showIcon
           type="error"
           message={t.invoicesTitle}
-          description={toErrorMessage(allInvoicesQuery.error ?? visualizationBuildingsQuery.error)}
+          description={toErrorMessage(allInvoicesQuery.error ?? allIncomesQuery.error ?? visualizationBuildingsQuery.error)}
           action={
             <Button
               onClick={() => {
                 void allInvoicesQuery.refetch();
+                void allIncomesQuery.refetch();
                 void visualizationBuildingsQuery.refetch();
               }}
             >
@@ -429,8 +432,9 @@ export default function Invoices() {
 
       <ProjectExpenseVisualization
         buildings={visualizationBuildingsQuery.data}
+        incomes={allIncomesQuery.data}
         invoices={allInvoicesQuery.data}
-        loading={allInvoicesQuery.isLoading || visualizationBuildingsQuery.isLoading}
+        loading={allInvoicesQuery.isLoading || allIncomesQuery.isLoading || visualizationBuildingsQuery.isLoading}
         projects={projects}
         projectLocked={scopedProjectId != null}
         selectedProjectId={selectedVisualizationProjectId}
@@ -516,6 +520,7 @@ export default function Invoices() {
           }}
           onSaved={() => {
             void erpInvalidation.income();
+            void allIncomesQuery.refetch();
           }}
         />
       ) : open ? (

@@ -74,6 +74,19 @@ html, body {
   max-width: 100%;
 }
 
+.erp-compact-expense-table .ant-table-thead > tr > th {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.erp-compact-expense-table .ant-table-tbody > tr > td {
+  padding: 4px 8px;
+}
+
+.erp-compact-expense-table .ant-empty-normal {
+  margin-block: 12px;
+}
+
 /* FullCalendar overrides */
 .erp-calendar .fc {
   --fc-border-color: #e5e0d5;

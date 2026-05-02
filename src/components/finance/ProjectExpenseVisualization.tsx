@@ -1,19 +1,30 @@
 import { Button, Empty, Select, Skeleton, Space, Table, Typography, type TableProps } from "antd";
 import { Plus } from "lucide-react";
-import type { Invoice, Project, ProjectBuilding } from "@/lib/erp";
+import { expenseTypeLabel } from "@/components/invoices/invoice-shared";
+import type { IncomeTransaction, Invoice, Project, ProjectBuilding } from "@/lib/erp";
 import { formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+
+type MoneyMovement = {
+  id: string;
+  type: "expense" | "income";
+  projectId: number | null;
+  buildingId: number | null;
+  buildingName: string | null;
+  date: string | null;
+  title: string;
+  amountUsd: number;
+  amountIqd: number;
+};
 
 type ExpenseSection = {
   buildingId: number | null;
   key: string;
   projectId: number | null;
   title: string;
-  invoices: Invoice[];
+  movements: MoneyMovement[];
   totalUsd: number;
   totalIqd: number;
-  remainingUsd: number;
-  remainingIqd: number;
 };
 
 type ExpenseAssignment = {
@@ -23,6 +34,7 @@ type ExpenseAssignment = {
 
 type ProjectExpenseVisualizationProps = {
   buildings?: ProjectBuilding[];
+  incomes?: IncomeTransaction[];
   invoices?: Invoice[];
   loading?: boolean;
   projects?: Project[];
@@ -32,28 +44,28 @@ type ProjectExpenseVisualizationProps = {
   onAddTransaction?: (assignment: ExpenseAssignment) => void;
 };
 
-function compareInvoicesByDate(left: Invoice, right: Invoice) {
-  const leftDate = left.invoiceDate ?? "9999-12-31";
-  const rightDate = right.invoiceDate ?? "9999-12-31";
+function compareMovementsByDate(left: MoneyMovement, right: MoneyMovement) {
+  const leftDate = left.date ?? "9999-12-31";
+  const rightDate = right.date ?? "9999-12-31";
   const dateSort = leftDate.localeCompare(rightDate);
 
   if (dateSort !== 0) {
     return dateSort;
   }
 
-  return left.number.localeCompare(right.number);
+  return left.title.localeCompare(right.title);
 }
 
 function buildSection({
   buildingId,
-  invoices,
   key,
+  movements,
   projectId,
   title,
 }: {
   buildingId: number | null;
-  invoices: Invoice[];
   key: string;
+  movements: MoneyMovement[];
   projectId: number | null;
   title: string;
 }): ExpenseSection {
@@ -62,69 +74,67 @@ function buildSection({
     key,
     projectId,
     title,
-    invoices: [...invoices].sort(compareInvoicesByDate),
-    totalUsd: invoices.reduce((total, invoice) => total + invoice.totalAmountUsd, 0),
-    totalIqd: invoices.reduce((total, invoice) => total + invoice.totalAmountIqd, 0),
-    remainingUsd: invoices.reduce((total, invoice) => total + invoice.remainingAmountUsd, 0),
-    remainingIqd: invoices.reduce((total, invoice) => total + invoice.remainingAmountIqd, 0),
+    movements: [...movements].sort(compareMovementsByDate),
+    totalUsd: movements.reduce((total, movement) => total + movement.amountUsd, 0),
+    totalIqd: movements.reduce((total, movement) => total + movement.amountIqd, 0),
   };
 }
 
 function buildSections({
   buildings,
-  invoices,
+  movements,
   projectWideTitle,
 }: {
   buildings: ProjectBuilding[];
-  invoices: Invoice[];
+  movements: MoneyMovement[];
   projectWideTitle: string;
 }) {
-  const invoicesByBuilding = new Map<number, Invoice[]>();
-  const projectWideInvoices: Invoice[] = [];
+  const movementsByBuilding = new Map<number, MoneyMovement[]>();
+  const projectWideMovements: MoneyMovement[] = [];
 
-  invoices.forEach((invoice) => {
-    if (invoice.buildingId == null) {
-      projectWideInvoices.push(invoice);
+  movements.forEach((movement) => {
+    if (movement.buildingId == null) {
+      projectWideMovements.push(movement);
       return;
     }
 
-    const current = invoicesByBuilding.get(invoice.buildingId) ?? [];
-    current.push(invoice);
-    invoicesByBuilding.set(invoice.buildingId, current);
+    const current = movementsByBuilding.get(movement.buildingId) ?? [];
+    current.push(movement);
+    movementsByBuilding.set(movement.buildingId, current);
   });
 
   const knownBuildingIds = new Set(buildings.map((building) => building.id));
   const sections = buildings.map((building) =>
     buildSection({
       buildingId: building.id,
-      invoices: invoicesByBuilding.get(building.id) ?? [],
       key: `building-${building.id}`,
+      movements: movementsByBuilding.get(building.id) ?? [],
       projectId: building.projectId,
       title: building.name,
     }),
   );
 
-  invoicesByBuilding.forEach((buildingInvoices, buildingId) => {
+  movementsByBuilding.forEach((buildingMovements, buildingId) => {
     if (!knownBuildingIds.has(buildingId)) {
       sections.push(
         buildSection({
           buildingId,
-          invoices: buildingInvoices,
           key: `building-${buildingId}`,
-          projectId: buildingInvoices[0]?.projectId ?? null,
-          title: buildingInvoices[0]?.buildingName ?? projectWideTitle,
+          movements: buildingMovements,
+          projectId: buildingMovements[0]?.projectId ?? null,
+          title: buildingMovements[0]?.buildingName ?? projectWideTitle,
         }),
       );
     }
   });
 
-  if (projectWideInvoices.length || !sections.length) {
+  if (projectWideMovements.length || !sections.length) {
     sections.push(
       buildSection({
         buildingId: null,
-        invoices: projectWideInvoices,
         key: "project-wide",
-        projectId: projectWideInvoices[0]?.projectId ?? null,
+        movements: projectWideMovements,
+        projectId: projectWideMovements[0]?.projectId ?? null,
         title: projectWideTitle,
       }),
     );
@@ -133,19 +143,99 @@ function buildSections({
   return sections;
 }
 
+function invoiceToMovement(invoice: Invoice, t: ReturnType<typeof useLang>["t"]): MoneyMovement {
+  return {
+    id: `expense-${invoice.id}`,
+    type: "expense",
+    projectId: invoice.projectId,
+    buildingId: invoice.buildingId,
+    buildingName: invoice.buildingName,
+    date: invoice.invoiceDate,
+    title: compactInvoiceTitle(invoice, t),
+    amountUsd: -invoice.totalAmountUsd,
+    amountIqd: -invoice.totalAmountIqd,
+  };
+}
+
+function incomeToMovement(income: IncomeTransaction, fallbackTitle: string): MoneyMovement {
+  return {
+    id: `income-${income.id}`,
+    type: "income",
+    projectId: income.projectId,
+    buildingId: income.buildingId,
+    buildingName: income.buildingName,
+    date: income.date,
+    title: income.description?.trim() || fallbackTitle,
+    amountUsd: income.amountUsd,
+    amountIqd: income.amountIqd,
+  };
+}
+
+function sumMovements(movements: MoneyMovement[], type?: MoneyMovement["type"]) {
+  return movements.reduce(
+    (totals, movement) => {
+      if (type && movement.type !== type) {
+        return totals;
+      }
+
+      return {
+        usd: totals.usd + movement.amountUsd,
+        iqd: totals.iqd + movement.amountIqd,
+      };
+    },
+    { usd: 0, iqd: 0 },
+  );
+}
+
+function amountTone(amounts: { usd: number; iqd: number }) {
+  if (amounts.usd > 0 || amounts.iqd > 0) {
+    return "success";
+  }
+
+  if (amounts.usd < 0 || amounts.iqd < 0) {
+    return "danger";
+  }
+
+  return undefined;
+}
+
+function removeTitlePrefix(title: string, prefix: string | null | undefined) {
+  if (!prefix) {
+    return title;
+  }
+
+  const scopedPrefix = `${prefix} - `;
+  return title.startsWith(scopedPrefix) ? title.slice(scopedPrefix.length).trim() : title;
+}
+
+function compactInvoiceTitle(invoice: Invoice, t: ReturnType<typeof useLang>["t"]) {
+  const titleWithoutScope = [invoice.projectName, invoice.buildingName].reduce(
+    (title, prefix) => removeTitlePrefix(title, prefix),
+    invoice.number.trim(),
+  );
+
+  if (titleWithoutScope) {
+    return titleWithoutScope;
+  }
+
+  return [
+    expenseTypeLabel(invoice.expenseType, t),
+    invoice.laborWorkerName ?? invoice.laborPersonName,
+    invoice.productName ?? invoice.supplierName,
+  ].filter(Boolean).join(" - ");
+}
+
 function ExpensePanel({
   addTransactionLabel,
   columns,
   section,
-  remainingLabel,
   totalLabel,
   emptyText,
   onAddTransaction,
 }: {
   addTransactionLabel: string;
-  columns: TableProps<Invoice>["columns"];
+  columns: TableProps<MoneyMovement>["columns"];
   section: ExpenseSection;
-  remainingLabel: string;
   totalLabel: string;
   emptyText: string;
   onAddTransaction?: (assignment: ExpenseAssignment) => void;
@@ -178,35 +268,26 @@ function ExpensePanel({
         </span>
       </div>
 
-      <Table<Invoice>
+      <Table<MoneyMovement>
         columns={columns}
-        dataSource={section.invoices}
+        dataSource={section.movements}
         locale={{ emptyText }}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 460 }}
+        scroll={{ x: 360 }}
         size="small"
+        className="erp-compact-expense-table"
       />
 
-      <div style={{ borderTop: "1px solid #e5e0d5", background: "#fff", padding: "8px 12px" }}>
-        <div className="erp-invoice-amount-pair">
-          <div className="erp-invoice-amount-cell">
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{totalLabel}</Typography.Text>
-            <div>
-              <Typography.Text strong>
-                {formatCurrencyPair({ usd: section.totalUsd, iqd: section.totalIqd })}
-              </Typography.Text>
-            </div>
-          </div>
-          <div className="erp-invoice-amount-cell">
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{remainingLabel}</Typography.Text>
-            <div>
-              <Typography.Text strong type="warning">
-                {formatCurrencyPair({ usd: section.remainingUsd, iqd: section.remainingIqd }, { hideZero: true })}
-              </Typography.Text>
-            </div>
-          </div>
-        </div>
+      <div style={{ display: "flex", minHeight: 44, alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid #e5e0d5", background: "#fff", padding: "6px 12px" }}>
+        <Typography.Text strong>{totalLabel}</Typography.Text>
+        <Typography.Text
+          strong
+          type={section.totalUsd > 0 || section.totalIqd > 0 ? "success" : section.totalUsd < 0 || section.totalIqd < 0 ? "danger" : undefined}
+          style={{ textAlign: "right" }}
+        >
+          {formatCurrencyPair({ usd: section.totalUsd, iqd: section.totalIqd })}
+        </Typography.Text>
       </div>
     </section>
   );
@@ -214,6 +295,7 @@ function ExpensePanel({
 
 export default function ProjectExpenseVisualization({
   buildings = [],
+  incomes = [],
   invoices = [],
   loading = false,
   projects = [],
@@ -226,51 +308,52 @@ export default function ProjectExpenseVisualization({
   const projectInvoices = invoices.filter(
     (invoice) => invoice.projectId === selectedProjectId && invoice.recordStatus === "active",
   );
+  const projectIncomes = incomes.filter(
+    (income) => income.projectId === selectedProjectId && income.recordStatus === "active",
+  );
+  const projectMovements = [
+    ...projectInvoices.map((invoice) => invoiceToMovement(invoice, t)),
+    ...projectIncomes.map((income) => incomeToMovement(income, t.income)),
+  ];
+  const allBuildingsIncomeTotal = sumMovements(projectMovements, "income");
+  const allBuildingsExpenseTotal = sumMovements(projectMovements, "expense");
+  const allBuildingsNetTotal = sumMovements(projectMovements);
   const sections = buildSections({
     buildings,
-    invoices: projectInvoices,
+    movements: projectMovements,
     projectWideTitle: t.projectGlobalCost,
   });
-  const columns: TableProps<Invoice>["columns"] = [
+  const columns: TableProps<MoneyMovement>["columns"] = [
     {
       title: t.date,
-      dataIndex: "invoiceDate",
-      width: 116,
-      render: (_value: string | null, invoice) => formatDate(invoice.invoiceDate),
+      dataIndex: "date",
+      width: 88,
+      render: (_value: string | null, movement) => formatDate(movement.date),
     },
     {
       title: t.expenseTitle,
-      dataIndex: "number",
-      render: (_value: string, invoice) => (
-        <Space direction="vertical" size={0} style={{ minWidth: 0, width: "100%" }}>
-          <Typography.Text ellipsis={{ tooltip: invoice.number }} strong>
-            {invoice.number}
-          </Typography.Text>
-          <div className="erp-invoice-amount-pair" style={{ marginTop: 2 }}>
-            <div className="erp-invoice-amount-cell">
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.totalAmount}</Typography.Text>
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {formatCurrencyPair(
-                    { usd: invoice.totalAmountUsd, iqd: invoice.totalAmountIqd },
-                    { hideZero: true },
-                  )}
-                </Typography.Text>
-              </div>
-            </div>
-            <div className="erp-invoice-amount-cell">
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.remaining_label}</Typography.Text>
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {formatCurrencyPair(
-                    { usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd },
-                    { hideZero: true },
-                  )}
-                </Typography.Text>
-              </div>
-            </div>
-          </div>
-        </Space>
+      dataIndex: "title",
+      render: (_value: string, movement) => (
+        <Typography.Text
+          ellipsis={{ tooltip: movement.title }}
+          strong
+          type={movement.type === "income" ? "success" : "danger"}
+          style={{ fontSize: 13 }}
+        >
+          {movement.title}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: t.totalAmount,
+      dataIndex: "amountUsd",
+      align: "right",
+      width: 132,
+      render: (_value: number, movement) => (
+        <Typography.Text strong type={movement.type === "income" ? "success" : "danger"} style={{ fontSize: 13 }}>
+          {movement.type === "income" ? "+ " : "- "}
+          {formatCurrencyPair({ usd: Math.abs(movement.amountUsd), iqd: Math.abs(movement.amountIqd) }, { hideZero: true })}
+        </Typography.Text>
       ),
     },
   ];
@@ -278,22 +361,46 @@ export default function ProjectExpenseVisualization({
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <div style={{ borderRadius: 8, border: "1px solid #e5e0d5", background: "#fff", padding: "12px 16px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-        <Space direction="vertical" size={6} style={{ width: "100%" }}>
-          <Typography.Text strong>{t.projectOption}</Typography.Text>
-          <Select<number>
-            disabled={projectLocked || !projects.length}
-            options={projects.map((project) => ({ label: project.name, value: project.id }))}
-            placeholder={t.allProjects}
-            showSearch
-            optionFilterProp="label"
-            style={{ width: "100%", maxWidth: 420 }}
-            value={selectedProjectId ?? undefined}
-            onChange={onProjectChange}
-          />
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <Space direction="vertical" size={6} style={{ minWidth: 240, flex: "1 1 320px" }}>
+            <Typography.Text strong>{t.projectOption}</Typography.Text>
+            <Select<number>
+              disabled={projectLocked || !projects.length}
+              options={projects.map((project) => ({ label: project.name, value: project.id }))}
+              placeholder={t.allProjects}
+              showSearch
+              optionFilterProp="label"
+              style={{ width: "100%", maxWidth: 420 }}
+              value={selectedProjectId ?? undefined}
+              onChange={onProjectChange}
+            />
+            {selectedProjectId != null ? (
+              <Typography.Text type="secondary">{t.expense_count(projectMovements.length)}</Typography.Text>
+            ) : null}
+          </Space>
           {selectedProjectId != null ? (
-            <Typography.Text type="secondary">{t.expense_count(projectInvoices.length)}</Typography.Text>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 12, flex: "1 1 420px" }}>
+              <Space direction="vertical" size={0} style={{ minWidth: 0 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.income}</Typography.Text>
+                <Typography.Text strong type="success" style={{ textAlign: "right" }}>
+                  + {formatCurrencyPair(allBuildingsIncomeTotal, { hideZero: true })}
+                </Typography.Text>
+              </Space>
+              <Space direction="vertical" size={0} style={{ minWidth: 0 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.expenses}</Typography.Text>
+                <Typography.Text strong type="danger" style={{ textAlign: "right" }}>
+                  - {formatCurrencyPair({ usd: Math.abs(allBuildingsExpenseTotal.usd), iqd: Math.abs(allBuildingsExpenseTotal.iqd) }, { hideZero: true })}
+                </Typography.Text>
+              </Space>
+              <Space direction="vertical" size={0} style={{ minWidth: 0 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.totalAmount}</Typography.Text>
+                <Typography.Text strong type={amountTone(allBuildingsNetTotal)} style={{ textAlign: "right" }}>
+                  {formatCurrencyPair(allBuildingsNetTotal)}
+                </Typography.Text>
+              </Space>
+            </div>
           ) : null}
-        </Space>
+        </div>
       </div>
 
       {loading ? (
@@ -309,7 +416,6 @@ export default function ProjectExpenseVisualization({
               columns={columns}
               emptyText={t.noExpenses}
               onAddTransaction={onAddTransaction}
-              remainingLabel={t.remaining_label}
               section={section}
               totalLabel={t.totalAmount}
             />
