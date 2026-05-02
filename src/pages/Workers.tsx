@@ -20,7 +20,15 @@ import {
   type TableProps,
 } from "antd";
 import { Download, FileSpreadsheet, Plus } from "lucide-react";
-import { createWorker, erpKeys, listWorkerBalances, listWorkers } from "@/lib/erp";
+import {
+  createWorker,
+  erpKeys,
+  listSpecialities,
+  listWorkerBalances,
+  listWorkers,
+  updateWorkerSpecialities,
+  type Speciality,
+} from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
@@ -49,6 +57,7 @@ type WorkerFormValues = {
   role: string;
   category?: string;
   phone?: string;
+  specialityIds?: number[];
 };
 
 function buildFilters(search: string, category: string) {
@@ -69,6 +78,10 @@ function WorkerModal({
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<WorkerFormValues>();
+  const { data: specialities = [], isLoading: specialitiesLoading } = useQuery({
+    queryKey: erpKeys.specialities,
+    queryFn: listSpecialities,
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (values: WorkerFormValues) => {
@@ -79,7 +92,10 @@ function WorkerModal({
         phone: values.phone?.trim() || null,
       };
 
-      await createWorker(payload);
+      const workerId = await createWorker(payload);
+      if (values.specialityIds?.length) {
+        await updateWorkerSpecialities(workerId, values.specialityIds);
+      }
     },
     onSuccess: async () => {
       await erpInvalidation.workers();
@@ -131,6 +147,24 @@ function WorkerModal({
             </Form.Item>
           </Col>
         </Row>
+
+        <Form.Item name="specialityIds" label={t.specialities}>
+          <Select<number, { label: string; value: number }>
+            allowClear
+            mode="multiple"
+            loading={specialitiesLoading}
+            optionFilterProp="label"
+            placeholder={specialities.length ? t.specialitiesPlaceholder : t.noSpecialities}
+            showSearch
+            options={specialities.map((speciality: Speciality) => ({
+              label: speciality.name,
+              value: speciality.id,
+            }))}
+          />
+        </Form.Item>
+        <Typography.Text type="secondary" style={{ display: "block", marginTop: -16 }}>
+          {t.specialitiesHelp}
+        </Typography.Text>
       </Form>
     </Modal>
   );

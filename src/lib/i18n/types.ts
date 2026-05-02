@@ -107,6 +107,10 @@ export type TranslationShape = {
   addWorker: string;
   name: string;
   role: string;
+  specialities: string;
+  specialitiesPlaceholder: string;
+  specialitiesHelp: string;
+  noSpecialities: string;
   phone: string;
   balance: string;
   toReceive: string;

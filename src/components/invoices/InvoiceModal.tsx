@@ -8,6 +8,7 @@ import {
   buildingExpenseAssignmentKey,
   expenseAssignmentKeyFromRecord,
   parseExpenseAssignmentKey,
+  type ExpenseAssignment,
 } from "@/lib/expense-assignment";
 import { EXPENSE_TYPES, asExpenseType, type ExpenseType } from "@/lib/expense-types";
 import { currencyInputProps, formatCurrencyLabel, formatDateInput } from "@/lib/format";
@@ -92,10 +93,12 @@ function InvoiceImageField({
 
 export function InvoiceModal({
   invoice,
+  initialAssignment,
   onClose,
   onSaved,
 }: {
   invoice?: InvoiceRow;
+  initialAssignment?: ExpenseAssignment;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -118,6 +121,11 @@ export function InvoiceModal({
   const { data: workers } = useWorkers();
   const { data: projectBuildings } = useProjectBuildings();
   const effectiveAssignmentKey = assignmentKey;
+  const initialAssignmentKey =
+    invoice == null && initialAssignment?.projectId != null && initialAssignment.buildingId != null
+      ? buildingExpenseAssignmentKey(initialAssignment.buildingId, initialAssignment.projectId)
+      : undefined;
+  const assignmentLocked = initialAssignmentKey != null;
   const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
 
@@ -366,7 +374,7 @@ export function InvoiceModal({
           laborWorkerId: invoice?.labor_worker_id ?? undefined,
           supplierId: invoice?.supplier_id ?? undefined,
           assignmentKey:
-            invoice ? expenseAssignmentKeyFromRecord(invoice.project_id, invoice.building_id) : undefined,
+            invoice ? expenseAssignmentKeyFromRecord(invoice.project_id, invoice.building_id) : initialAssignmentKey,
           productId: invoice?.product_id ?? undefined,
           paidAmountUsd: invoice?.paid_amount_usd ?? (asCurrency(invoice?.currency) === "USD" ? invoice?.paid_amount ?? 0 : 0),
           remainingAmountUsd:
@@ -394,6 +402,7 @@ export function InvoiceModal({
           <Col xs={24} md={12}>
             <Form.Item name="assignmentKey" label={t.invoiceAssignment} rules={[{ required: true, message: t.requiredField }]}>
               <Select
+                disabled={assignmentLocked}
                 showSearch
                 optionFilterProp="label"
                 placeholder={t.noneOption}

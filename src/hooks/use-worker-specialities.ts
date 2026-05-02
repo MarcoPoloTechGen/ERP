@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App } from "antd";
-import { erpKeys, createWorkerSpeciality, deleteWorkerSpeciality, getWorkerSpecialities, listSpecialities, updateWorkerSpecialities } from "@/lib/erp";
+import { erpKeys, getWorkerSpecialities, listSpecialities, updateWorkerSpecialities } from "@/lib/erp";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 import { useLang } from "@/lib/i18n";

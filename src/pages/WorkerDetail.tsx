@@ -26,19 +26,18 @@ import {
   deleteWorkerTransaction,
   erpKeys,
   getAppSettings,
+  getWorkerSpecialities,
   getWorker,
   listProjectBuildings,
   listInvoices,
   listProjects,
+  listSpecialities,
   listWorkerTransactions,
   updateWorker,
   updateWorkerTransaction,
-  type WorkerTransaction,
-  listSpecialities,
   updateWorkerSpecialities,
-  type Speciality,
+  type WorkerTransaction,
 } from "@/lib/erp";
-import { useCreateWorkerSpecialities } from "@/hooks/use-create-expense";
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";
@@ -62,7 +61,18 @@ type WorkerFormValues = {
   role: string;
   category?: string;
   phone?: string;
+  specialityIds?: number[];
 };
+
+function sameIds(left: number[], right: number[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const sortedLeft = [...left].sort((a, b) => a - b);
+  const sortedRight = [...right].sort((a, b) => a - b);
+  return sortedLeft.every((id, index) => id === sortedRight[index]);
+}
 
 function WorkerTransactionModal({
   transaction,
@@ -260,6 +270,21 @@ function WorkerFormModal({
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<WorkerFormValues>();
+  const { data: specialities = [], isLoading: specialitiesLoading } = useQuery({
+    queryKey: erpKeys.specialities,
+    queryFn: listSpecialities,
+  });
+  const { data: workerSpecialities = [] } = useQuery({
+    queryKey: erpKeys.workerSpecialities(worker.id),
+    queryFn: () => getWorkerSpecialities(worker.id),
+  });
+
+  useEffect(() => {
+    form.setFieldValue(
+      "specialityIds",
+      workerSpecialities.map((speciality) => speciality.specialityId),
+    );
+  }, [form, workerSpecialities]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: WorkerFormValues) => {
@@ -271,6 +296,7 @@ function WorkerFormModal({
       };
 
       await updateWorker(worker.id, payload);
+      await updateWorkerSpecialities(worker.id, values.specialityIds ?? []);
     },
     onSuccess: async () => {
       await erpInvalidation.workerDetail(worker.id);
@@ -322,8 +348,95 @@ function WorkerFormModal({
             </Form.Item>
           </Col>
         </Row>
+
+        <Form.Item name="specialityIds" label={t.specialities}>
+          <Select
+            allowClear
+            mode="multiple"
+            loading={specialitiesLoading}
+            optionFilterProp="label"
+            placeholder={specialities.length ? t.specialitiesPlaceholder : t.noSpecialities}
+            showSearch
+            options={specialities.map((speciality) => ({
+              label: speciality.name,
+              value: speciality.id,
+            }))}
+          />
+        </Form.Item>
+        <Typography.Text type="secondary" style={{ display: "block", marginTop: -16 }}>
+          {t.specialitiesHelp}
+        </Typography.Text>
       </Form>
     </Modal>
+  );
+}
+
+function WorkerSpecialitiesSection({ workerId }: { workerId: number }) {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const { data: specialities = [], isLoading: specialitiesLoading } = useQuery({
+    queryKey: erpKeys.specialities,
+    queryFn: listSpecialities,
+  });
+  const { data: workerSpecialities = [], isLoading: workerSpecialitiesLoading } = useQuery({
+    queryKey: erpKeys.workerSpecialities(workerId),
+    queryFn: () => getWorkerSpecialities(workerId),
+    enabled: Number.isFinite(workerId),
+  });
+  const savedIds = useMemo(
+    () => workerSpecialities.map((speciality) => speciality.specialityId),
+    [workerSpecialities],
+  );
+  const hasChanges = !sameIds(savedIds, selectedIds);
+
+  useEffect(() => {
+    setSelectedIds(savedIds);
+  }, [savedIds]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => updateWorkerSpecialities(workerId, selectedIds),
+    onSuccess: async () => {
+      await erpInvalidation.workerSpecialities(workerId);
+      message.success(t.saved);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Card
+      title={t.specialities}
+      extra={
+        <Button
+          type="primary"
+          disabled={!hasChanges}
+          loading={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+        >
+          {t.save}
+        </Button>
+      }
+    >
+      <Space direction="vertical" size="small" style={{ width: "100%" }}>
+        <Select
+          allowClear
+          mode="multiple"
+          loading={specialitiesLoading || workerSpecialitiesLoading}
+          optionFilterProp="label"
+          placeholder={specialities.length ? t.specialitiesPlaceholder : t.noSpecialities}
+          showSearch
+          style={{ width: "100%" }}
+          value={selectedIds}
+          onChange={setSelectedIds}
+          options={specialities.map((speciality) => ({
+            label: speciality.name,
+            value: speciality.id,
+          }))}
+        />
+        <Typography.Text type="secondary">{t.specialitiesHelp}</Typography.Text>
+      </Space>
+    </Card>
   );
 }
 
@@ -498,6 +611,8 @@ export default function WorkerDetail() {
           title={t.transactions}
         />
       )}
+
+      <WorkerSpecialitiesSection workerId={worker.id} />
 
       <Card
         title={t.transactions}

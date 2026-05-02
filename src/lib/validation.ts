@@ -1,5 +1,4 @@
 import { getStoredLang } from "@/lib/i18n";
-import { z } from "zod";
 
 export type InvoiceValidationInput = {
   totalAmount: number;
@@ -236,20 +235,3 @@ export function validateProjectInput(input: ProjectValidationInput) {
   assertNonNegativeAmount(input.budget, "Budget");
   assertDateOrder(input.startDate, input.endDate, "start date", "end date");
 }
-
-export const listSpecialitiesSchema = z.array(
-  z.object({
-    id: z.number(),
-    name: z.string(),
-  }),
-);
-
-export const insertWorkerSpecialitySchema = z.object({
-  workerId: z.number(),
-  specialityId: z.number(),
-});
-
-export const updateWorkerSpecialitySchema = z.object({
-  workerId: z.number(),
-  specialityIds: z.array(z.number()),
-});

@@ -1,14 +1,22 @@
-import { Empty, Select, Skeleton, Space, Table, Typography, type TableProps } from "antd";
+import { Button, Empty, Select, Skeleton, Space, Table, Typography, type TableProps } from "antd";
+import { Plus } from "lucide-react";
 import type { Invoice, Project, ProjectBuilding } from "@/lib/erp";
 import { formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
 type ExpenseSection = {
+  buildingId: number | null;
   key: string;
+  projectId: number | null;
   title: string;
   invoices: Invoice[];
   totalUsd: number;
   totalIqd: number;
+};
+
+type ExpenseAssignment = {
+  projectId: number;
+  buildingId: number;
 };
 
 type ProjectExpenseVisualizationProps = {
@@ -19,6 +27,7 @@ type ProjectExpenseVisualizationProps = {
   projectLocked?: boolean;
   selectedProjectId: number | null;
   onProjectChange: (projectId: number) => void;
+  onAddTransaction?: (assignment: ExpenseAssignment) => void;
 };
 
 function compareInvoicesByDate(left: Invoice, right: Invoice) {
@@ -33,9 +42,23 @@ function compareInvoicesByDate(left: Invoice, right: Invoice) {
   return left.number.localeCompare(right.number);
 }
 
-function buildSection(key: string, title: string, invoices: Invoice[]): ExpenseSection {
+function buildSection({
+  buildingId,
+  invoices,
+  key,
+  projectId,
+  title,
+}: {
+  buildingId: number | null;
+  invoices: Invoice[];
+  key: string;
+  projectId: number | null;
+  title: string;
+}): ExpenseSection {
   return {
+    buildingId,
     key,
+    projectId,
     title,
     invoices: [...invoices].sort(compareInvoicesByDate),
     totalUsd: invoices.reduce((total, invoice) => total + invoice.totalAmountUsd, 0),
@@ -68,43 +91,85 @@ function buildSections({
 
   const knownBuildingIds = new Set(buildings.map((building) => building.id));
   const sections = buildings.map((building) =>
-    buildSection(`building-${building.id}`, building.name, invoicesByBuilding.get(building.id) ?? []),
+    buildSection({
+      buildingId: building.id,
+      invoices: invoicesByBuilding.get(building.id) ?? [],
+      key: `building-${building.id}`,
+      projectId: building.projectId,
+      title: building.name,
+    }),
   );
 
   invoicesByBuilding.forEach((buildingInvoices, buildingId) => {
     if (!knownBuildingIds.has(buildingId)) {
       sections.push(
-        buildSection(
-          `building-${buildingId}`,
-          buildingInvoices[0]?.buildingName ?? projectWideTitle,
-          buildingInvoices,
-        ),
+        buildSection({
+          buildingId,
+          invoices: buildingInvoices,
+          key: `building-${buildingId}`,
+          projectId: buildingInvoices[0]?.projectId ?? null,
+          title: buildingInvoices[0]?.buildingName ?? projectWideTitle,
+        }),
       );
     }
   });
 
   if (projectWideInvoices.length || !sections.length) {
-    sections.push(buildSection("project-wide", projectWideTitle, projectWideInvoices));
+    sections.push(
+      buildSection({
+        buildingId: null,
+        invoices: projectWideInvoices,
+        key: "project-wide",
+        projectId: projectWideInvoices[0]?.projectId ?? null,
+        title: projectWideTitle,
+      }),
+    );
   }
 
   return sections;
 }
 
 function ExpensePanel({
+  addTransactionLabel,
   columns,
   section,
   totalLabel,
   emptyText,
+  onAddTransaction,
 }: {
+  addTransactionLabel: string;
   columns: TableProps<Invoice>["columns"];
   section: ExpenseSection;
   totalLabel: string;
   emptyText: string;
+  onAddTransaction?: (assignment: ExpenseAssignment) => void;
 }) {
+  const canAddTransaction = section.projectId != null && section.buildingId != null;
+
   return (
     <section style={{ minWidth: 0, overflow: "hidden", borderRadius: 8, border: "1px solid #e5e0d5", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-      <div style={{ borderBottom: "1px solid #e5e0d5", background: "#f8f6f0", padding: "6px 12px", textAlign: "center" }}>
-        <Typography.Text strong>{section.title}</Typography.Text>
+      <div style={{ display: "flex", minHeight: 52, alignItems: "center", justifyContent: "space-between", gap: 8, borderBottom: "1px solid #e5e0d5", background: "#f8f6f0", padding: "6px 12px" }}>
+        <span style={{ flex: "1 1 0" }} />
+        <Typography.Text strong style={{ minWidth: 0, flex: "2 1 auto", textAlign: "center" }}>
+          {section.title}
+        </Typography.Text>
+        <span style={{ display: "flex", flex: "1 1 0", justifyContent: "flex-end" }}>
+          {canAddTransaction && onAddTransaction ? (
+            <Button
+              aria-label={`${addTransactionLabel} - ${section.title}`}
+              icon={<Plus size={14} />}
+              size="small"
+              type="text"
+              onClick={() => {
+                if (section.projectId != null && section.buildingId != null) {
+                  onAddTransaction({ projectId: section.projectId, buildingId: section.buildingId });
+                }
+              }}
+            >
+              {addTransactionLabel}
+            </Button>
+          ) : null}
+        </span>
       </div>
 
       <Table<Invoice>
@@ -135,6 +200,7 @@ export default function ProjectExpenseVisualization({
   projectLocked = false,
   selectedProjectId,
   onProjectChange,
+  onAddTransaction,
 }: ProjectExpenseVisualizationProps) {
   const { t } = useLang();
   const projectInvoices = invoices.filter(
@@ -201,8 +267,10 @@ export default function ProjectExpenseVisualization({
           {sections.map((section) => (
             <ExpensePanel
               key={section.key}
+              addTransactionLabel={t.addTransaction}
               columns={columns}
               emptyText={t.noExpenses}
+              onAddTransaction={onAddTransaction}
               section={section}
               totalLabel={t.totalAmount}
             />

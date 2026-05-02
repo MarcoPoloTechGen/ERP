@@ -103,6 +103,9 @@ export default function Invoices() {
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
+  const [initialInvoiceAssignment, setInitialInvoiceAssignment] = useState<
+    { projectId: number; buildingId: number } | undefined
+  >();
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
@@ -323,6 +326,7 @@ export default function Invoices() {
           onDelete={() => deleteMutation.mutate(invoice)}
           onEdit={() => {
             setSelectedInvoice(invoice);
+            setInitialInvoiceAssignment(undefined);
             setOpen(true);
           }}
         />
@@ -381,6 +385,7 @@ export default function Invoices() {
         title={t.invoicesTitle}
         onAdd={() => {
           setSelectedInvoice(undefined);
+          setInitialInvoiceAssignment(undefined);
           setOpen(true);
         }}
         onExportCsv={() => exportInvoices("csv")}
@@ -413,6 +418,11 @@ export default function Invoices() {
         projects={projects}
         projectLocked={scopedProjectId != null}
         selectedProjectId={selectedVisualizationProjectId}
+        onAddTransaction={(assignment) => {
+          setSelectedInvoice(undefined);
+          setInitialInvoiceAssignment(assignment);
+          setOpen(true);
+        }}
         onProjectChange={setVisualizationProjectId}
       />
 
@@ -478,8 +488,15 @@ export default function Invoices() {
       {open ? (
         <InvoiceModal
           invoice={selectedInvoice}
-          onClose={() => setOpen(false)}
-          onSaved={() => void tableQuery.refetch()}
+          initialAssignment={initialInvoiceAssignment}
+          onClose={() => {
+            setOpen(false);
+            setInitialInvoiceAssignment(undefined);
+          }}
+          onSaved={() => {
+            void tableQuery.refetch();
+            void allInvoicesQuery.refetch();
+          }}
         />
       ) : null}
     </Space>

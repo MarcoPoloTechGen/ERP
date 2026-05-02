@@ -29,6 +29,10 @@ type TableUpdatePayload<Name extends TableName> = TablesUpdate<Name>;
 type RpcArgs<Name extends RpcName> = Database["public"]["Functions"][Name]["Args"];
 type RpcReturns<Name extends RpcName> = Database["public"]["Functions"][Name]["Returns"];
 
+function fromUntyped(tableName: string) {
+  return (supabase as any).from(tableName);
+}
+
 type ProfileRow = TableRow<"profiles">;
 type AppSettingsRow = TableRow<"app_settings">;
 type ProjectMembershipRow = TableRow<"project_memberships">;
@@ -46,10 +50,13 @@ type AppIncomeTransactionHistoryRow = ViewRow<"app_income_transaction_history">;
 type AppIncomeTransactionRow = ViewRow<"app_income_transactions">;
 
 type WorkerWritePayload = Pick<TableInsertPayload<"workers">, "name" | "role" | "category" | "phone">;
-type SupplierWritePayload = Pick<
-  TableInsertPayload<"suppliers">,
-  "name" | "contact" | "phone" | "email" | "address"
->;
+type SupplierWritePayload = {
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+};
 type ProductWritePayload = Pick<
   TableInsertPayload<"materials">,
   | "name"
@@ -607,6 +614,8 @@ export const erpKeys = {
   dashboard: ["dashboard"] as const,
   workers: ["workers"] as const,
   worker: (id: number) => ["worker", id] as const,
+  specialities: ["specialities"] as const,
+  workerSpecialities: (workerId: number) => ["worker", workerId, "specialities"] as const,
   workerTransactionsList: ["workerTransactions"] as const,
   workerTransactions: (workerId: number) => ["workerTransactions", workerId] as const,
   suppliers: ["suppliers"] as const,
@@ -1411,8 +1420,7 @@ async function resolveBuildingId(projectId: number | null, buildingId: number | 
 }
 
 async function replaceTransactionPhoto(transactionId: number, imagePath: string | null, userId: string | null) {
-  const { error: deleteError } = await supabase
-    .from("transaction_photos")
+  const { error: deleteError } = await fromUntyped("transaction_photos")
     .delete()
     .eq("transaction_id", transactionId);
 
@@ -1424,7 +1432,7 @@ async function replaceTransactionPhoto(transactionId: number, imagePath: string 
     return;
   }
 
-  const { error: insertError } = await supabase.from("transaction_photos").insert({
+  const { error: insertError } = await fromUntyped("transaction_photos").insert({
     transaction_id: transactionId,
     storage_path: imagePath,
     created_by: userId,
@@ -2108,10 +2116,12 @@ export async function getWorker(id: number): Promise<Worker> {
 
 export async function createWorker(input: WorkerInput) {
   const payload = normalizeWorkerInput(input);
-  const { error } = await supabase.from("workers").insert(payload);
+  const { data, error } = await supabase.from("workers").insert(payload).select("id").single();
   if (error) {
     throw new Error(error.message);
   }
+
+  return readId(asRow(data), "id");
 }
 
 export async function updateWorker(id: number, input: WorkerInput) {
@@ -2215,7 +2225,7 @@ export async function listWorkerBalances(): Promise<WorkerBalance[]> {
 
 export async function createSupplier(input: SupplierInput) {
   const payload = normalizeSupplierInput(input);
-  const { error } = await supabase.from("suppliers").insert(payload);
+  const { error } = await fromUntyped("suppliers").insert(payload);
   if (error) {
     throw new Error(error.message);
   }
@@ -2223,14 +2233,14 @@ export async function createSupplier(input: SupplierInput) {
 
 export async function updateSupplier(id: number, input: SupplierInput) {
   const payload = normalizeSupplierInput(input);
-  const { error } = await supabase.from("suppliers").update(payload).eq("id", id);
+  const { error } = await fromUntyped("suppliers").update(payload).eq("id", id);
   if (error) {
     throw new Error(error.message);
   }
 }
 
 export async function deleteSupplier(id: number) {
-  const { error } = await supabase.from("suppliers").delete().eq("id", id);
+  const { error } = await fromUntyped("suppliers").delete().eq("id", id);
   if (error) {
     throw new Error(error.message);
   }

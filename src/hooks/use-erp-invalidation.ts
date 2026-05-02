@@ -83,6 +83,7 @@ export function useErpInvalidation() {
       workerDetail: (workerId: number) =>
         invalidateGroup(queryClient, [
           erpKeys.worker(workerId),
+          erpKeys.workerSpecialities(workerId),
           erpKeys.workerTransactions(workerId),
           erpKeys.workers,
           erpKeys.workerBalances,
@@ -94,6 +95,11 @@ export function useErpInvalidation() {
           erpKeys.workerTransactionsList,
           erpKeys.workerBalances,
           erpKeys.dashboard,
+        ]),
+      workerSpecialities: (workerId: number) =>
+        invalidateGroup(queryClient, [
+          erpKeys.workerSpecialities(workerId),
+          erpKeys.specialities,
         ]),
     }),
     [queryClient],
