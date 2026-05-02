@@ -6,7 +6,6 @@ import {
   App,
   Alert,
   Button,
-  Segmented,
   Image as AntImage,
   Space,
   Table,
@@ -17,9 +16,7 @@ import {
 import FinanceFilters from "@/components/finance/FinanceFilters";
 import FinancePageHeader from "@/components/finance/FinancePageHeader";
 import FinanceRowActions from "@/components/finance/FinanceRowActions";
-import ProjectExpenseVisualization from "@/components/finance/ProjectExpenseVisualization";
 import { standardPagination } from "@/components/finance/table";
-import { IncomeModal } from "@/components/income/IncomeModal";
 import { InvoiceModal } from "@/components/invoices/InvoiceModal";
 import {
   expenseTypeLabel,
@@ -33,7 +30,6 @@ import {
   type InvoiceStatus,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
-import type { ExpenseAssignment } from "@/lib/expense-assignment";
 import { asExpenseType } from "@/lib/expense-types";
 import { formatCurrencyLabel, formatCurrencyPair, formatDate, formatDateInput } from "@/lib/format";
 import {
@@ -50,9 +46,7 @@ import {
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
-import { useIncomeTransactions } from "@/hooks/use-income";
-import { useInvoices } from "@/hooks/use-invoices";
-import { useProjectBuildings, useProjects } from "@/hooks/use-projects";
+import { useProjects } from "@/hooks/use-projects";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import {
   createSignedInvoiceImageUrls,
@@ -107,13 +101,10 @@ export default function Invoices() {
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | undefined>();
-  const [initialInvoiceAssignment, setInitialInvoiceAssignment] = useState<ExpenseAssignment | undefined>();
-  const [buildingTransactionKind, setBuildingTransactionKind] = useState<"expense" | "income">("expense");
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
   const [searchInput, setSearchInput] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
-  const [visualizationProjectId, setVisualizationProjectId] = useState<number | null>(null);
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState<Currency | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -124,30 +115,6 @@ export default function Invoices() {
 
   const { data: projects } = useProjects();
   const { data: suppliers } = useSuppliers();
-  const allInvoicesQuery = useInvoices();
-  const allIncomesQuery = useIncomeTransactions();
-
-  useEffect(() => {
-    if (!projects?.length) {
-      setVisualizationProjectId(null);
-      return;
-    }
-
-    if (scopedProjectId != null) {
-      setVisualizationProjectId(scopedProjectId);
-      return;
-    }
-
-    if (visualizationProjectId == null || !projects.some((project) => project.id === visualizationProjectId)) {
-      setVisualizationProjectId(projects[0].id);
-    }
-  }, [projects, scopedProjectId, visualizationProjectId]);
-
-  const selectedVisualizationProjectId = visualizationProjectId;
-  const visualizationBuildingsQuery = useProjectBuildings(
-    selectedVisualizationProjectId,
-    selectedVisualizationProjectId != null,
-  );
 
   const { tableProps, tableQuery, setFilters, setCurrentPage } = useTable<InvoiceRow>({
     resource: "app_invoices",
@@ -330,8 +297,6 @@ export default function Invoices() {
           onDelete={() => deleteMutation.mutate(invoice)}
           onEdit={() => {
             setSelectedInvoice(invoice);
-            setInitialInvoiceAssignment(undefined);
-            setBuildingTransactionKind("expense");
             setOpen(true);
           }}
         />
@@ -380,18 +345,6 @@ export default function Invoices() {
     exportRowsToExcel(`${fileBase}.xlsx`, fileBase, exportRows);
   }
 
-  const buildingTransactionSelector = initialInvoiceAssignment ? (
-    <Segmented<"expense" | "income">
-      block
-      options={[
-        { label: t.expenses, value: "expense" },
-        { label: t.income, value: "income" },
-      ]}
-      value={buildingTransactionKind}
-      onChange={setBuildingTransactionKind}
-    />
-  ) : null;
-
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
       <FinancePageHeader
@@ -402,49 +355,10 @@ export default function Invoices() {
         title={t.invoicesTitle}
         onAdd={() => {
           setSelectedInvoice(undefined);
-          setInitialInvoiceAssignment(undefined);
-          setBuildingTransactionKind("expense");
           setOpen(true);
         }}
         onExportCsv={() => exportInvoices("csv")}
         onExportExcel={() => exportInvoices("xlsx")}
-      />
-
-      {allInvoicesQuery.isError || allIncomesQuery.isError || visualizationBuildingsQuery.isError ? (
-        <Alert
-          showIcon
-          type="error"
-          message={t.invoicesTitle}
-          description={toErrorMessage(allInvoicesQuery.error ?? allIncomesQuery.error ?? visualizationBuildingsQuery.error)}
-          action={
-            <Button
-              onClick={() => {
-                void allInvoicesQuery.refetch();
-                void allIncomesQuery.refetch();
-                void visualizationBuildingsQuery.refetch();
-              }}
-            >
-              {t.retry}
-            </Button>
-          }
-        />
-      ) : null}
-
-      <ProjectExpenseVisualization
-        buildings={visualizationBuildingsQuery.data}
-        incomes={allIncomesQuery.data}
-        invoices={allInvoicesQuery.data}
-        loading={allInvoicesQuery.isLoading || allIncomesQuery.isLoading || visualizationBuildingsQuery.isLoading}
-        projects={projects}
-        projectLocked={scopedProjectId != null}
-        selectedProjectId={selectedVisualizationProjectId}
-        onAddTransaction={(assignment) => {
-          setSelectedInvoice(undefined);
-          setInitialInvoiceAssignment(assignment);
-          setBuildingTransactionKind("expense");
-          setOpen(true);
-        }}
-        onProjectChange={setVisualizationProjectId}
       />
 
       <FinanceFilters<InvoiceStatus>
@@ -506,37 +420,15 @@ export default function Invoices() {
         pagination={standardPagination(tableProps.pagination, (total) => `${total} ${t.expenses.toLowerCase()}`)}
       />
 
-      {open && initialInvoiceAssignment && buildingTransactionKind === "income" ? (
-        <IncomeModal
-          headerExtra={buildingTransactionSelector}
-          income={null}
-          initialAssignment={initialInvoiceAssignment}
-          open
-          onClose={() => {
-            setOpen(false);
-            setSelectedInvoice(undefined);
-            setInitialInvoiceAssignment(undefined);
-            setBuildingTransactionKind("expense");
-          }}
-          onSaved={() => {
-            void erpInvalidation.income();
-            void allIncomesQuery.refetch();
-          }}
-        />
-      ) : open ? (
+      {open ? (
         <InvoiceModal
-          headerExtra={buildingTransactionSelector}
           invoice={selectedInvoice}
-          initialAssignment={initialInvoiceAssignment}
           onClose={() => {
             setOpen(false);
             setSelectedInvoice(undefined);
-            setInitialInvoiceAssignment(undefined);
-            setBuildingTransactionKind("expense");
           }}
           onSaved={() => {
             void tableQuery.refetch();
-            void allInvoicesQuery.refetch();
           }}
         />
       ) : null}

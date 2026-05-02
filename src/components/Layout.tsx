@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   BadgeDollarSign,
+  Building2,
   CalendarDays,
   FileText,
   FolderKanban,
@@ -10,12 +11,13 @@ import {
   LogOut,
   Menu,
   Package2,
+  Save,
   ShieldCheck,
   Truck,
   Users,
   X,
 } from "lucide-react";
-import { App, Button, Divider, InputNumber, Layout as AntLayout, Select, Space, Typography } from "antd";
+import { App, Button, Divider, InputNumber, Layout as AntLayout, Select, Space, Tooltip, Typography } from "antd";
 import BrandMark from "@/components/BrandMark";
 import { useAuth } from "@/lib/auth";
 import { erpKeys, getAppSettings, updateExchangeRateIqdPer100Usd } from "@/lib/erp";
@@ -98,6 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const canEditAppSettings = hasAdminAccess(profile?.role);
   const exchangeRateValue = appSettings?.exchangeRateIqdPer100Usd ?? null;
   const exchangeRateDisplay = formatCurrency(exchangeRateValue ?? 0, "IQD");
+  const isRtl = t.dir === "rtl";
   const exchangeRateMutation = useMutation({
     mutationFn: updateExchangeRateIqdPer100Usd,
     onSuccess: async () => {
@@ -134,6 +137,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: t.projects, icon: FolderKanban },
     { href: "/suppliers", label: t.suppliers, icon: Truck },
     { href: "/products", label: t.products, icon: Package2 },
+    { href: "/batiments", label: t.buildingsTitle, icon: Building2 },
     { href: "/calendar", label: t.calendar, icon: CalendarDays },
     { href: "/income", label: t.income, icon: BadgeDollarSign },
     { href: "/expenses", label: t.expenses, icon: FileText },
@@ -151,7 +155,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           />
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.95)" }}>{t.siteTitle}</div>
-            <div style={{ fontSize: 11, color: "rgba(232,223,200,0.45)" }}>{t.siteSub}</div>
+            <div style={{ fontSize: 11, color: "rgba(232,223,200,0.7)" }}>{t.siteSub}</div>
           </div>
         </div>
         {!isDesktopNav && navOpen && (
@@ -199,10 +203,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Project scope */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginBottom: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.72)", marginBottom: 6 }}>
           {t.projectScope}
         </div>
         <Select<string>
+          className="erp-sidebar-select"
           value={selectedProjectId == null ? "all" : String(selectedProjectId)}
           loading={projectScopeLoading}
           disabled={projects.length <= 1 || forcedProjectId != null}
@@ -219,15 +224,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Exchange rate */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginBottom: 6 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.72)", marginBottom: 6 }}>
           {t.exchangeRate}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.85)", marginBottom: 8 }}>
-          100 $ = {exchangeRateValue == null ? "-" : exchangeRateDisplay}
-        </div>
+        {!canEditAppSettings && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(232,223,200,0.85)" }}>
+            <span className="erp-exchange-rate-readonly">
+              100 $ = {exchangeRateValue == null ? "-" : exchangeRateDisplay}
+            </span>
+          </div>
+        )}
         {canEditAppSettings && (
-          <Space.Compact style={{ width: "100%" }}>
+          <Space.Compact className="erp-exchange-rate-control" style={{ width: "100%" }}>
             <InputNumber
+              addonBefore={<span dir="ltr">100 $ =</span>}
               min={MIN_EXCHANGE_RATE_IQD_PER_100_USD}
               max={MAX_EXCHANGE_RATE_IQD_PER_100_USD}
               value={exchangeRateDraft}
@@ -236,18 +246,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               {...currencyInputProps("IQD")}
               onChange={(value) => setExchangeRateDraft(typeof value === "number" ? value : null)}
             />
-            <Button
-              loading={exchangeRateMutation.isPending}
-              disabled={
-                exchangeRateDraft === exchangeRateValue ||
-                exchangeRateDraft == null ||
-                exchangeRateDraft < MIN_EXCHANGE_RATE_IQD_PER_100_USD ||
-                exchangeRateDraft > MAX_EXCHANGE_RATE_IQD_PER_100_USD
-              }
-              onClick={() => exchangeRateMutation.mutate(exchangeRateDraft)}
-            >
-              {t.save}
-            </Button>
+            <Tooltip title={t.save}>
+              <Button
+                aria-label={t.save}
+                icon={<Save size={16} />}
+                loading={exchangeRateMutation.isPending}
+                disabled={
+                  exchangeRateDraft === exchangeRateValue ||
+                  exchangeRateDraft == null ||
+                  exchangeRateDraft < MIN_EXCHANGE_RATE_IQD_PER_100_USD ||
+                  exchangeRateDraft > MAX_EXCHANGE_RATE_IQD_PER_100_USD
+                }
+                onClick={() => exchangeRateMutation.mutate(exchangeRateDraft)}
+              />
+            </Tooltip>
           </Space.Compact>
         )}
       </div>
@@ -257,7 +269,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div style={{ fontSize: 13, fontWeight: 500, color: "rgba(232,223,200,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {profile?.fullName ?? profile?.email ?? t.user}
         </div>
-        <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.45)", marginTop: 2 }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(232,223,200,0.72)", marginTop: 2 }}>
           {isSuperAdmin(profile?.role) ? t.superAdminTitle : profile?.role === "admin" ? t.adminTitle : t.user}
         </div>
       </div>
@@ -336,12 +348,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div
         style={{
           position: "fixed",
-          inset: "0 auto 0 0",
+          top: 0,
+          bottom: 0,
+          insetInlineStart: 0,
           zIndex: 40,
           width: 272,
           background: "#1e2433",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
-          transform: !isDesktopNav && navOpen ? "translateX(0)" : "translateX(-100%)",
+          borderInlineEnd: "1px solid rgba(255,255,255,0.07)",
+          transform: !isDesktopNav && navOpen ? "translateX(0)" : `translateX(${isRtl ? "100%" : "-100%"})`,
           transition: "transform 0.2s ease",
           overflowY: "auto",
         }}
@@ -383,7 +397,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <Content style={{ padding: "24px 32px", minWidth: 0 }}>
+        <Content className="erp-app-content">
           {children}
         </Content>
       </AntLayout>

@@ -1,6 +1,6 @@
-import { Button, Empty, Select, Skeleton, Space, Table, Typography, type TableProps } from "antd";
+import { Button, Popover, Empty, Select, Skeleton, Space, Table, Typography, type TableProps } from "antd";
 import { Plus } from "lucide-react";
-import { expenseTypeLabel } from "@/components/invoices/invoice-shared";
+import { expenseTypeLabel, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
 import type { IncomeTransaction, Invoice, Project, ProjectBuilding } from "@/lib/erp";
 import { formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
@@ -9,10 +9,15 @@ type MoneyMovement = {
   id: string;
   type: "expense" | "income";
   projectId: number | null;
+  projectName: string | null;
   buildingId: number | null;
   buildingName: string | null;
   date: string | null;
   title: string;
+  sourceLabel: string;
+  counterparty: string | null;
+  description: string | null;
+  status: string | null;
   amountUsd: number;
   amountIqd: number;
 };
@@ -148,10 +153,15 @@ function invoiceToMovement(invoice: Invoice, t: ReturnType<typeof useLang>["t"])
     id: `expense-${invoice.id}`,
     type: "expense",
     projectId: invoice.projectId,
+    projectName: invoice.projectName,
     buildingId: invoice.buildingId,
     buildingName: invoice.buildingName,
     date: invoice.invoiceDate,
     title: compactInvoiceTitle(invoice, t),
+    sourceLabel: expenseTypeLabel(invoice.expenseType, t),
+    counterparty: invoice.laborWorkerName ?? invoice.laborPersonName ?? invoice.productName ?? invoice.supplierName,
+    description: invoice.notes,
+    status: invoiceStatusLabel(invoice.status, t),
     amountUsd: -invoice.totalAmountUsd,
     amountIqd: -invoice.totalAmountIqd,
   };
@@ -162,13 +172,71 @@ function incomeToMovement(income: IncomeTransaction, fallbackTitle: string): Mon
     id: `income-${income.id}`,
     type: "income",
     projectId: income.projectId,
+    projectName: income.projectName,
     buildingId: income.buildingId,
     buildingName: income.buildingName,
     date: income.date,
     title: income.description?.trim() || fallbackTitle,
+    sourceLabel: fallbackTitle,
+    counterparty: income.createdByName,
+    description: income.description,
+    status: null,
     amountUsd: income.amountUsd,
     amountIqd: income.amountIqd,
   };
+}
+
+function formatCompactDate(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "2-digit" }).format(date);
+}
+
+function MovementDetails({
+  movement,
+  t,
+}: {
+  movement: MoneyMovement;
+  t: ReturnType<typeof useLang>["t"];
+}) {
+  const amount = {
+    usd: Math.abs(movement.amountUsd),
+    iqd: Math.abs(movement.amountIqd),
+  };
+
+  return (
+    <Space direction="vertical" size={4} style={{ width: 260 }}>
+      <Typography.Text strong type={movement.type === "income" ? "success" : "danger"}>
+        {movement.type === "income" ? t.income : t.expenses}
+      </Typography.Text>
+      <DetailLine label={t.totalAmount} value={formatCurrencyPair(amount, { hideZero: true })} />
+      <DetailLine label={t.date} value={formatDate(movement.date)} />
+      <DetailLine label={t.expenseType} value={movement.sourceLabel} />
+      <DetailLine label={t.projectOption} value={movement.projectName ?? "-"} />
+      <DetailLine label={t.buildingLabel} value={movement.buildingName ?? "-"} />
+      {movement.counterparty ? <DetailLine label={t.name} value={movement.counterparty} /> : null}
+      {movement.status ? <DetailLine label={t.status} value={movement.status} /> : null}
+      {movement.description ? <DetailLine label={t.description} value={movement.description} /> : null}
+    </Space>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "84px minmax(0, 1fr)", gap: 8 }}>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {label}
+      </Typography.Text>
+      <Typography.Text style={{ fontSize: 12, overflowWrap: "anywhere" }}>{value}</Typography.Text>
+    </div>
+  );
 }
 
 function sumMovements(movements: MoneyMovement[], type?: MoneyMovement["type"]) {
@@ -274,7 +342,7 @@ function ExpensePanel({
         locale={{ emptyText }}
         pagination={false}
         rowKey="id"
-        scroll={{ x: 360 }}
+        scroll={{ x: 320 }}
         size="small"
         className="erp-compact-expense-table"
       />
@@ -327,33 +395,60 @@ export default function ProjectExpenseVisualization({
     {
       title: t.date,
       dataIndex: "date",
-      width: 88,
-      render: (_value: string | null, movement) => formatDate(movement.date),
+      width: 58,
+      render: (_value: string | null, movement) => (
+        <Popover
+          content={<MovementDetails movement={movement} t={t} />}
+          trigger={["hover", "click"]}
+          placement="topLeft"
+        >
+          <Typography.Text style={{ cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>
+            {formatCompactDate(movement.date)}
+          </Typography.Text>
+        </Popover>
+      ),
     },
     {
       title: t.expenseTitle,
       dataIndex: "title",
       render: (_value: string, movement) => (
-        <Typography.Text
-          ellipsis={{ tooltip: movement.title }}
-          strong
-          type={movement.type === "income" ? "success" : "danger"}
-          style={{ fontSize: 13 }}
+        <Popover
+          content={<MovementDetails movement={movement} t={t} />}
+          trigger={["hover", "click"]}
+          placement="topLeft"
         >
-          {movement.title}
-        </Typography.Text>
+          <Typography.Text
+            ellipsis={{ tooltip: false }}
+            strong
+            type={movement.type === "income" ? "success" : "danger"}
+            style={{ cursor: "pointer", fontSize: 13, maxWidth: "100%" }}
+          >
+            {movement.title}
+          </Typography.Text>
+        </Popover>
       ),
     },
     {
-      title: t.totalAmount,
+      title: t.amount,
       dataIndex: "amountUsd",
       align: "right",
-      width: 132,
+      width: 1,
+      className: "erp-compact-amount-column",
       render: (_value: number, movement) => (
-        <Typography.Text strong type={movement.type === "income" ? "success" : "danger"} style={{ fontSize: 13 }}>
-          {movement.type === "income" ? "+ " : "- "}
-          {formatCurrencyPair({ usd: Math.abs(movement.amountUsd), iqd: Math.abs(movement.amountIqd) }, { hideZero: true })}
-        </Typography.Text>
+        <Popover
+          content={<MovementDetails movement={movement} t={t} />}
+          trigger={["hover", "click"]}
+          placement="topRight"
+        >
+          <Typography.Text
+            strong
+            type={movement.type === "income" ? "success" : "danger"}
+            style={{ cursor: "pointer", fontSize: 13, whiteSpace: "nowrap" }}
+          >
+            {movement.type === "income" ? "+ " : "- "}
+            {formatCurrencyPair({ usd: Math.abs(movement.amountUsd), iqd: Math.abs(movement.amountIqd) }, { hideZero: true })}
+          </Typography.Text>
+        </Popover>
       ),
     },
   ];

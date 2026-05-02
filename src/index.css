@@ -36,6 +36,65 @@ html, body {
   display: none;
 }
 
+.erp-app-content {
+  min-width: 0;
+  padding: 24px 32px;
+}
+
+.erp-sidebar-select.ant-select-disabled .ant-select-selector {
+  background: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.erp-sidebar-select.ant-select-disabled .ant-select-selection-item,
+.erp-sidebar-select.ant-select-disabled .ant-select-arrow {
+  color: #111827 !important;
+}
+
+.erp-exchange-rate-readonly {
+  direction: ltr;
+  display: inline-block;
+  unicode-bidi: isolate;
+}
+
+.erp-exchange-rate-control .ant-input-number-group-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.erp-exchange-rate-control .ant-input-number {
+  width: 100%;
+}
+
+.erp-exchange-rate-control .ant-input-number-group-addon {
+  background: #f3f4f6;
+  border-color: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.erp-exchange-rate-control .ant-btn {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  padding-inline: 0;
+  width: 42px;
+}
+
+.erp-exchange-rate-control .ant-btn:disabled,
+.erp-exchange-rate-control .ant-btn.ant-btn-disabled {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(232, 223, 200, 0.48) !important;
+  color: rgba(232, 223, 200, 0.78) !important;
+}
+
+@media (max-width: 767px) {
+  .erp-app-content {
+    padding: 16px 12px 20px;
+  }
+}
+
 .erp-modal-title {
   display: inline-flex;
   align-items: baseline;
@@ -81,6 +140,11 @@ html, body {
 
 .erp-compact-expense-table .ant-table-tbody > tr > td {
   padding: 4px 8px;
+}
+
+.erp-compact-expense-table .erp-compact-amount-column {
+  white-space: nowrap;
+  width: 1%;
 }
 
 .erp-compact-expense-table .ant-empty-normal {

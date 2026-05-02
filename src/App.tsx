@@ -70,6 +70,7 @@ function lazyPage<T extends ComponentType<unknown>>(loader: () => Promise<{ defa
 
 const Dashboard = lazyPage(() => import("@/pages/Dashboard"));
 const Admin = lazyPage(() => import("@/pages/Admin"));
+const Buildings = lazyPage(() => import("@/pages/Buildings"));
 const CalendarPage = lazyPage(() => import("@/pages/Calendar"));
 const Income = lazyPage(() => import("@/pages/Income"));
 const InvoiceDetail = lazyPage(() => import("@/pages/InvoiceDetail"));
@@ -220,6 +221,7 @@ function AppRouter() {
             <Route path="/suppliers" component={Suppliers} />
             <Route path="/suppliers/:id" component={SupplierDetail} />
             <Route path="/products" component={Products} />
+            <Route path="/batiments" component={Buildings} />
             <Route path="/calendar" component={CalendarPage} />
             <Route path="/income" component={Income} />
             <Route path="/expenses" component={Invoices} />
