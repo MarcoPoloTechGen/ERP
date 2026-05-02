@@ -64,6 +64,7 @@ type CalendarEntryType = "income" | "expense";
 type CalendarEntryFormValues = {
   type: CalendarEntryType;
   projectId?: number;
+  buildingId?: number;
   amountUsd?: number;
   amountIqd?: number;
   description?: string;
@@ -202,6 +203,7 @@ function CalendarEntryModal({
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<CalendarEntryFormValues>();
   const entryType = Form.useWatch("type", form) ?? "income";
+  const incomeProjectId = Form.useWatch("projectId", form);
   const expenseType = Form.useWatch("expenseType", form) ?? "products";
   const assignmentKey = Form.useWatch("assignmentKey", form);
   const supplierId = Form.useWatch("supplierId", form);
@@ -214,8 +216,9 @@ function CalendarEntryModal({
   const { data: projectBuildings } = useQuery({
     queryKey: erpKeys.projectBuildings(0),
     queryFn: () => listProjectBuildings(),
-    enabled: entryType === "expense",
+    enabled: entryType === "expense" || entryType === "income",
   });
+  const effectiveIncomeProjectId = scopedProjectId ?? incomeProjectId ?? null;
   const effectiveAssignmentKey = assignmentKey;
   const selectedAssignment = parseExpenseAssignmentKey(effectiveAssignmentKey, projectBuildings);
   const selectedProjectId = selectedAssignment.projectId ?? undefined;
@@ -243,6 +246,10 @@ function CalendarEntryModal({
   const productNameById = useMemo(() => {
     return new Map((products ?? []).map((product) => [product.id, product.name]));
   }, [products]);
+  const incomeBuildingOptions = useMemo(
+    () => (projectBuildings ?? []).filter((building) => building.projectId === effectiveIncomeProjectId),
+    [effectiveIncomeProjectId, projectBuildings],
+  );
 
   const assignmentOptions = useMemo(() => {
     const options = buildExpenseAssignmentOptions({
@@ -287,6 +294,26 @@ function CalendarEntryModal({
   }, [entryType, form, projectBuildings, scopedProjectId]);
 
   useEffect(() => {
+    if (entryType !== "income") {
+      return;
+    }
+
+    const currentBuildingId = form.getFieldValue("buildingId");
+    if (effectiveIncomeProjectId == null) {
+      if (currentBuildingId != null) {
+        form.setFieldValue("buildingId", undefined);
+      }
+      return;
+    }
+
+    if (currentBuildingId != null && incomeBuildingOptions.some((building) => building.id === currentBuildingId)) {
+      return;
+    }
+
+    form.setFieldValue("buildingId", incomeBuildingOptions.length === 1 ? incomeBuildingOptions[0].id : undefined);
+  }, [effectiveIncomeProjectId, entryType, form, incomeBuildingOptions]);
+
+  useEffect(() => {
     if (entryType !== "expense") {
       return;
     }
@@ -323,6 +350,7 @@ function CalendarEntryModal({
       if (values.type === "income") {
         return createIncomeTransaction({
           projectId: scopedProjectId ?? (values.projectId as number),
+          buildingId: values.buildingId as number,
           amountUsd: Number(values.amountUsd ?? 0),
           amountIqd: Number(values.amountIqd ?? 0),
           description: values.description?.trim() || null,
@@ -412,6 +440,7 @@ function CalendarEntryModal({
           amountUsd: 0,
           amountIqd: 0,
           projectId: scopedProjectId ?? undefined,
+          buildingId: undefined,
           date: selectedDate,
           expenseType: "products",
           paidAmountUsd: 0,
@@ -454,7 +483,23 @@ function CalendarEntryModal({
                     showSearch
                     optionFilterProp="label"
                     placeholder={t.noneOption}
+                    onChange={() => form.setFieldValue("buildingId", undefined)}
                     options={projects?.map((project) => ({ label: project.name, value: project.id }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item
+                  name="buildingId"
+                  label={t.buildingLabel}
+                  rules={[{ required: true, message: t.requiredField }]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={t.noneOption}
+                    disabled={effectiveIncomeProjectId == null}
+                    options={incomeBuildingOptions.map((building) => ({ label: building.name, value: building.id }))}
                   />
                 </Form.Item>
               </Col>

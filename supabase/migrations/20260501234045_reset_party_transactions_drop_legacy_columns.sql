@@ -1,95 +1,25 @@
--- Move party transactions to the total/paid amount model.
--- The legacy entry_type/amount columns are kept as compatibility fields while
--- the application and reporting contract move to total_amount - paid_amount.
+-- Reset party transactions and remove legacy debit/credit amount columns.
+-- This intentionally clears outgoing transaction data so the new total/paid
+-- model starts from zero.
 
-alter table if exists public.party_transactions
-  add column if not exists total_amount_usd numeric not null default 0,
-  add column if not exists paid_amount_usd numeric not null default 0,
-  add column if not exists total_amount_iqd numeric not null default 0,
-  add column if not exists paid_amount_iqd numeric not null default 0;
+drop function if exists public.get_party_transactions();
+drop function if exists public.get_invoices();
+drop function if exists public.get_dashboard_overview();
 
-update public.party_transactions
-set
-  total_amount_usd = case
-    when total_amount_usd <> 0 or paid_amount_usd <> 0 then total_amount_usd
-    when entry_type = 'debt' then coalesce(amount_usd, case when currency = 'USD' then amount else 0 end, 0)
-    else 0
-  end,
-  paid_amount_usd = case
-    when total_amount_usd <> 0 or paid_amount_usd <> 0 then paid_amount_usd
-    when entry_type = 'payment' then coalesce(amount_usd, case when currency = 'USD' then amount else 0 end, 0)
-    else 0
-  end,
-  total_amount_iqd = case
-    when total_amount_iqd <> 0 or paid_amount_iqd <> 0 then total_amount_iqd
-    when entry_type = 'debt' then coalesce(amount_iqd, case when currency = 'IQD' then amount else 0 end, 0)
-    else 0
-  end,
-  paid_amount_iqd = case
-    when total_amount_iqd <> 0 or paid_amount_iqd <> 0 then paid_amount_iqd
-    when entry_type = 'payment' then coalesce(amount_iqd, case when currency = 'IQD' then amount else 0 end, 0)
-    else 0
-  end;
+drop view if exists public.all_expenses;
+drop view if exists public.app_invoice_history;
+drop view if exists public.app_invoices;
+drop view if exists public.app_supplier_transactions;
+drop view if exists public.app_worker_transactions;
+drop view if exists public.app_party_transactions;
+drop view if exists public.app_suppliers;
+drop view if exists public.app_workers;
+drop view if exists public.supplier_balances;
+drop view if exists public.worker_balances;
+drop view if exists public.project_summary;
 
-alter table if exists public.party_transactions
-  drop constraint if exists party_transactions_total_paid_amounts_check,
-  add constraint party_transactions_total_paid_amounts_check
-  check (
-    total_amount_usd >= 0
-    and paid_amount_usd >= 0
-    and total_amount_iqd >= 0
-    and paid_amount_iqd >= 0
-    and (
-      total_amount_usd > 0
-      or paid_amount_usd > 0
-      or total_amount_iqd > 0
-      or paid_amount_iqd > 0
-    )
-  ) not valid;
-
-alter table if exists public.party_transactions
-  drop constraint if exists party_transactions_entity_check,
-  add constraint party_transactions_entity_check
-  check (
-    (entity_type = 'worker' and worker_id is not null and supplier_id is null)
-    or (entity_type = 'supplier' and supplier_id is not null and worker_id is null)
-    or (entity_type = 'other' and worker_id is null and supplier_id is null)
-  ) not valid;
-
-alter table if exists public.party_transaction_history
-  add column if not exists old_amount_usd numeric,
-  add column if not exists old_amount_iqd numeric,
-  add column if not exists old_total_amount_usd numeric,
-  add column if not exists old_paid_amount_usd numeric,
-  add column if not exists old_total_amount_iqd numeric,
-  add column if not exists old_paid_amount_iqd numeric;
-
-update public.party_transaction_history
-set
-  old_total_amount_usd = coalesce(
-    old_total_amount_usd,
-    case when old_entry_type = 'debt' then old_amount_usd else 0 end,
-    0
-  ),
-  old_paid_amount_usd = coalesce(
-    old_paid_amount_usd,
-    case when old_entry_type = 'payment' then old_amount_usd else 0 end,
-    0
-  ),
-  old_total_amount_iqd = coalesce(
-    old_total_amount_iqd,
-    case when old_entry_type = 'debt' then old_amount_iqd else 0 end,
-    0
-  ),
-  old_paid_amount_iqd = coalesce(
-    old_paid_amount_iqd,
-    case when old_entry_type = 'payment' then old_amount_iqd else 0 end,
-    0
-  )
-where old_total_amount_usd is null
-  or old_paid_amount_usd is null
-  or old_total_amount_iqd is null
-  or old_paid_amount_iqd is null;
+truncate table public.transaction_photos, public.party_transaction_history, public.party_transactions
+restart identity cascade;
 
 create or replace function public.log_party_transaction_history()
 returns trigger
@@ -115,15 +45,10 @@ begin
   insert into public.party_transaction_history (
     transaction_id,
     change_type,
-    old_entry_type,
     old_entity_type,
     old_worker_id,
     old_supplier_id,
     old_building_id,
-    old_amount,
-    old_currency,
-    old_amount_usd,
-    old_amount_iqd,
     old_total_amount_usd,
     old_paid_amount_usd,
     old_total_amount_iqd,
@@ -136,15 +61,10 @@ begin
   values (
     old.id,
     case when tg_op = 'DELETE' then 'delete' else 'update' end,
-    old.entry_type,
     old.entity_type,
     old.worker_id,
     old.supplier_id,
     old.building_id,
-    old.amount,
-    old.currency,
-    old.amount_usd,
-    old.amount_iqd,
     old.total_amount_usd,
     old.paid_amount_usd,
     old.total_amount_iqd,
@@ -158,6 +78,141 @@ begin
   return coalesce(new, old);
 end;
 $function$;
+
+alter table if exists public.party_transactions
+  drop constraint if exists party_transactions_entry_type_check,
+  drop constraint if exists party_transactions_currency_check,
+  drop column if exists entry_type,
+  drop column if exists amount,
+  drop column if exists amount_usd,
+  drop column if exists amount_iqd,
+  drop column if exists currency;
+
+alter table if exists public.party_transaction_history
+  drop constraint if exists party_transaction_history_old_entry_type_check,
+  drop constraint if exists party_transaction_history_old_currency_check,
+  drop column if exists old_entry_type,
+  drop column if exists old_amount,
+  drop column if exists old_amount_usd,
+  drop column if exists old_amount_iqd,
+  drop column if exists old_currency;
+
+create or replace view public.worker_balances
+with (security_invoker = true)
+as
+select
+  w.id as worker_id,
+  w.name as worker_name,
+  coalesce(
+    sum(coalesce(pt.total_amount_usd, 0) - coalesce(pt.paid_amount_usd, 0)),
+    0
+  )::numeric as balance_usd,
+  coalesce(
+    sum(coalesce(pt.total_amount_iqd, 0) - coalesce(pt.paid_amount_iqd, 0)),
+    0
+  )::numeric as balance_iqd
+from public.workers as w
+left join public.party_transactions as pt
+  on pt.worker_id = w.id
+  and pt.deleted_at is null
+group by w.id, w.name;
+
+create or replace view public.supplier_balances
+with (security_invoker = true)
+as
+select
+  s.id as supplier_id,
+  s.name as supplier_name,
+  coalesce(
+    sum(coalesce(pt.total_amount_usd, 0) - coalesce(pt.paid_amount_usd, 0)),
+    0
+  )::numeric as balance_usd,
+  coalesce(
+    sum(coalesce(pt.total_amount_iqd, 0) - coalesce(pt.paid_amount_iqd, 0)),
+    0
+  )::numeric as balance_iqd
+from public.suppliers as s
+left join public.party_transactions as pt
+  on pt.supplier_id = s.id
+  and pt.deleted_at is null
+group by s.id, s.name;
+
+create or replace view public.app_workers
+with (security_invoker = true)
+as
+select
+  w.id,
+  w.name,
+  coalesce(w.role, '-'::text) as role,
+  w.category,
+  w.phone,
+  w.notes,
+  coalesce(wb.balance_usd, 0::numeric) as balance,
+  coalesce(wb.balance_usd, 0::numeric) as balance_usd,
+  coalesce(wb.balance_iqd, 0::numeric) as balance_iqd,
+  w.created_at,
+  w.updated_at
+from public.workers as w
+left join public.worker_balances as wb
+  on wb.worker_id = w.id;
+
+create or replace view public.app_suppliers
+with (security_invoker = true)
+as
+select
+  s.id,
+  s.name,
+  s.contact,
+  s.phone,
+  s.email,
+  s.address,
+  coalesce(sb.balance_usd, 0::numeric) as balance_usd,
+  coalesce(sb.balance_iqd, 0::numeric) as balance_iqd,
+  s.created_at,
+  s.updated_at
+from public.suppliers as s
+left join public.supplier_balances as sb
+  on sb.supplier_id = s.id;
+
+create or replace view public.project_summary
+with (security_invoker = true)
+as
+with party_totals as (
+  select
+    pb.project_id,
+    coalesce(sum(pt.total_amount_usd), 0)::numeric as expenses_usd,
+    coalesce(sum(pt.total_amount_iqd), 0)::numeric as expenses_iqd,
+    coalesce(sum(pt.paid_amount_usd), 0)::numeric as payments_out_usd,
+    coalesce(sum(pt.paid_amount_iqd), 0)::numeric as payments_out_iqd
+  from public.project_buildings as pb
+  left join public.party_transactions as pt
+    on pt.building_id = pb.id
+    and pt.deleted_at is null
+  group by pb.project_id
+),
+income_totals as (
+  select
+    it.project_id,
+    coalesce(sum(it.amount_usd), 0)::numeric as income_usd,
+    coalesce(sum(it.amount_iqd), 0)::numeric as income_iqd
+  from public.income_transactions as it
+  where it.deleted_at is null
+  group by it.project_id
+)
+select
+  p.id as project_id,
+  p.name as project_name,
+  coalesce(pt.expenses_usd, 0::numeric) as expenses_usd,
+  coalesce(pt.expenses_iqd, 0::numeric) as expenses_iqd,
+  coalesce(pt.payments_out_usd, 0::numeric) as payments_out_usd,
+  coalesce(pt.payments_out_iqd, 0::numeric) as payments_out_iqd,
+  coalesce(it.income_usd, 0::numeric) as income_usd,
+  coalesce(it.income_iqd, 0::numeric) as income_iqd
+from public.projects as p
+left join party_totals as pt
+  on pt.project_id = p.id
+left join income_totals as it
+  on it.project_id = p.id;
 
 create or replace view public.app_party_transactions
 with (security_invoker = true)
@@ -366,7 +421,10 @@ select
       then greatest(coalesce(pth.old_total_amount_usd, 0) - coalesce(pth.old_paid_amount_usd, 0), 0)
     else greatest(coalesce(pth.old_total_amount_iqd, 0) - coalesce(pth.old_paid_amount_iqd, 0), 0)
   end::numeric as remaining_amount,
-  coalesce(pth.old_currency, 'USD') as currency,
+  case
+    when coalesce(pth.old_total_amount_usd, 0) > 0 or coalesce(pth.old_paid_amount_usd, 0) > 0 then 'USD'
+    else 'IQD'
+  end::text as currency,
   coalesce(pth.old_total_amount_usd, 0)::numeric as total_amount_usd,
   coalesce(pth.old_paid_amount_usd, 0)::numeric as paid_amount_usd,
   greatest(coalesce(pth.old_total_amount_usd, 0) - coalesce(pth.old_paid_amount_usd, 0), 0)::numeric as remaining_amount_usd,
@@ -428,6 +486,112 @@ select
   i.record_status,
   i.created_at
 from public.app_invoices as i;
+
+create or replace function public.get_invoices()
+returns table(
+  id text,
+  created_at timestamp without time zone,
+  expense_source text,
+  reference text,
+  category text,
+  amount text,
+  amount_usd text,
+  amount_iqd text,
+  currency text,
+  notes text,
+  date date,
+  project_id text,
+  project_name text,
+  supplier_id text,
+  supplier_name text,
+  labor_worker_id text,
+  labor_worker_name text,
+  status text,
+  party_type text,
+  total_amount text,
+  paid_amount text,
+  remaining_amount text,
+  due_date date,
+  image_path text,
+  created_by text,
+  created_by_name text,
+  record_status text
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $function$
+  select
+    id::text,
+    created_at::timestamp,
+    expense_source,
+    reference,
+    category,
+    amount::text,
+    amount_usd::text,
+    amount_iqd::text,
+    currency,
+    notes,
+    date,
+    project_id::text,
+    project_name,
+    supplier_id::text,
+    supplier_name,
+    labor_worker_id::text,
+    labor_worker_name,
+    status,
+    party_type,
+    total_amount::text,
+    paid_amount::text,
+    remaining_amount::text,
+    due_date,
+    image_path,
+    created_by::text,
+    created_by_name,
+    record_status
+  from public.all_expenses
+  where record_status = 'active';
+$function$;
+
+create or replace function public.get_party_transactions()
+returns table(
+  id text,
+  created_at timestamp without time zone,
+  expense_source text,
+  reference text,
+  category text,
+  amount text,
+  amount_usd text,
+  amount_iqd text,
+  currency text,
+  notes text,
+  date date,
+  project_id text,
+  project_name text,
+  supplier_id text,
+  supplier_name text,
+  labor_worker_id text,
+  labor_worker_name text,
+  status text,
+  party_type text,
+  total_amount text,
+  paid_amount text,
+  remaining_amount text,
+  due_date date,
+  image_path text,
+  created_by text,
+  created_by_name text,
+  record_status text
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $function$
+  select *
+  from public.get_invoices();
+$function$;
 
 create or replace function public.get_dashboard_overview()
 returns jsonb
@@ -625,9 +789,16 @@ $$;
 grant select on public.app_party_transactions to authenticated;
 grant select on public.app_worker_transactions to authenticated;
 grant select on public.app_supplier_transactions to authenticated;
+grant select on public.worker_balances to authenticated;
+grant select on public.supplier_balances to authenticated;
+grant select on public.app_workers to authenticated;
+grant select on public.app_suppliers to authenticated;
+grant select on public.project_summary to authenticated;
 grant select on public.app_invoices to authenticated;
 grant select on public.app_invoice_history to authenticated;
 grant select on public.all_expenses to authenticated;
+grant execute on function public.get_invoices() to authenticated;
+grant execute on function public.get_party_transactions() to authenticated;
 grant execute on function public.get_dashboard_overview() to authenticated;
 
 notify pgrst, 'reload schema';

@@ -57,7 +57,7 @@ function buildFilters({
   dateTo: string;
 }) {
   const filters: CrudFilters = [];
-  addContainsSearchFilter(filters, ["project_name", "description", "created_by_name"], search);
+  addContainsSearchFilter(filters, ["project_name", "building_name", "description", "created_by_name"], search);
   addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
   addCurrencyAmountFilter(filters, currency, { USD: "amount_usd", IQD: "amount_iqd" });
   addDateRangeFilter(filters, "date", dateFrom, dateTo);
@@ -141,6 +141,7 @@ export default function Income() {
           </Space>
         ),
       },
+      { title: t.buildingLabel, dataIndex: "building_name", render: (value: string | null) => value ?? "-" },
       {
         title: t.amount,
         dataIndex: "amount_usd",
@@ -194,6 +195,7 @@ export default function Income() {
         },
       },
       { title: t.projectOption, dataIndex: "projectName", render: (value: string | null) => value ?? "-" },
+      { title: t.buildingLabel, dataIndex: "buildingName", render: (value: string | null) => value ?? "-" },
       {
         title: t.amount,
         dataIndex: "amountUsd",
@@ -210,6 +212,7 @@ export default function Income() {
     const fileBase = t.incomeTitle;
     const exportRows = rows.map((income) => ({
       [t.projectOption]: income.project_name ?? "",
+      [t.buildingLabel]: income.building_name ?? "",
       [`${t.amount} ${formatCurrencyLabel("USD")}`]: asNumber(income.amount_usd),
       [`${t.amount} IQD`]: asNumber(income.amount_iqd),
       [t.user]: income.created_by_name ?? "",

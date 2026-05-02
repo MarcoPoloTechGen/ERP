@@ -7,3 +7,4 @@ export * from "@/lib/erp/projects";
 export * from "@/lib/erp/shared";
 export * from "@/lib/erp/suppliers";
 export * from "@/lib/erp/workers";
+export * from "@/lib/erp/specialities";

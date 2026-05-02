@@ -165,10 +165,16 @@ export type Database = {
           id: number
           income_transaction_id: number
           old_amount: number
+          old_amount_iqd: number | null
+          old_amount_usd: number | null
+          old_building_id: number | null
+          old_building_name: string | null
           old_currency: string
           old_date: string
           old_description: string | null
           old_project_id: number
+          building_id: number | null
+          building_name: string | null
         }
         Insert: {
           change_type: string
@@ -177,10 +183,16 @@ export type Database = {
           id?: number
           income_transaction_id: number
           old_amount: number
+          old_amount_iqd?: number | null
+          old_amount_usd?: number | null
+          old_building_id?: number | null
+          old_building_name?: string | null
           old_currency: string
           old_date: string
           old_description?: string | null
           old_project_id: number
+          building_id?: number | null
+          building_name?: string | null
         }
         Update: {
           change_type?: string
@@ -189,10 +201,16 @@ export type Database = {
           id?: number
           income_transaction_id?: number
           old_amount?: number
+          old_amount_iqd?: number | null
+          old_amount_usd?: number | null
+          old_building_id?: number | null
+          old_building_name?: string | null
           old_currency?: string
           old_date?: string
           old_description?: string | null
           old_project_id?: number
+          building_id?: number | null
+          building_name?: string | null
         }
         Relationships: [
           {
@@ -223,6 +241,7 @@ export type Database = {
           amount: number
           amount_iqd: number
           amount_usd: number
+          building_id: number
           created_at: string
           created_by: string | null
           currency: string
@@ -239,6 +258,7 @@ export type Database = {
           amount: number
           amount_iqd?: number
           amount_usd?: number
+          building_id: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -255,6 +275,7 @@ export type Database = {
           amount?: number
           amount_iqd?: number
           amount_usd?: number
+          building_id?: number
           created_at?: string
           created_by?: string | null
           currency?: string
@@ -268,6 +289,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "income_transactions_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "project_buildings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "income_transactions_created_by_fkey"
             columns: ["created_by"]
@@ -440,16 +468,10 @@ export type Database = {
           changed_at: string
           changed_by: string | null
           id: number
-          old_amount: number
-          old_amount_iqd: number | null
-          old_amount_usd: number | null
           old_building_id: number
-          old_category_id: number | null
-          old_currency: string
           old_date: string
           old_description: string
           old_entity_type: string
-          old_entry_type: string
           old_notes: string | null
           old_paid_amount_iqd: number | null
           old_paid_amount_usd: number | null
@@ -464,16 +486,10 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           id?: number
-          old_amount: number
-          old_amount_iqd?: number | null
-          old_amount_usd?: number | null
           old_building_id: number
-          old_category_id?: number | null
-          old_currency: string
           old_date: string
           old_description: string
           old_entity_type: string
-          old_entry_type: string
           old_notes?: string | null
           old_paid_amount_iqd?: number | null
           old_paid_amount_usd?: number | null
@@ -488,16 +504,10 @@ export type Database = {
           changed_at?: string
           changed_by?: string | null
           id?: number
-          old_amount?: number
-          old_amount_iqd?: number | null
-          old_amount_usd?: number | null
           old_building_id?: number
-          old_category_id?: number | null
-          old_currency?: string
           old_date?: string
           old_description?: string
           old_entity_type?: string
-          old_entry_type?: string
           old_notes?: string | null
           old_paid_amount_iqd?: number | null
           old_paid_amount_usd?: number | null
@@ -561,20 +571,14 @@ export type Database = {
       }
       party_transactions: {
         Row: {
-          amount: number
-          amount_iqd: number
-          amount_usd: number
           building_id: number
-          category_id: number | null
           created_at: string
           created_by: string | null
-          currency: string
           date: string
           deleted_at: string | null
           deleted_by: string | null
           description: string
           entity_type: string
-          entry_type: string
           id: number
           notes: string | null
           paid_amount_iqd: number
@@ -587,20 +591,14 @@ export type Database = {
           worker_id: number | null
         }
         Insert: {
-          amount: number
-          amount_iqd?: number
-          amount_usd?: number
           building_id: number
-          category_id?: number | null
           created_at?: string
           created_by?: string | null
-          currency?: string
           date?: string
           deleted_at?: string | null
           deleted_by?: string | null
           description: string
           entity_type: string
-          entry_type: string
           id?: number
           notes?: string | null
           paid_amount_iqd?: number
@@ -613,20 +611,14 @@ export type Database = {
           worker_id?: number | null
         }
         Update: {
-          amount?: number
-          amount_iqd?: number
-          amount_usd?: number
           building_id?: number
-          category_id?: number | null
           created_at?: string
           created_by?: string | null
-          currency?: string
           date?: string
           deleted_at?: string | null
           deleted_by?: string | null
           description?: string
           entity_type?: string
-          entry_type?: string
           id?: number
           notes?: string | null
           paid_amount_iqd?: number
@@ -644,13 +636,6 @@ export type Database = {
             columns: ["building_id"]
             isOneToOne: false
             referencedRelation: "project_buildings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "party_transactions_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "expense_categories"
             referencedColumns: ["id"]
           },
           {
@@ -902,7 +887,7 @@ export type Database = {
         }
         Relationships: []
       }
-      specialties: {
+      specialities: {
         Row: {
           created_at: string
           id: number
@@ -920,150 +905,32 @@ export type Database = {
         }
         Relationships: []
       }
-      suppliers: {
-        Row: {
-          address: string | null
-          contact: string | null
-          created_at: string
-          email: string | null
-          id: number
-          name: string
-          phone: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          address?: string | null
-          contact?: string | null
-          created_at?: string
-          email?: string | null
-          id?: number
-          name: string
-          phone?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          address?: string | null
-          contact?: string | null
-          created_at?: string
-          email?: string | null
-          id?: number
-          name?: string
-          phone?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      transaction_photos: {
+      worker_specialities: {
         Row: {
           created_at: string
-          created_by: string | null
-          id: number
-          storage_path: string
-          transaction_id: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: number
-          storage_path: string
-          transaction_id: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: number
-          storage_path?: string
-          transaction_id?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transaction_photos_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "all_expenses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "app_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "app_party_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "app_supplier_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "app_worker_transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transaction_photos_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "party_transactions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      worker_specialties: {
-        Row: {
-          specialty_id: number
+          speciality_id: number
           worker_id: number
         }
         Insert: {
-          specialty_id: number
+          created_at?: string
+          speciality_id: number
           worker_id: number
         }
         Update: {
-          specialty_id?: number
+          created_at?: string
+          speciality_id?: number
           worker_id?: number
         }
         Relationships: [
           {
-            foreignKeyName: "worker_specialties_specialty_id_fkey"
-            columns: ["specialty_id"]
+            foreignKeyName: "worker_specialities_speciality_id_fkey"
+            columns: ["speciality_id"]
             isOneToOne: false
-            referencedRelation: "specialties"
+            referencedRelation: "specialities"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "worker_specialties_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: false
-            referencedRelation: "app_workers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "worker_specialties_worker_id_fkey"
-            columns: ["worker_id"]
-            isOneToOne: false
-            referencedRelation: "worker_balances"
-            referencedColumns: ["worker_id"]
-          },
-          {
-            foreignKeyName: "worker_specialties_worker_id_fkey"
+            foreignKeyName: "worker_specialities_worker_id_fkey"
             columns: ["worker_id"]
             isOneToOne: false
             referencedRelation: "workers"
@@ -1214,6 +1081,8 @@ export type Database = {
           amount: number | null
           amount_iqd: number | null
           amount_usd: number | null
+          building_id: number | null
+          building_name: string | null
           change_type: string | null
           changed_at: string | null
           changed_by: string | null
@@ -1256,6 +1125,8 @@ export type Database = {
           amount: number | null
           amount_iqd: number | null
           amount_usd: number | null
+          building_id: number | null
+          building_name: string | null
           created_at: string | null
           created_by: string | null
           created_by_name: string | null

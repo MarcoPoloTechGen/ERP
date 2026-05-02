@@ -63,15 +63,10 @@ type ProductWritePayload = Pick<
   | "unit_price_iqd"
 >;
 type PartyTransactionWritePayload = {
-  entry_type: "debt" | "payment";
   entity_type: "worker" | "supplier" | "other";
   worker_id: number | null;
   supplier_id: number | null;
   building_id: number;
-  amount: number;
-  currency: Currency;
-  amount_usd: number;
-  amount_iqd: number;
   total_amount_usd: number;
   paid_amount_usd: number;
   total_amount_iqd: number;
@@ -84,6 +79,7 @@ type PartyTransactionWritePayload = {
 };
 type IncomeTransactionWritePayload = {
   project_id: number;
+  building_id: number;
   amount: number;
   currency: Currency;
   amount_usd: number;
@@ -113,11 +109,6 @@ type ProfileRoleUpdatePayload = Pick<TableUpdatePayload<"profiles">, "role">;
 type ProfileNameUpdatePayload = Pick<TableUpdatePayload<"profiles">, "full_name">;
 type ProfileSelectedProjectUpdatePayload = Pick<TableUpdatePayload<"profiles">, "selected_project_id">;
 type InvoicePaidUpdatePayload = {
-  entry_type: "payment";
-  amount: number;
-  currency: Currency;
-  amount_usd: number;
-  amount_iqd: number;
   total_amount_usd: number;
   paid_amount_usd: number;
   total_amount_iqd: number;
@@ -135,6 +126,7 @@ export type TransactionType = "credit" | "debit";
 export type PartyType = "worker" | "supplier";
 export type Currency = "USD" | "IQD";
 export const CURRENCIES: Currency[] = ["USD", "IQD"];
+export const DEFAULT_PROJECT_BUILDING_NAME = "تێچوی گشتی ";
 export type UserRole = "super_admin" | "admin" | "user";
 export type RecordStatus = "active" | "deleted";
 
@@ -224,6 +216,7 @@ export interface ProjectBuilding {
   id: number;
   projectId: number;
   name: string;
+  isDefault: boolean;
   createdAt: string | null;
 }
 
@@ -377,6 +370,8 @@ export interface IncomeTransaction {
   id: number;
   projectId: number;
   projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   amount: number;
   currency: Currency;
   amountUsd: number;
@@ -427,6 +422,8 @@ export interface IncomeTransactionHistoryEntry {
   action: IncomeTransactionHistoryAction;
   projectId: number | null;
   projectName: string | null;
+  buildingId: number | null;
+  buildingName: string | null;
   amount: number;
   currency: Currency;
   amountUsd: number;
@@ -569,11 +566,6 @@ export interface InvoiceInput {
 
 export interface WorkerTransactionInput {
   workerId: number;
-  type?: TransactionType;
-  amount?: number;
-  currency?: Currency;
-  amountUsd?: number;
-  amountIqd?: number;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
@@ -586,11 +578,6 @@ export interface WorkerTransactionInput {
 
 export interface SupplierTransactionInput {
   supplierId: number;
-  type?: TransactionType;
-  amount?: number;
-  currency?: Currency;
-  amountUsd?: number;
-  amountIqd?: number;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
@@ -603,6 +590,7 @@ export interface SupplierTransactionInput {
 
 export interface IncomeTransactionInput {
   projectId: number;
+  buildingId: number;
   amount?: number;
   currency?: Currency;
   amountUsd: number;
@@ -681,6 +669,19 @@ function readNumber(row: Row, ...keys: string[]) {
   }
 
   return null;
+}
+
+function readBoolean(row: Row, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+
+  return false;
 }
 
 function readDate(row: Row, ...keys: string[]) {
@@ -863,6 +864,7 @@ function normalizeProjectBuilding(row: ProjectBuildingRow): ProjectBuilding {
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
     name: readString(row, "name") ?? "Building",
+    isDefault: readBoolean(row, "is_default", "isDefault"),
     createdAt: readDate(row, "created_at", "createdAt"),
   };
 }
@@ -1187,6 +1189,8 @@ function normalizeIncomeTransaction(row: AppIncomeTransactionRow): IncomeTransac
     id: readId(row, "id"),
     projectId: readId(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
+    buildingId: readNumber(row, "building_id", "buildingId"),
+    buildingName: readString(row, "building_name", "buildingName"),
     amount: readNumber(row, "amount") ?? 0,
     currency,
     amountUsd,
@@ -1220,6 +1224,8 @@ function normalizeIncomeTransactionHistoryEntry(
     action: toIncomeTransactionHistoryAction(readString(row, "change_type", "changeType", "action")),
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
+    buildingId: readNumber(row, "building_id", "buildingId"),
+    buildingName: readString(row, "building_name", "buildingName"),
     amount: readNumber(row, "amount") ?? 0,
     currency,
     amountUsd,
@@ -1700,10 +1706,7 @@ async function buildInvoiceTransactionPayload(
 ) {
   const normalized = normalizeInvoiceInput(input);
   const buildingId = await resolveBuildingId(normalized.projectId, normalized.buildingId);
-  const entryType: PartyTransactionWritePayload["entry_type"] =
-    normalized.status === "paid" ? "payment" : "debt";
   const payload: PartyTransactionWritePayload = {
-    entry_type: entryType,
     entity_type:
       normalized.expenseType === "labor"
         ? "worker"
@@ -1713,10 +1716,6 @@ async function buildInvoiceTransactionPayload(
     worker_id: normalized.expenseType === "labor" ? normalized.laborWorkerId : null,
     supplier_id: normalized.expenseType === "products" ? normalized.supplierId : null,
     building_id: buildingId,
-    amount: normalized.totalAmount,
-    currency: normalized.currency,
-    amount_usd: normalized.totalAmountUsd,
-    amount_iqd: normalized.totalAmountIqd,
     total_amount_usd: normalized.totalAmountUsd,
     paid_amount_usd: normalized.paidAmountUsd,
     total_amount_iqd: normalized.totalAmountIqd,
@@ -1736,9 +1735,6 @@ async function buildInvoiceTransactionPayload(
 function normalizePartyTransactionInput(input: {
   partyId: number;
   partyType: PartyType;
-  type?: TransactionType;
-  amountUsd?: number;
-  amountIqd?: number;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
@@ -1747,35 +1743,30 @@ function normalizePartyTransactionInput(input: {
   date: string | null;
   buildingId: number;
 }) {
-  const legacyAmountUsd = input.amountUsd ?? 0;
-  const legacyAmountIqd = input.amountIqd ?? 0;
-  const totalAmountUsd = input.totalAmountUsd ?? (input.type === "credit" ? legacyAmountUsd : 0);
-  const paidAmountUsd = input.paidAmountUsd ?? (input.type === "debit" ? legacyAmountUsd : 0);
-  const totalAmountIqd = input.totalAmountIqd ?? (input.type === "credit" ? legacyAmountIqd : 0);
-  const paidAmountIqd = input.paidAmountIqd ?? (input.type === "debit" ? legacyAmountIqd : 0);
+  const totalAmountUsd = input.totalAmountUsd ?? 0;
+  const paidAmountUsd = input.paidAmountUsd ?? 0;
+  const totalAmountIqd = input.totalAmountIqd ?? 0;
+  const paidAmountIqd = input.paidAmountIqd ?? 0;
   const amountUsd = Math.max(totalAmountUsd, paidAmountUsd);
   const amountIqd = Math.max(totalAmountIqd, paidAmountIqd);
-  const currency = pickPrimaryCurrency(amountUsd, amountIqd);
-  const isMostlyPaid = paidAmountUsd + paidAmountIqd > totalAmountUsd + totalAmountIqd;
-  const legacyType: TransactionType = isMostlyPaid ? "debit" : "credit";
 
   assertPositiveDualCurrencyAmount(amountUsd, amountIqd, "Transaction amount");
 
   const payload: PartyTransactionWritePayload = {
-    entry_type: legacyType === "credit" ? "debt" : "payment",
     entity_type: input.partyType,
     worker_id: input.partyType === "worker" ? input.partyId : null,
     supplier_id: input.partyType === "supplier" ? input.partyId : null,
     building_id: input.buildingId,
-    amount: pickPrimaryAmount(amountUsd, amountIqd),
-    currency,
-    amount_usd: amountUsd,
-    amount_iqd: amountIqd,
     total_amount_usd: totalAmountUsd,
     paid_amount_usd: paidAmountUsd,
     total_amount_iqd: totalAmountIqd,
     paid_amount_iqd: paidAmountIqd,
-    description: normalizeOptionalText(input.description) ?? defaultTransactionDescription(legacyType),
+    description: normalizeOptionalText(input.description) ?? defaultTransactionDescription({
+      totalAmountUsd,
+      paidAmountUsd,
+      totalAmountIqd,
+      paidAmountIqd,
+    }),
     notes: null,
     date: input.date ?? new Date().toISOString().slice(0, 10),
   };
@@ -1783,8 +1774,20 @@ function normalizePartyTransactionInput(input: {
   return payload;
 }
 
-function defaultTransactionDescription(transactionType: TransactionType): string {
-  return transactionType === "credit" ? "Credit" : "Debit";
+function defaultTransactionDescription(input: {
+  totalAmountUsd: number;
+  paidAmountUsd: number;
+  totalAmountIqd: number;
+  paidAmountIqd: number;
+}): string {
+  const total = input.totalAmountUsd + input.totalAmountIqd;
+  const paid = input.paidAmountUsd + input.paidAmountIqd;
+
+  if (total > 0 && paid > 0) {
+    return "Transaction";
+  }
+
+  return paid > 0 ? "Payment" : "Invoice";
 }
 
 function assertAmountWithinLimit(
@@ -1826,20 +1829,22 @@ function assertTransactionAmountLimits(input: {
 }
 
 function transactionLimitAmounts(input: {
-  amountUsd?: number;
-  amountIqd?: number;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
   paidAmountIqd?: number;
 }) {
   return {
-    amountUsd: Math.max(input.amountUsd ?? 0, input.totalAmountUsd ?? 0, input.paidAmountUsd ?? 0),
-    amountIqd: Math.max(input.amountIqd ?? 0, input.totalAmountIqd ?? 0, input.paidAmountIqd ?? 0),
+    amountUsd: Math.max(input.totalAmountUsd ?? 0, input.paidAmountUsd ?? 0),
+    amountIqd: Math.max(input.totalAmountIqd ?? 0, input.paidAmountIqd ?? 0),
   };
 }
 
 function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
+  if (!input.buildingId) {
+    throw new Error("Income transaction building is required.");
+  }
+
   const amountUsd = input.amountUsd ?? 0;
   const amountIqd = input.amountIqd ?? 0;
   const currency = pickPrimaryCurrency(amountUsd, amountIqd);
@@ -1848,6 +1853,7 @@ function normalizeIncomeTransactionInput(input: IncomeTransactionInput) {
 
   const payload: IncomeTransactionWritePayload = {
     project_id: input.projectId,
+    building_id: input.buildingId,
     amount: pickPrimaryAmount(amountUsd, amountIqd),
     currency,
     amount_usd: amountUsd,
@@ -2326,9 +2332,6 @@ export async function createWorkerTransaction(input: WorkerTransactionInput) {
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
-    type: input.type,
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
     totalAmountUsd: input.totalAmountUsd,
     paidAmountUsd: input.paidAmountUsd,
     totalAmountIqd: input.totalAmountIqd,
@@ -2350,9 +2353,6 @@ export async function updateWorkerTransaction(id: number, input: WorkerTransacti
   const payload = normalizePartyTransactionInput({
     partyId: input.workerId,
     partyType: "worker",
-    type: input.type,
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
     totalAmountUsd: input.totalAmountUsd,
     paidAmountUsd: input.paidAmountUsd,
     totalAmountIqd: input.totalAmountIqd,
@@ -2416,9 +2416,6 @@ export async function createSupplierTransaction(input: SupplierTransactionInput)
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
-    type: input.type,
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
     totalAmountUsd: input.totalAmountUsd,
     paidAmountUsd: input.paidAmountUsd,
     totalAmountIqd: input.totalAmountIqd,
@@ -2440,9 +2437,6 @@ export async function updateSupplierTransaction(id: number, input: SupplierTrans
   const payload = normalizePartyTransactionInput({
     partyId: input.supplierId,
     partyType: "supplier",
-    type: input.type,
-    amountUsd: input.amountUsd,
-    amountIqd: input.amountIqd,
     totalAmountUsd: input.totalAmountUsd,
     paidAmountUsd: input.paidAmountUsd,
     totalAmountIqd: input.totalAmountIqd,
@@ -2592,13 +2586,7 @@ export async function updateInvoice(id: number, input: InvoiceInput) {
 
 export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: number; totalAmountIqd: number }) {
   const currentUserId = await getCurrentUserId();
-  const currency = pickPrimaryCurrency(amounts.totalAmountUsd, amounts.totalAmountIqd);
   const payload: InvoicePaidUpdatePayload = {
-    entry_type: "payment",
-    amount: pickPrimaryAmount(amounts.totalAmountUsd, amounts.totalAmountIqd),
-    currency,
-    amount_usd: amounts.totalAmountUsd,
-    amount_iqd: amounts.totalAmountIqd,
     total_amount_usd: amounts.totalAmountUsd,
     paid_amount_usd: amounts.totalAmountUsd,
     total_amount_iqd: amounts.totalAmountIqd,

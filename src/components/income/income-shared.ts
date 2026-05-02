@@ -2,6 +2,8 @@ export type IncomeRow = {
   id: number | null;
   project_id: number | null;
   project_name: string | null;
+  building_id: number | null;
+  building_name: string | null;
   amount: number | null;
   currency: string | null;
   amount_usd: number | null;
@@ -14,6 +16,7 @@ export type IncomeRow = {
 
 export type IncomeFormValues = {
   projectId: number;
+  buildingId: number;
   amountUsd?: number;
   amountIqd?: number;
   description?: string;

@@ -34,7 +34,11 @@ import {
   updateWorker,
   updateWorkerTransaction,
   type WorkerTransaction,
+  listSpecialities,
+  updateWorkerSpecialities,
+  type Speciality,
 } from "@/lib/erp";
+import { useCreateWorkerSpecialities } from "@/hooks/use-create-expense";
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { toErrorMessage } from "@/lib/refine-helpers";

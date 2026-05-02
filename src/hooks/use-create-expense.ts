@@ -28,12 +28,13 @@ function normalizeAmounts(data: ExpenseFormData) {
   const amountUsd = Number(data.amountUsd || 0);
   const amountIqd = Number(data.amountIqd || 0);
   const currency: Currency = amountUsd > 0 || amountIqd === 0 ? 'USD' : 'IQD';
+  const primaryAmount = currency === 'USD' ? amountUsd : amountIqd;
 
   return {
-    amount: currency === 'USD' ? amountUsd : amountIqd,
     amountUsd,
     amountIqd,
     currency,
+    primaryAmount,
   };
 }
 
@@ -47,9 +48,10 @@ export function useCreateExpense() {
       if (data.partyType === 'worker' && data.workerId) {
         return createWorkerTransaction({
           workerId: data.workerId,
-          type: 'credit',
-          amountUsd: amounts.amountUsd,
-          amountIqd: amounts.amountIqd,
+          totalAmountUsd: amounts.amountUsd,
+          paidAmountUsd: 0,
+          totalAmountIqd: amounts.amountIqd,
+          paidAmountIqd: 0,
           description: data.description ?? null,
           date: data.date,
           projectId: data.projectId ?? null,
@@ -60,9 +62,10 @@ export function useCreateExpense() {
       if (data.partyType === 'supplier' && data.supplierId) {
         return createSupplierTransaction({
           supplierId: data.supplierId,
-          type: 'credit',
-          amountUsd: amounts.amountUsd,
-          amountIqd: amounts.amountIqd,
+          totalAmountUsd: amounts.amountUsd,
+          paidAmountUsd: 0,
+          totalAmountIqd: amounts.amountIqd,
+          paidAmountIqd: 0,
           description: data.description ?? null,
           date: data.date,
           projectId: data.projectId ?? null,
@@ -79,8 +82,8 @@ export function useCreateExpense() {
         projectId: data.projectId,
         buildingId: data.buildingId ?? null,
         productId: null,
-        totalAmount: amounts.amount,
-        paidAmount: amounts.amount,
+        totalAmount: amounts.primaryAmount,
+        paidAmount: amounts.primaryAmount,
         currency: amounts.currency,
         totalAmountUsd: amounts.amountUsd,
         paidAmountUsd: amounts.amountUsd,

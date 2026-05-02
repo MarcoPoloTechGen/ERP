@@ -12,6 +12,9 @@ alter table public.suppliers
 alter table public.projects
   add column if not exists budget numeric;
 
+alter table public.project_buildings
+  add column if not exists is_default boolean not null default false;
+
 alter table public.materials
   add column if not exists supplier_id integer references public.suppliers(id) on delete set null,
   add column if not exists project_id integer references public.projects(id) on delete set null,
@@ -60,7 +63,7 @@ begin
 end $$;
 
 insert into public.project_buildings (project_id, name, is_default)
-select p.id, 'Depenses generales', true
+select p.id, 'تێچوی گشتی ', true
 from public.projects as p
 where not exists (
   select 1
@@ -95,7 +98,7 @@ begin
   );
 
   insert into public.project_buildings (project_id, name, is_default)
-  select p_project_id, 'Depenses generales', true
+  select p_project_id, 'تێچوی گشتی ', true
   where not exists (
     select 1
     from public.project_buildings

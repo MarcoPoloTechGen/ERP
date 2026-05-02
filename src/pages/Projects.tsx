@@ -25,6 +25,7 @@ import {
 import { ChevronRight, Download, FileSpreadsheet, MinusCircle, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   createProject,
+  DEFAULT_PROJECT_BUILDING_NAME,
   deleteProject,
   erpKeys,
   listProjectBuildings,
@@ -69,6 +70,8 @@ type ProjectFormValues = {
   buildings?: { name?: string }[];
 };
 
+const LEGACY_DEFAULT_PROJECT_BUILDING_NAME = "Depenses generales";
+
 const statusColor: Record<ProjectStatus, string> = {
   active: "green",
   completed: "blue",
@@ -90,6 +93,14 @@ function buildFilters(search: string, status: ProjectStatus | "all") {
   addContainsSearchFilter(filters, ["name", "client", "location"], search);
   addEqualFilter(filters, "status", status);
   return filters;
+}
+
+function isDefaultProjectBuildingName(name: string) {
+  const trimmedName = name.trim();
+  return (
+    trimmedName === DEFAULT_PROJECT_BUILDING_NAME.trim() ||
+    trimmedName === LEGACY_DEFAULT_PROJECT_BUILDING_NAME
+  );
 }
 
 function ProjectModal({
@@ -118,7 +129,9 @@ function ProjectModal({
     }
 
     if (projectBuildings) {
-      const buildings = projectBuildings.map((building) => ({ name: building.name }));
+      const buildings = projectBuildings
+        .filter((building) => !building.isDefault && !isDefaultProjectBuildingName(building.name))
+        .map((building) => ({ name: building.name }));
       form.setFieldValue("buildings", buildings.length ? buildings : [{ name: "" }]);
     }
   }, [form, project, projectBuildings]);
@@ -133,7 +146,9 @@ function ProjectModal({
         budget: values.budget ?? null,
         startDate: values.startDate || null,
         endDate: values.endDate || null,
-        buildings: (values.buildings ?? []).map((building) => building.name ?? ""),
+        buildings: (values.buildings ?? [])
+          .map((building) => building.name ?? "")
+          .filter((name) => !isDefaultProjectBuildingName(name)),
       };
 
       if (project) {
@@ -228,6 +243,7 @@ function ProjectModal({
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
           {t.buildingsHint}
         </Typography.Paragraph>
+        <Input value={DEFAULT_PROJECT_BUILDING_NAME} disabled style={{ marginBottom: 8 }} />
         <Form.List name="buildings">
           {(fields, { add, remove }) => (
             <Space direction="vertical" size="small" style={{ width: "100%" }}>
