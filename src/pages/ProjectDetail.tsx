@@ -1,10 +1,24 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, FileText } from "lucide-react";
-import { Button, Card, Col, Empty, Row, Skeleton, Space, Tag, Typography } from "antd";
-import { erpKeys, getProject, listInvoices, listProjectBuildings, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
+import { ArrowLeft, FileText, Pencil, Trash2 } from "lucide-react";
+import { App, Button, Card, Col, Empty, Popconfirm, Row, Skeleton, Space, Tag, Typography } from "antd";
+import { ProjectModal } from "@/components/projects/ProjectModal";
+import {
+  deleteProject,
+  erpKeys,
+  getProject,
+  listInvoices,
+  listProjectBuildings,
+  type InvoiceStatus,
+  type ProjectStatus,
+} from "@/lib/erp";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
+import { canDeleteProjects, hasAdminAccess } from "@/lib/permissions";
+import { toErrorMessage } from "@/lib/refine-helpers";
+import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
 function projectStatusColor(status: ProjectStatus) {
   if (status === "completed") {
@@ -30,22 +44,40 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const { t } = useLang();
+  const { profile } = useAuth();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const canManageProjects = hasAdminAccess(profile?.role);
+  const canRemoveProjects = canDeleteProjects(profile?.role);
 
-  const { data: project, isLoading } = useQuery({
+  const projectQuery = useQuery({
     queryKey: erpKeys.project(projectId),
     queryFn: () => getProject(projectId),
     enabled: Number.isFinite(projectId),
   });
+  const { data: project, isLoading } = projectQuery;
 
   const { data: invoices } = useQuery({
     queryKey: erpKeys.invoices,
     queryFn: listInvoices,
   });
 
-  const { data: buildings } = useQuery({
+  const buildingsQuery = useQuery({
     queryKey: erpKeys.projectBuildings(projectId),
     queryFn: () => listProjectBuildings(projectId),
     enabled: Number.isFinite(projectId),
+  });
+  const { data: buildings } = buildingsQuery;
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(projectId),
+    onSuccess: async () => {
+      await erpInvalidation.projects();
+      message.success(t.deleted);
+      window.location.href = "/projects";
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
   });
 
   const relatedInvoices = invoices?.filter((invoice) => invoice.projectId === projectId) ?? [];
@@ -57,7 +89,7 @@ export default function ProjectDetail() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Row align="middle" gutter={[16, 16]}>
+      <Row align="middle" gutter={[16, 16]} justify="space-between">
         <Col flex="none">
           <Link href="/projects">
             <Button icon={<ArrowLeft size={16} />} />
@@ -74,6 +106,29 @@ export default function ProjectDetail() {
             <Typography.Text type="secondary">{project.client ?? t.noClient}</Typography.Text>
           </div>
         </Col>
+        {canManageProjects || canRemoveProjects ? (
+          <Col flex="none">
+            <Space>
+              {canManageProjects ? (
+                <Button icon={<Pencil size={16} />} onClick={() => setShowProjectModal(true)}>
+                  {t.edit}
+                </Button>
+              ) : null}
+              {canRemoveProjects ? (
+                <Popconfirm
+                  title={t.deleteProjectConfirm}
+                  okText={t.remove}
+                  cancelText={t.cancel}
+                  onConfirm={() => deleteMutation.mutate()}
+                >
+                  <Button danger icon={<Trash2 size={16} />} loading={deleteMutation.isPending}>
+                    {t.remove}
+                  </Button>
+                </Popconfirm>
+              ) : null}
+            </Space>
+          </Col>
+        ) : null}
       </Row>
 
       <Card title={t.projectInfo}>
@@ -172,6 +227,17 @@ export default function ProjectDetail() {
           </Space>
         )}
       </Card>
+
+      {showProjectModal ? (
+        <ProjectModal
+          project={project}
+          onClose={() => setShowProjectModal(false)}
+          onSaved={() => {
+            void projectQuery.refetch();
+            void buildingsQuery.refetch();
+          }}
+        />
+      ) : null}
     </Space>
   );
 }

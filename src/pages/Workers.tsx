@@ -34,6 +34,11 @@ import {
   type Speciality,
 } from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
+import {
+  WorkerTransactionModal,
+  getWorkerTransactionModeLabel,
+  type WorkerTransactionMode,
+} from "@/components/workers/WorkerTransactionModal";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
@@ -307,6 +312,7 @@ function WorkerModal({
 export default function Workers() {
   const { t } = useLang();
   const [open, setOpen] = useState(false);
+  const [transactionTarget, setTransactionTarget] = useState<{ worker: WorkerRow; mode: WorkerTransactionMode } | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const search = useDeferredValue(searchInput.trim());
 
@@ -403,6 +409,32 @@ export default function Workers() {
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {balanceUsdValue(worker) >= 0 && balanceIqdValue(worker) >= 0 ? t.toReceive : t.owes}
           </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      align: "right",
+      width: 390,
+      render: (_value, worker) => (
+        <Space
+          size="small"
+          wrap
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          {(["worked", "paid", "worked_paid"] satisfies WorkerTransactionMode[]).map((mode) => (
+            <Button
+              key={mode}
+              size="small"
+              icon={<Plus size={14} />}
+              onClick={() => setTransactionTarget({ worker, mode })}
+            >
+              {getWorkerTransactionModeLabel(t, mode)}
+            </Button>
+          ))}
         </Space>
       ),
     },
@@ -517,6 +549,15 @@ export default function Workers() {
 
       {open ? (
         <WorkerModal onClose={() => setOpen(false)} onSaved={() => void tableQuery.refetch()} />
+      ) : null}
+
+      {transactionTarget ? (
+        <WorkerTransactionModal
+          mode={transactionTarget.mode}
+          workerId={transactionTarget.worker.id}
+          onClose={() => setTransactionTarget(null)}
+          onSaved={() => void tableQuery.refetch()}
+        />
       ) : null}
     </Space>
   );

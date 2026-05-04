@@ -143,6 +143,9 @@ export type TranslationShape = {
   transactions: string;
   transactionsCount: (count: number) => string;
   addTransaction: string;
+  workerWorked: string;
+  workerPaid: string;
+  workerWorkedPaid: string;
   noTransactions: string;
   newTransaction: string;
   editTransaction: string;
