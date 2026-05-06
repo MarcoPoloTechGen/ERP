@@ -8,6 +8,7 @@ const CURRENCY_DISPLAY_LABELS: Record<Currency, string> = {
 const MONEY_LOCALE = "en-US";
 const MONEY_INPUT_CLASS_NAME = "erp-currency-input-ltr";
 const MONEY_FRACTION_DIGITS = 0;
+const DECIMAL_COMMA_MAX_FRACTION_DIGITS = 2;
 
 const CURRENCY_NUMBER_FORMATTER = new Intl.NumberFormat(MONEY_LOCALE, {
   minimumFractionDigits: MONEY_FRACTION_DIGITS,
@@ -49,12 +50,16 @@ function formatCurrencyText(amount: number, currency: Currency) {
   return `${formatCurrencyNumber(amount)} ${formatCurrencyLabel(currency)}`;
 }
 
-export function formatCurrencyInputValue(value: string | number | undefined) {
-  if (value == null || value === "") {
+export function formatCurrencyInputValue(
+  value: string | number | undefined,
+  info?: { userTyping: boolean; input: string },
+) {
+  const inputValue = info?.userTyping ? info.input : value;
+  if (inputValue == null || inputValue === "") {
     return "";
   }
 
-  const amount = typeof value === "number" ? value : Number(parseCurrencyInputValue(value));
+  const amount = typeof inputValue === "number" ? inputValue : Number(parseCurrencyInputValue(inputValue));
   if (!Number.isFinite(amount)) {
     return "";
   }
@@ -70,26 +75,29 @@ export function parseCurrencyInputValue(value: string | undefined) {
 
   const lastComma = cleanValue.lastIndexOf(",");
   const lastDot = cleanValue.lastIndexOf(".");
-  const decimalSeparator =
-    lastComma >= 0 && lastDot >= 0
-      ? lastComma > lastDot
-        ? ","
-        : "."
-      : lastComma >= 0 && cleanValue.length - lastComma - 1 !== 3
-        ? ","
-        : lastDot >= 0 && cleanValue.length - lastDot - 1 !== 3
-          ? "."
-          : null;
 
-  if (decimalSeparator === ",") {
+  if (lastComma >= 0 && lastDot >= 0 && lastComma > lastDot) {
     return cleanValue.replace(/\./g, "").replace(",", ".");
   }
 
-  if (decimalSeparator === ".") {
+  if (lastDot >= 0) {
     return cleanValue.replace(/,/g, "");
   }
 
-  return cleanValue.replace(/[,.]/g, "");
+  const commaCount = (cleanValue.match(/,/g) ?? []).length;
+  if (commaCount === 1) {
+    const fractionLength = cleanValue.length - lastComma - 1;
+    if (fractionLength > 0 && fractionLength <= DECIMAL_COMMA_MAX_FRACTION_DIGITS) {
+      return cleanValue.replace(",", ".");
+    }
+  }
+
+  return cleanValue.replace(/,/g, "");
+}
+
+export function parseCurrencyInputNumber(value: string | undefined) {
+  const parsedValue = Number(parseCurrencyInputValue(value));
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
 }
 
 export function currencyInputProps(currency: Currency) {
@@ -98,10 +106,11 @@ export function currencyInputProps(currency: Currency) {
     "data-currency": currency,
     dir: "ltr" as const,
     formatter: formatCurrencyInputValue,
-    parser: parseCurrencyInputValue,
+    parser: parseCurrencyInputNumber,
     precision: MONEY_FRACTION_DIGITS,
     step: 1,
     controls: false,
+    inputMode: "numeric" as const,
   };
 }
 

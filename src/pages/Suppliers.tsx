@@ -12,13 +12,23 @@ import {
   Input,
   Modal,
   Row,
+  Select,
   Space,
   Table,
+  Tag,
   Typography,
   type TableProps,
 } from "antd";
 import { Download, FileSpreadsheet, Plus } from "lucide-react";
-import { createSupplier, erpKeys, listSupplierBalances } from "@/lib/erp";
+import {
+  createSupplier,
+  erpKeys,
+  listProducts,
+  listProductsBySupplierIds,
+  listSupplierBalances,
+  updateSupplierProducts,
+  type Product,
+} from "@/lib/erp";
 import { exportRowsToCsv, exportRowsToExcel } from "@/lib/export";
 import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
@@ -45,12 +55,19 @@ type SupplierFormValues = {
   phone?: string;
   email?: string;
   address?: string;
+  productIds?: number[];
 };
 
 function buildFilters(search: string) {
   const filters: CrudFilters = [];
   addContainsSearchFilter(filters, ["name", "contact", "phone", "email", "address"], search);
   return filters;
+}
+
+function productOptionLabel(product: Product) {
+  return [product.name, product.unit, formatCurrencyPair({ usd: product.unitPriceUsd, iqd: product.unitPriceIqd }, { hideZero: true })]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function SupplierModal({
@@ -64,6 +81,10 @@ function SupplierModal({
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<SupplierFormValues>();
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: erpKeys.products,
+    queryFn: listProducts,
+  });
 
   const saveMutation = useMutation({
     mutationFn: async (values: SupplierFormValues) => {
@@ -75,7 +96,10 @@ function SupplierModal({
         address: values.address?.trim() || null,
       };
 
-      await createSupplier(payload);
+      const supplierId = await createSupplier(payload);
+      if (values.productIds?.length) {
+        await updateSupplierProducts(supplierId, values.productIds);
+      }
     },
     onSuccess: async () => {
       await erpInvalidation.suppliers();
@@ -133,6 +157,22 @@ function SupplierModal({
             </Form.Item>
           </Col>
         </Row>
+
+        <Form.Item name="productIds" label={t.products}>
+          <Select
+            allowClear
+            mode="multiple"
+            loading={productsLoading}
+            optionFilterProp="label"
+            placeholder={products.length ? t.products : t.noProducts}
+            showSearch
+            options={products
+              .map((product) => ({
+                label: productOptionLabel(product),
+                value: product.id,
+              }))}
+          />
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -161,6 +201,15 @@ export default function Suppliers() {
   }, [search, setCurrentPage, setFilters]);
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const supplierIds = useMemo(
+    () => Array.from(new Set(rows.map((supplier) => supplier.id).filter((id) => Number.isFinite(id)))),
+    [rows],
+  );
+  const { data: productsBySupplier = {} } = useQuery({
+    queryKey: [...erpKeys.supplierProductsList, supplierIds],
+    queryFn: () => listProductsBySupplierIds(supplierIds),
+    enabled: supplierIds.length > 0,
+  });
   const supplierBalances = useMemo(() => {
     const balancesBySupplier = new Map<number, { usd: number; iqd: number }>();
 
@@ -178,7 +227,22 @@ export default function Suppliers() {
       responsive: ["xs", "sm", "md", "lg"],
       ellipsis: true,
       minWidth: 120,
-      render: (value: string) => <Typography.Text strong ellipsis>{value}</Typography.Text>,
+      render: (value: string, supplier) => (
+        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+          <Typography.Text strong ellipsis>
+            {value}
+          </Typography.Text>
+          {productsBySupplier[supplier.id]?.length ? (
+            <Space size={[4, 4]} wrap>
+              {productsBySupplier[supplier.id].map((product) => (
+                <Tag key={product.id} style={{ marginInlineEnd: 0 }}>
+                  {product.name}
+                </Tag>
+              ))}
+            </Space>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: t.contact,

@@ -4,6 +4,8 @@ import { Link, useParams } from "wouter";
 import { ArrowLeft, FileText, Pencil, Trash2 } from "lucide-react";
 import { App, Button, Card, Col, Empty, Popconfirm, Row, Skeleton, Space, Tag, Typography } from "antd";
 import { ProjectModal } from "@/components/projects/ProjectModal";
+import { ProjectAlertsCard } from "@/components/projects/ProjectAlertsCard";
+import { ProjectFilesCard } from "@/components/projects/ProjectFilesCard";
 import {
   deleteProject,
   erpKeys,
@@ -183,6 +185,10 @@ export default function ProjectDetail() {
           </Space>
         )}
       </Card>
+
+      <ProjectFilesCard projectId={projectId} />
+
+      <ProjectAlertsCard projectId={projectId} />
 
       <Card
         title={

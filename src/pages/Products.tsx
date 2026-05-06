@@ -30,7 +30,6 @@ import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
 import {
   addContainsSearchFilter,
   addCurrencyAmountFilter,
-  addEqualFilter,
   STANDARD_PAGE_SIZE,
   toErrorMessage,
 } from "@/lib/refine-helpers";
@@ -43,18 +42,17 @@ import { useSuppliers } from "@/hooks/use-suppliers";
 function buildFilters({
   search,
   projectId,
-  supplierId,
   currency,
 }: {
   search: string;
   projectId: string;
-  supplierId: string;
   currency: Currency | "all";
 }) {
   const filters: CrudFilters = [];
   addContainsSearchFilter(filters, ["name", "supplier_name", "project_name", "building_name", "unit"], search);
-  addEqualFilter(filters, "project_id", projectId === "all" ? "all" : Number(projectId));
-  addEqualFilter(filters, "supplier_id", supplierId === "all" ? "all" : Number(supplierId));
+  if (projectId !== "all") {
+    filters.push({ field: "project_id", operator: "eq", value: Number(projectId) });
+  }
   addCurrencyAmountFilter(filters, currency, { USD: "unit_price_usd", IQD: "unit_price_iqd" });
   return filters;
 }
@@ -85,8 +83,8 @@ export default function Products() {
 
   useEffect(() => {
     setCurrentPage(1);
-    setFilters(buildFilters({ search, projectId: effectiveProjectFilter, supplierId: supplierFilter, currency: currencyFilter }), "replace");
-  }, [currencyFilter, effectiveProjectFilter, search, setCurrentPage, setFilters, supplierFilter]);
+    setFilters(buildFilters({ search, projectId: effectiveProjectFilter, currency: currencyFilter }), "replace");
+  }, [currencyFilter, effectiveProjectFilter, search, setCurrentPage, setFilters]);
 
   const deleteMutation = useMutation({
     mutationFn: (product: ProductRow) => {
@@ -104,6 +102,14 @@ export default function Products() {
   });
 
   const rows = useMemo(() => tableProps.dataSource ?? [], [tableProps.dataSource]);
+  const visibleRows = useMemo(() => {
+    if (supplierFilter === "all") {
+      return rows;
+    }
+
+    const selectedSupplierId = Number(supplierFilter);
+    return rows.filter((product) => product.supplier_ids?.includes(selectedSupplierId));
+  }, [rows, supplierFilter]);
   const hasFilters = Boolean(
     searchInput || (scopedProjectId == null && projectFilter !== "all") || supplierFilter !== "all" || currencyFilter !== "all",
   );
@@ -169,7 +175,7 @@ export default function Products() {
 
   function exportProducts(format: "csv" | "xlsx") {
     const fileBase = t.productsTitle;
-    const exportRows = rows.map((product) => ({
+    const exportRows = visibleRows.map((product) => ({
       [t.name]: product.name ?? "",
       [t.supplierLabel]: product.supplier_name ?? "",
       [t.projectOption]: product.project_name ?? "",
@@ -198,10 +204,10 @@ export default function Products() {
         </Col>
         <Col>
           <Space wrap>
-            <Button icon={<Download size={16} />} disabled={!rows.length} onClick={() => exportProducts("csv")}>
+            <Button icon={<Download size={16} />} disabled={!visibleRows.length} onClick={() => exportProducts("csv")}>
               CSV
             </Button>
-            <Button icon={<FileSpreadsheet size={16} />} disabled={!rows.length} onClick={() => exportProducts("xlsx")}>
+            <Button icon={<FileSpreadsheet size={16} />} disabled={!visibleRows.length} onClick={() => exportProducts("xlsx")}>
               {t.excel}
             </Button>
             <Button
@@ -292,6 +298,7 @@ export default function Products() {
 
       <Table<ProductRow>
         {...tableProps}
+        dataSource={visibleRows}
         rowKey="id"
         columns={columns}
         scroll={{ x: 1000 }}

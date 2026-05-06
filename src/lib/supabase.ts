@@ -6,6 +6,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const invoiceImagesBucket = "invoice-images";
 export const brandingAssetsBucket = "branding-assets";
+export const projectFilesBucket = "project-files";
 
 export const supabaseConfigError =
   !supabaseUrl || !supabaseAnonKey
@@ -99,6 +100,10 @@ export function resolveBrandingAssetPath(pathOrUrl: string | null | undefined) {
   return extractStoragePathFromBucketUrl(brandingAssetsBucket, pathOrUrl);
 }
 
+export function resolveProjectFilePath(pathOrUrl: string | null | undefined) {
+  return extractStoragePathFromBucketUrl(projectFilesBucket, pathOrUrl);
+}
+
 export function getPublicBrandingAssetUrl(pathOrUrl: string | null | undefined) {
   const path = resolveBrandingAssetPath(pathOrUrl);
   if (!path) {
@@ -149,6 +154,23 @@ export async function createSignedInvoiceImageUrl(pathOrUrl: string | null | und
   return urlsByPath.get(resolvedPath) ?? null;
 }
 
+export async function createSignedProjectFileUrl(pathOrUrl: string | null | undefined, expiresIn = 300) {
+  const resolvedPath = resolveProjectFilePath(pathOrUrl);
+  if (!resolvedPath) {
+    return null;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(projectFilesBucket)
+    .createSignedUrl(resolvedPath, expiresIn, { download: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data.signedUrl;
+}
+
 export async function uploadInvoiceImage(
   file: File,
   expenseTitle?: string,
@@ -176,6 +198,29 @@ export async function uploadInvoiceImage(
   };
 }
 
+export async function uploadProjectFile(file: File, projectId: number, uploaderId: string) {
+  const extension = getFileExtension(file);
+  const fileNameWithoutExtension = file.name.replace(/\.[^.]+$/, "");
+  const fileNameBase = sanitizeSegment(fileNameWithoutExtension || "file") || "file";
+  const path = `project-${projectId}/user-${uploaderId}/${new Date().getUTCFullYear()}/${Date.now()}-${fileNameBase}.${extension}`;
+
+  const { error } = await supabase.storage
+    .from(projectFilesBucket)
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    path,
+  };
+}
+
 export async function deleteInvoiceImageByUrl(pathOrUrl: string | null | undefined) {
   const path = resolveInvoiceImagePath(pathOrUrl);
   if (!path) {
@@ -183,6 +228,18 @@ export async function deleteInvoiceImageByUrl(pathOrUrl: string | null | undefin
   }
 
   const { error } = await supabase.storage.from(invoiceImagesBucket).remove([path]);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteProjectFileByPath(pathOrUrl: string | null | undefined) {
+  const path = resolveProjectFilePath(pathOrUrl);
+  if (!path) {
+    return;
+  }
+
+  const { error } = await supabase.storage.from(projectFilesBucket).remove([path]);
   if (error) {
     throw error;
   }

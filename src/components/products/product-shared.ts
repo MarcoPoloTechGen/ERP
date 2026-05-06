@@ -3,6 +3,8 @@ export type ProductRow = {
   name: string | null;
   supplier_id: number | null;
   supplier_name: string | null;
+  supplier_ids?: number[] | null;
+  supplier_names?: string[] | null;
   project_id: number | null;
   project_name: string | null;
   building_id: number | null;

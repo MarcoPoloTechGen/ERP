@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Col, Form, Image as AntImage, Input, InputNumber, Modal, Row, Select, Space, Typography, Upload } from "antd";
 import { Image as ImageIcon } from "lucide-react";
-import { createInvoice, updateInvoice, type InvoiceStatus } from "@/lib/erp";
+import { createInvoice, erpKeys, listProductsBySupplierIds, updateInvoice, type InvoiceStatus } from "@/lib/erp";
 import {
   buildExpenseAssignmentOptions,
   buildingExpenseAssignmentKey,
@@ -123,6 +123,11 @@ export function InvoiceModal({
   const { data: projects } = useProjects();
   const { data: products } = useProducts();
   const { data: workers } = useWorkers();
+  const { data: productsBySupplier = {} } = useQuery({
+    queryKey: supplierId == null ? [...erpKeys.supplierProductsList, "none"] : erpKeys.supplierProducts(supplierId),
+    queryFn: () => listProductsBySupplierIds(supplierId == null ? [] : [supplierId]),
+    enabled: supplierId != null,
+  });
   const { data: projectBuildings } = useProjectBuildings();
   const initialAssignmentKey =
     invoice == null && initialAssignment?.projectId != null && initialAssignment.buildingId != null
@@ -195,8 +200,10 @@ export function InvoiceModal({
       return [];
     }
 
-    return projectProducts.filter((product) => product.supplierId === supplierId);
-  }, [projectProducts, supplierId]);
+    const linkedProducts = productsBySupplier[supplierId] ?? [];
+    const linkedProductIds = new Set(linkedProducts.map((product) => product.id));
+    return projectProducts.filter((product) => linkedProductIds.has(product.id));
+  }, [productsBySupplier, projectProducts, supplierId]);
   const showProductField = expenseType === "products" && supplierId != null && supplierProducts.length > 1;
   const workerNameById = useMemo(() => {
     return new Map((workers ?? []).map((worker) => [worker.id, worker.name]));

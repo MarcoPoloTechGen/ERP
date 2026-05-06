@@ -51,7 +51,13 @@ export function useErpInvalidation() {
           erpKeys.supplierBalances,
           erpKeys.supplierTransactionsList,
         ]),
-      products: () => invalidateGroup(queryClient, [erpKeys.products, erpKeys.dashboard]),
+      products: () =>
+        invalidateGroup(queryClient, [
+          erpKeys.products,
+          erpKeys.supplierProductsList,
+          erpKeys.suppliers,
+          erpKeys.dashboard,
+        ]),
       specialities: () => invalidateGroup(queryClient, [erpKeys.specialities, erpKeys.workerSpecialitiesList]),
       projects: () =>
         invalidateGroup(queryClient, [
@@ -65,6 +71,7 @@ export function useErpInvalidation() {
       suppliers: () =>
         invalidateGroup(queryClient, [
           erpKeys.suppliers,
+          erpKeys.supplierProductsList,
           erpKeys.supplierBalances,
           erpKeys.supplierTransactionsList,
           erpKeys.invoices,
@@ -72,6 +79,9 @@ export function useErpInvalidation() {
       supplierDetail: (supplierId: number) =>
         invalidateGroup(queryClient, [
           erpKeys.supplier(supplierId),
+          erpKeys.supplierProducts(supplierId),
+          erpKeys.supplierProductsList,
+          erpKeys.products,
           erpKeys.supplierTransactions(supplierId),
           erpKeys.supplierTransactionsList,
           erpKeys.supplierBalances,

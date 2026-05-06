@@ -8,6 +8,7 @@ import {
   listProjectBuildings,
   listProjects,
   updateWorkerTransaction,
+  type Currency,
   type WorkerTransaction,
 } from "@/lib/erp";
 import { ModalTitle } from "@/components/ModalTitle";
@@ -32,6 +33,7 @@ export function getWorkerTransactionModeLabel(t: TranslationShape, mode: WorkerT
 }
 
 type TransactionFormValues = {
+  currency?: Currency;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
@@ -41,6 +43,29 @@ type TransactionFormValues = {
   projectId?: number;
   buildingId?: number;
 };
+
+function getInitialTransactionCurrency(transaction?: WorkerTransaction): Currency {
+  if (!transaction) {
+    return "IQD";
+  }
+
+  const hasUsdAmount = transaction.totalAmountUsd > 0 || transaction.paidAmountUsd > 0;
+  const hasIqdAmount = transaction.totalAmountIqd > 0 || transaction.paidAmountIqd > 0;
+
+  if (transaction.currency === "USD" && hasUsdAmount) {
+    return "USD";
+  }
+
+  if (transaction.currency === "IQD" && hasIqdAmount) {
+    return "IQD";
+  }
+
+  if (hasIqdAmount) {
+    return "IQD";
+  }
+
+  return hasUsdAmount ? "USD" : "IQD";
+}
 
 export function WorkerTransactionModal({
   mode = "worked_paid",
@@ -61,6 +86,8 @@ export function WorkerTransactionModal({
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<TransactionFormValues>();
   const selectedProjectId = Form.useWatch("projectId", form);
+  const initialCurrency = getInitialTransactionCurrency(transaction);
+  const selectedCurrency = Form.useWatch("currency", form) ?? initialCurrency;
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const lockedProjectLabel = scopedProjectId == null
     ? null
@@ -80,12 +107,13 @@ export function WorkerTransactionModal({
 
   const saveMutation = useMutation({
     mutationFn: (values: TransactionFormValues) => {
+      const currency = values.currency ?? initialCurrency;
       const payload = {
         workerId,
-        totalAmountUsd: showTotalFields ? Number(values.totalAmountUsd || 0) : 0,
-        paidAmountUsd: showPaidFields ? Number(values.paidAmountUsd || 0) : 0,
-        totalAmountIqd: showTotalFields ? Number(values.totalAmountIqd || 0) : 0,
-        paidAmountIqd: showPaidFields ? Number(values.paidAmountIqd || 0) : 0,
+        totalAmountUsd: showTotalFields && currency === "USD" ? Number(values.totalAmountUsd || 0) : 0,
+        paidAmountUsd: showPaidFields && currency === "USD" ? Number(values.paidAmountUsd || 0) : 0,
+        totalAmountIqd: showTotalFields && currency === "IQD" ? Number(values.totalAmountIqd || 0) : 0,
+        paidAmountIqd: showPaidFields && currency === "IQD" ? Number(values.paidAmountIqd || 0) : 0,
         description: values.description?.trim() || null,
         date: values.date || null,
         projectId: scopedProjectId ?? values.projectId ?? null,
@@ -104,8 +132,12 @@ export function WorkerTransactionModal({
 
   const validateAmountPair = () => {
     const values = form.getFieldsValue(["totalAmountUsd", "paidAmountUsd", "totalAmountIqd", "paidAmountIqd"]);
-    const totalAmount = Number(values.totalAmountUsd || 0) + Number(values.totalAmountIqd || 0);
-    const paidAmount = Number(values.paidAmountUsd || 0) + Number(values.paidAmountIqd || 0);
+    const totalAmount = selectedCurrency === "USD"
+      ? Number(values.totalAmountUsd || 0)
+      : Number(values.totalAmountIqd || 0);
+    const paidAmount = selectedCurrency === "USD"
+      ? Number(values.paidAmountUsd || 0)
+      : Number(values.paidAmountIqd || 0);
 
     if (showTotalFields && showPaidFields) {
       return totalAmount > 0 || paidAmount > 0
@@ -151,6 +183,7 @@ export function WorkerTransactionModal({
         form={form}
         layout="vertical"
         initialValues={{
+          currency: initialCurrency,
           totalAmountUsd: transaction?.totalAmountUsd ?? 0,
           paidAmountUsd: transaction?.paidAmountUsd ?? 0,
           totalAmountIqd: transaction?.totalAmountIqd ?? 0,
@@ -163,56 +196,72 @@ export function WorkerTransactionModal({
         onFinish={(values) => saveMutation.mutate(values)}
       >
         <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="currency" label={t.currency} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                options={[
+                  { label: "IQD", value: "IQD" },
+                  { label: "USD", value: "USD" },
+                ]}
+              />
+            </Form.Item>
+          </Col>
           {showTotalFields ? (
             <>
-              <Col xs={24} md={12}>
-                <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
-                  <InputNumber
-                    min={appSettings?.transactionAmountMinUsd ?? 0}
-                    max={appSettings?.transactionAmountMaxUsd ?? undefined}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    {...currencyInputProps("USD")}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
-                  <InputNumber
-                    min={appSettings?.transactionAmountMinIqd ?? 0}
-                    max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    {...currencyInputProps("IQD")}
-                  />
-                </Form.Item>
-              </Col>
+              {selectedCurrency === "USD" ? (
+                <Col xs={24} md={12}>
+                  <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+                    <InputNumber
+                      min={appSettings?.transactionAmountMinUsd ?? 0}
+                      max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      {...currencyInputProps("USD")}
+                    />
+                  </Form.Item>
+                </Col>
+              ) : (
+                <Col xs={24} md={12}>
+                  <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
+                    <InputNumber
+                      min={appSettings?.transactionAmountMinIqd ?? 0}
+                      max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      {...currencyInputProps("IQD")}
+                    />
+                  </Form.Item>
+                </Col>
+              )}
             </>
           ) : null}
           {showPaidFields ? (
             <>
-              <Col xs={24} md={12}>
-                <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
-                  <InputNumber
-                    min={appSettings?.transactionAmountMinUsd ?? 0}
-                    max={appSettings?.transactionAmountMaxUsd ?? undefined}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    {...currencyInputProps("USD")}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
-                  <InputNumber
-                    min={appSettings?.transactionAmountMinIqd ?? 0}
-                    max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                    step={0.01}
-                    style={{ width: "100%" }}
-                    {...currencyInputProps("IQD")}
-                  />
-                </Form.Item>
-              </Col>
+              {selectedCurrency === "USD" ? (
+                <Col xs={24} md={12}>
+                  <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+                    <InputNumber
+                      min={appSettings?.transactionAmountMinUsd ?? 0}
+                      max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      {...currencyInputProps("USD")}
+                    />
+                  </Form.Item>
+                </Col>
+              ) : (
+                <Col xs={24} md={12}>
+                  <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
+                    <InputNumber
+                      min={appSettings?.transactionAmountMinIqd ?? 0}
+                      max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                      step={0.01}
+                      style={{ width: "100%" }}
+                      {...currencyInputProps("IQD")}
+                    />
+                  </Form.Item>
+                </Col>
+              )}
             </>
           ) : null}
           {scopedProjectId == null ? (

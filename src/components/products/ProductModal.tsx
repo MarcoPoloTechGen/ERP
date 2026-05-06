@@ -7,15 +7,16 @@ import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 import { useProjectBuildings, useProjects } from "@/hooks/use-projects";
-import { useSuppliers } from "@/hooks/use-suppliers";
 import { ModalTitle } from "@/components/ModalTitle";
 import type { ProductFormValues, ProductRow } from "@/components/products/product-shared";
 
 export function ProductModal({
+  lockedSupplier,
   product,
   onClose,
   onSaved,
 }: {
+  lockedSupplier?: { id: number; name: string };
   product?: ProductRow;
   onClose: () => void;
   onSaved: () => void;
@@ -28,18 +29,18 @@ export function ProductModal({
   const projectId = Form.useWatch("projectId", form);
   const selectedProjectId = scopedProjectId ?? (typeof projectId === "number" ? projectId : undefined);
 
-  const { data: suppliers } = useSuppliers();
   const { data: projects } = useProjects();
   const lockedProjectLabel = scopedProjectId == null
     ? null
     : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
+  const lockedLabel = [lockedProjectLabel, lockedSupplier?.name].filter(Boolean).join(" | ") || null;
   const { data: buildings } = useProjectBuildings(selectedProjectId, selectedProjectId != null);
 
   const saveMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
       const payload = {
         name: values.name.trim(),
-        supplierId: values.supplierId ?? null,
+        supplierId: lockedSupplier?.id ?? values.supplierId ?? null,
         projectId: scopedProjectId ?? values.projectId ?? null,
         buildingId: values.buildingId ?? null,
         unit: values.unit?.trim() || null,
@@ -69,7 +70,7 @@ export function ProductModal({
   return (
     <Modal
       open
-      title={<ModalTitle title={product ? t.editProduct : t.newProduct} lockedLabel={lockedProjectLabel} />}
+      title={<ModalTitle title={product ? t.editProduct : t.newProduct} lockedLabel={lockedLabel} />}
       okText={product ? t.save : t.create}
       cancelText={t.cancel}
       confirmLoading={saveMutation.isPending}
@@ -81,7 +82,7 @@ export function ProductModal({
         layout="vertical"
         initialValues={{
           name: product?.name ?? "",
-          supplierId: product?.supplier_id ?? undefined,
+          supplierId: lockedSupplier?.id ?? undefined,
           projectId: scopedProjectId ?? product?.project_id ?? undefined,
           buildingId: product?.building_id ?? undefined,
           unit: product?.unit ?? "",
@@ -97,18 +98,6 @@ export function ProductModal({
         </Form.Item>
 
         <Row gutter={16}>
-          <Col xs={24} md={12}>
-            <Form.Item name="supplierId" label={t.supplierLabel}>
-              <Select
-                disabled={scopedProjectId != null}
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t.noneOption}
-                options={suppliers?.map((supplier) => ({ label: supplier.name, value: supplier.id }))}
-              />
-            </Form.Item>
-          </Col>
           {scopedProjectId == null ? (
             <Col xs={24} md={12}>
               <Form.Item name="projectId" label={t.projectOption}>

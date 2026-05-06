@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, FileText, Pencil, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, FileText, Package2, Pencil, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import {
   App,
   Button,
@@ -23,19 +23,26 @@ import {
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { ModalTitle } from "@/components/ModalTitle";
 import { invoiceStatusColor, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
+import { ProductModal } from "@/components/products/ProductModal";
+import type { ProductRow } from "@/components/products/product-shared";
 import {
   createSupplierTransaction,
+  deleteProduct,
   deleteSupplier,
   deleteSupplierTransaction,
   erpKeys,
   getAppSettings,
   getSupplier,
+  listProducts,
   listProjectBuildings,
   listInvoices,
   listProjects,
   listSupplierTransactions,
   updateSupplierTransaction,
   updateSupplier,
+  updateSupplierProducts,
+  type Currency,
+  type Product,
   type SupplierTransaction,
 } from "@/lib/erp";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
@@ -50,9 +57,11 @@ type SupplierFormValues = {
   phone?: string;
   email?: string;
   address?: string;
+  productIds?: number[];
 };
 
 type TransactionFormValues = {
+  currency?: Currency;
   totalAmountUsd?: number;
   paidAmountUsd?: number;
   totalAmountIqd?: number;
@@ -62,6 +71,66 @@ type TransactionFormValues = {
   projectId?: number;
   buildingId?: number;
 };
+
+function getInitialTransactionCurrency(transaction?: SupplierTransaction): Currency {
+  if (!transaction) {
+    return "IQD";
+  }
+
+  const hasUsdAmount = transaction.totalAmountUsd > 0 || transaction.paidAmountUsd > 0;
+  const hasIqdAmount = transaction.totalAmountIqd > 0 || transaction.paidAmountIqd > 0;
+
+  if (transaction.currency === "USD" && hasUsdAmount) {
+    return "USD";
+  }
+
+  if (transaction.currency === "IQD" && hasIqdAmount) {
+    return "IQD";
+  }
+
+  if (hasIqdAmount) {
+    return "IQD";
+  }
+
+  return hasUsdAmount ? "USD" : "IQD";
+}
+
+function sameIds(left: number[], right: number[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const sortedLeft = [...left].sort((a, b) => a - b);
+  const sortedRight = [...right].sort((a, b) => a - b);
+  return sortedLeft.every((id, index) => id === sortedRight[index]);
+}
+
+function productOptionLabel(product: Product) {
+  return [product.name, product.unit, formatCurrencyPair({ usd: product.unitPriceUsd, iqd: product.unitPriceIqd }, { hideZero: true })]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function toProductRow(product: Product): ProductRow {
+  return {
+    id: product.id,
+    name: product.name,
+    supplier_id: product.supplierId,
+    supplier_name: product.supplierName,
+    supplier_ids: product.supplierIds,
+    supplier_names: product.supplierNames,
+    project_id: product.projectId,
+    project_name: product.projectName,
+    building_id: product.buildingId,
+    building_name: product.buildingName,
+    unit: product.unit,
+    unit_price: product.unitPrice,
+    currency: product.currency,
+    unit_price_usd: product.unitPriceUsd,
+    unit_price_iqd: product.unitPriceIqd,
+    created_at: product.createdAt,
+  };
+}
 
 function SupplierFormModal({
   supplier,
@@ -81,6 +150,22 @@ function SupplierFormModal({
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<SupplierFormValues>();
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: erpKeys.products,
+    queryFn: listProducts,
+  });
+  const supplierProducts = useMemo(
+    () => products.filter((product) => product.supplierIds.includes(supplier.id)),
+    [products, supplier.id],
+  );
+  const selectableProducts = products;
+
+  useEffect(() => {
+    form.setFieldValue(
+      "productIds",
+      supplierProducts.map((product) => product.id),
+    );
+  }, [form, supplierProducts]);
 
   const saveMutation = useMutation({
     mutationFn: async (values: SupplierFormValues) => {
@@ -93,6 +178,7 @@ function SupplierFormModal({
       };
 
       await updateSupplier(supplier.id, payload);
+      await updateSupplierProducts(supplier.id, values.productIds ?? []);
     },
     onSuccess: async () => {
       await erpInvalidation.supplierDetail(supplier.id);
@@ -150,6 +236,21 @@ function SupplierFormModal({
             </Form.Item>
           </Col>
         </Row>
+
+        <Form.Item name="productIds" label={t.products}>
+          <Select
+            allowClear
+            mode="multiple"
+            loading={productsLoading}
+            optionFilterProp="label"
+            placeholder={selectableProducts.length ? t.products : t.noProducts}
+            showSearch
+            options={selectableProducts.map((product) => ({
+              label: productOptionLabel(product),
+              value: product.id,
+            }))}
+          />
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -170,6 +271,8 @@ function SupplierTransactionModal({
   const erpInvalidation = useErpInvalidation();
   const [form] = Form.useForm<TransactionFormValues>();
   const selectedProjectId = Form.useWatch("projectId", form);
+  const initialCurrency = getInitialTransactionCurrency(transaction);
+  const selectedCurrency = Form.useWatch("currency", form) ?? initialCurrency;
   const { data: projects } = useQuery({ queryKey: erpKeys.projects, queryFn: listProjects });
   const lockedProjectLabel = scopedProjectId == null
     ? null
@@ -187,12 +290,13 @@ function SupplierTransactionModal({
 
   const saveMutation = useMutation({
     mutationFn: (values: TransactionFormValues) => {
+      const currency = values.currency ?? initialCurrency;
       const payload = {
         supplierId: supplier.id,
-        totalAmountUsd: Number(values.totalAmountUsd || 0),
-        paidAmountUsd: Number(values.paidAmountUsd || 0),
-        totalAmountIqd: Number(values.totalAmountIqd || 0),
-        paidAmountIqd: Number(values.paidAmountIqd || 0),
+        totalAmountUsd: currency === "USD" ? Number(values.totalAmountUsd || 0) : 0,
+        paidAmountUsd: currency === "USD" ? Number(values.paidAmountUsd || 0) : 0,
+        totalAmountIqd: currency === "IQD" ? Number(values.totalAmountIqd || 0) : 0,
+        paidAmountIqd: currency === "IQD" ? Number(values.paidAmountIqd || 0) : 0,
         description: values.description?.trim() || null,
         date: values.date || null,
         projectId: scopedProjectId ?? values.projectId ?? null,
@@ -210,10 +314,11 @@ function SupplierTransactionModal({
 
   const validateAmountPair = () => {
     const values = form.getFieldsValue(["totalAmountUsd", "paidAmountUsd", "totalAmountIqd", "paidAmountIqd"]);
-    const amountUsd = Number(values.totalAmountUsd || 0) + Number(values.paidAmountUsd || 0);
-    const amountIqd = Number(values.totalAmountIqd || 0) + Number(values.paidAmountIqd || 0);
+    const amount = selectedCurrency === "USD"
+      ? Number(values.totalAmountUsd || 0) + Number(values.paidAmountUsd || 0)
+      : Number(values.totalAmountIqd || 0) + Number(values.paidAmountIqd || 0);
 
-    return amountUsd > 0 || amountIqd > 0
+    return amount > 0
       ? Promise.resolve()
       : Promise.reject(new Error(t.requiredField));
   };
@@ -249,6 +354,7 @@ function SupplierTransactionModal({
         form={form}
         layout="vertical"
         initialValues={{
+          currency: initialCurrency,
           totalAmountUsd: transaction?.totalAmountUsd ?? 0,
           paidAmountUsd: transaction?.paidAmountUsd ?? 0,
           totalAmountIqd: transaction?.totalAmountIqd ?? 0,
@@ -262,49 +368,66 @@ function SupplierTransactionModal({
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>
-            <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinUsd ?? 0}
-                max={appSettings?.transactionAmountMaxUsd ?? undefined}
-                step={0.01}
-                style={{ width: "100%" }}
-                {...currencyInputProps("USD")}
+            <Form.Item name="currency" label={t.currency} rules={[{ required: true, message: t.requiredField }]}>
+              <Select
+                options={[
+                  { label: "IQD", value: "IQD" },
+                  { label: "USD", value: "USD" },
+                ]}
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinUsd ?? 0}
-                max={appSettings?.transactionAmountMaxUsd ?? undefined}
-                step={0.01}
-                style={{ width: "100%" }}
-                {...currencyInputProps("USD")}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinIqd ?? 0}
-                max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={0.01}
-                style={{ width: "100%" }}
-                {...currencyInputProps("IQD")}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={12}>
-            <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
-              <InputNumber
-                min={appSettings?.transactionAmountMinIqd ?? 0}
-                max={appSettings?.transactionAmountMaxIqd ?? undefined}
-                step={0.01}
-                style={{ width: "100%" }}
-                {...currencyInputProps("IQD")}
-              />
-            </Form.Item>
-          </Col>
+          {selectedCurrency === "USD" ? (
+            <>
+              <Col xs={24} md={12}>
+                <Form.Item name="totalAmountUsd" label={`${t.totalAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinUsd ?? 0}
+                    max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    {...currencyInputProps("USD")}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="paidAmountUsd" label={`${t.paidAmount} ${formatCurrencyLabel("USD")}`} rules={[{ validator: validateAmountPair }]}>
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinUsd ?? 0}
+                    max={appSettings?.transactionAmountMaxUsd ?? undefined}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    {...currencyInputProps("USD")}
+                  />
+                </Form.Item>
+              </Col>
+            </>
+          ) : (
+            <>
+              <Col xs={24} md={12}>
+                <Form.Item name="totalAmountIqd" label={`${t.totalAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinIqd ?? 0}
+                    max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    {...currencyInputProps("IQD")}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="paidAmountIqd" label={`${t.paidAmount} IQD`} rules={[{ validator: validateAmountPair }]}>
+                  <InputNumber
+                    min={appSettings?.transactionAmountMinIqd ?? 0}
+                    max={appSettings?.transactionAmountMaxIqd ?? undefined}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    {...currencyInputProps("IQD")}
+                  />
+                </Form.Item>
+              </Col>
+            </>
+          )}
           {scopedProjectId == null ? (
             <Col xs={24} md={12}>
               <Form.Item name="projectId" label={t.txProject} rules={[{ required: true, message: t.requiredField }]}>
@@ -340,6 +463,154 @@ function SupplierTransactionModal({
         </Form.Item>
       </Form>
     </Modal>
+  );
+}
+
+function SupplierProductsSection({ supplier }: { supplier: { id: number; name: string } }) {
+  const { t } = useLang();
+  const { message } = App.useApp();
+  const erpInvalidation = useErpInvalidation();
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [editedProduct, setEditedProduct] = useState<Product | null>(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: erpKeys.products,
+    queryFn: listProducts,
+  });
+  const supplierProducts = useMemo(
+    () => products.filter((product) => product.supplierIds.includes(supplier.id)),
+    [products, supplier.id],
+  );
+  const selectableProducts = products;
+  const savedIds = useMemo(() => supplierProducts.map((product) => product.id), [supplierProducts]);
+  const hasChanges = !sameIds(savedIds, selectedIds);
+
+  useEffect(() => {
+    setSelectedIds(savedIds);
+  }, [savedIds]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => updateSupplierProducts(supplier.id, selectedIds),
+    onSuccess: async () => {
+      await erpInvalidation.supplierDetail(supplier.id);
+      message.success(t.saved);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: (product: Product) => deleteProduct(product.id),
+    onSuccess: async () => {
+      await erpInvalidation.supplierDetail(supplier.id);
+      message.success(t.deleted);
+    },
+    onError: (error) => void message.error(toErrorMessage(error)),
+  });
+
+  return (
+    <Card
+      title={
+        <Space>
+          <Package2 size={16} />
+          <span>{t.products}</span>
+        </Space>
+      }
+      extra={
+        <Space wrap>
+          <Button
+            type="primary"
+            disabled={!hasChanges}
+            loading={saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {t.save}
+          </Button>
+          <Button
+            icon={<Plus size={16} />}
+            onClick={() => {
+              setEditedProduct(null);
+              setShowProductModal(true);
+            }}
+          >
+            {t.addProduct}
+          </Button>
+        </Space>
+      }
+    >
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        <Select
+          allowClear
+          mode="multiple"
+          loading={productsLoading}
+          optionFilterProp="label"
+          placeholder={selectableProducts.length ? t.products : t.noProducts}
+          showSearch
+          style={{ width: "100%" }}
+          value={selectedIds}
+          onChange={setSelectedIds}
+          options={selectableProducts.map((product) => ({
+            label: productOptionLabel(product),
+            value: product.id,
+          }))}
+        />
+        <Typography.Text type="secondary">{t.product_count(supplierProducts.length)}</Typography.Text>
+
+        {!supplierProducts.length ? (
+          <Empty description={t.noProducts} />
+        ) : (
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            {supplierProducts.map((product) => (
+              <Card key={product.id} size="small">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                  <div>
+                    <Typography.Text strong>{product.name}</Typography.Text>
+                    <div>
+                      <Typography.Text type="secondary">
+                        {[product.unit, product.projectName, product.buildingName].filter(Boolean).join(" | ") || t.noDetail}
+                      </Typography.Text>
+                    </div>
+                    <Typography.Text type="secondary">
+                      {t.unitPrice}:{" "}
+                      {formatCurrencyPair({ usd: product.unitPriceUsd, iqd: product.unitPriceIqd }, { hideZero: true })}
+                    </Typography.Text>
+                  </div>
+                  <Space size="small">
+                    <Button
+                      type="text"
+                      icon={<Pencil size={16} />}
+                      onClick={() => {
+                        setEditedProduct(product);
+                        setShowProductModal(true);
+                      }}
+                    />
+                    <Popconfirm
+                      title={t.deleteProductConfirm}
+                      okText={t.remove}
+                      cancelText={t.cancel}
+                      onConfirm={() => deleteProductMutation.mutate(product)}
+                    >
+                      <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteProductMutation.isPending} />
+                    </Popconfirm>
+                  </Space>
+                </div>
+              </Card>
+            ))}
+          </Space>
+        )}
+      </Space>
+
+      {showProductModal ? (
+        <ProductModal
+          lockedSupplier={supplier}
+          product={editedProduct ? toProductRow(editedProduct) : undefined}
+          onClose={() => {
+            setShowProductModal(false);
+            setEditedProduct(null);
+          }}
+          onSaved={() => void erpInvalidation.supplierDetail(supplier.id)}
+        />
+      ) : null}
+    </Card>
   );
 }
 
@@ -517,6 +788,8 @@ export default function SupplierDetail() {
           title={t.transactions}
         />
       )}
+
+      <SupplierProductsSection supplier={{ id: supplier.id, name: supplier.name }} />
 
       <Card
         title={t.transactions}

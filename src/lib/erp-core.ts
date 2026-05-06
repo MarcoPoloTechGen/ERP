@@ -1,9 +1,12 @@
 import {
   createSignedInvoiceImageUrl,
   createSignedInvoiceImageUrls,
+  createSignedProjectFileUrl,
+  deleteProjectFileByPath,
   getPublicBrandingAssetUrl,
   resolveInvoiceImagePath,
   supabase,
+  uploadProjectFile,
 } from "@/lib/supabase";
 import type { Database, Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 import {
@@ -228,11 +231,33 @@ export interface ProjectBuilding {
   createdAt: string | null;
 }
 
+export interface ProjectFile {
+  id: number;
+  projectId: number;
+  storagePath: string;
+  fileName: string;
+  mimeType: string | null;
+  fileSize: number;
+  uploadedBy: string | null;
+  createdAt: string | null;
+}
+
+export interface ProjectAlert {
+  id: number;
+  projectId: number;
+  alertDate: string;
+  note: string;
+  createdBy: string | null;
+  createdAt: string | null;
+}
+
 export interface Product {
   id: number;
   name: string;
   supplierId: number | null;
   supplierName: string | null;
+  supplierIds: number[];
+  supplierNames: string[];
   projectId: number | null;
   projectName: string | null;
   buildingId: number | null;
@@ -538,6 +563,11 @@ export interface ProjectInput {
   buildings: string[];
 }
 
+export interface ProjectAlertInput {
+  alertDate: string;
+  note: string;
+}
+
 export interface ProductInput {
   name: string;
   supplierId: number | null;
@@ -625,11 +655,15 @@ export const erpKeys = {
   supplier: (id: number) => ["supplier", id] as const,
   supplierTransactionsList: ["supplierTransactions"] as const,
   supplierTransactions: (supplierId: number) => ["supplierTransactions", supplierId] as const,
+  supplierProductsList: ["supplierProducts"] as const,
+  supplierProducts: (supplierId: number) => ["supplier", supplierId, "products"] as const,
   supplierBalances: ["supplierBalances"] as const,
   workerBalances: ["workerBalances"] as const,
   projects: ["projects"] as const,
   project: (id: number) => ["project", id] as const,
   projectBuildings: (projectId: number) => ["projectBuildings", projectId] as const,
+  projectFiles: (projectId: number) => ["projectFiles", projectId] as const,
+  projectAlerts: (projectId: number | "all") => ["projectAlerts", projectId] as const,
   products: ["products"] as const,
   invoices: ["invoices"] as const,
   invoice: (id: number) => ["invoice", id] as const,
@@ -643,6 +677,10 @@ export const erpKeys = {
 
 function asRow(value: unknown): Row {
   return typeof value === "object" && value !== null ? (value as Row) : {};
+}
+
+function uniqueFiniteIds(ids: number[]) {
+  return Array.from(new Set(ids.filter((id) => Number.isFinite(id))));
 }
 
 function readValue(row: Row, ...keys: string[]) {
@@ -694,6 +732,28 @@ function readBoolean(row: Row, ...keys: string[]) {
   }
 
   return false;
+}
+
+function readNumberArray(row: Row, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => Number(item)).filter((item) => Number.isFinite(item));
+}
+
+function readStringArray(row: Row, ...keys: string[]) {
+  const value = readValue(row, ...keys);
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
 }
 
 function readDate(row: Row, ...keys: string[]) {
@@ -882,8 +942,34 @@ function normalizeProjectBuilding(row: ProjectBuildingRow): ProjectBuilding {
   };
 }
 
+function normalizeProjectFile(row: Row): ProjectFile {
+  return {
+    id: readId(row, "id"),
+    projectId: readId(row, "project_id", "projectId"),
+    storagePath: readString(row, "storage_path", "storagePath") ?? "",
+    fileName: readString(row, "file_name", "fileName") ?? "file",
+    mimeType: readString(row, "mime_type", "mimeType"),
+    fileSize: readNumber(row, "file_size", "fileSize") ?? 0,
+    uploadedBy: readString(row, "uploaded_by", "uploadedBy"),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
+function normalizeProjectAlert(row: Row): ProjectAlert {
+  return {
+    id: readId(row, "id"),
+    projectId: readId(row, "project_id", "projectId"),
+    alertDate: readDate(row, "alert_date", "alertDate") ?? "",
+    note: readString(row, "note") ?? "",
+    createdBy: readString(row, "created_by", "createdBy"),
+    createdAt: readDate(row, "created_at", "createdAt"),
+  };
+}
+
 function normalizeProduct(row: AppProductRow): Product {
   const currency = toCurrency(readString(row, "currency"));
+  const supplierIds = readNumberArray(row, "supplier_ids", "supplierIds");
+  const supplierNames = readStringArray(row, "supplier_names", "supplierNames");
   const { amountUsd: unitPriceUsd, amountIqd: unitPriceIqd } = readDualCurrencyAmount(
     row,
     ["unit_price_usd", "unitPriceUsd"],
@@ -895,8 +981,10 @@ function normalizeProduct(row: AppProductRow): Product {
   return {
     id: readId(row, "id"),
     name: readString(row, "name") ?? "Unnamed product",
-    supplierId: readNumber(row, "supplier_id", "supplierId"),
-    supplierName: readString(row, "supplier_name", "supplierName"),
+    supplierId: supplierIds[0] ?? readNumber(row, "supplier_id", "supplierId"),
+    supplierName: supplierNames[0] ?? readString(row, "supplier_name", "supplierName"),
+    supplierIds,
+    supplierNames,
     projectId: readNumber(row, "project_id", "projectId"),
     projectName: readString(row, "project_name", "projectName"),
     buildingId: readNumber(row, "building_id", "buildingId"),
@@ -1643,7 +1731,7 @@ function normalizeProductInput(input: ProductInput): ProductWritePayload {
 
   return {
     name: input.name.trim(),
-    supplier_id: input.supplierId,
+    supplier_id: null,
     project_id: input.projectId,
     building_id: input.buildingId,
     unit: normalizeOptionalText(input.unit),
@@ -2230,10 +2318,12 @@ export async function listWorkerBalances(): Promise<WorkerBalance[]> {
 
 export async function createSupplier(input: SupplierInput) {
   const payload = normalizeSupplierInput(input);
-  const { error } = await fromUntyped("suppliers").insert(payload);
+  const { data, error } = await fromUntyped("suppliers").insert(payload).select("id").single();
   if (error) {
     throw new Error(error.message);
   }
+
+  return readId(asRow(data), "id");
 }
 
 export async function updateSupplier(id: number, input: SupplierInput) {
@@ -2273,6 +2363,111 @@ export async function listProjectBuildings(projectId?: number) {
   }
 
   return executeSelect(query, normalizeProjectBuilding);
+}
+
+export async function listProjectFiles(projectId: number) {
+  return executeSelect(
+    fromUntyped("project_files")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+    normalizeProjectFile,
+  );
+}
+
+export async function listProjectAlerts(projectId?: number | null) {
+  let query = fromUntyped("project_alerts")
+    .select("*")
+    .order("alert_date", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (projectId != null) {
+    query = query.eq("project_id", projectId);
+  }
+
+  return executeSelect(query, normalizeProjectAlert);
+}
+
+export async function createProjectAlert(projectId: number, input: ProjectAlertInput) {
+  const currentUserId = await getCurrentUserId();
+  if (!currentUserId) {
+    throw new Error("Authentication is required.");
+  }
+
+  const note = input.note.trim();
+  if (!input.alertDate) {
+    throw new Error("Date is required.");
+  }
+
+  if (!note) {
+    throw new Error("Note is required.");
+  }
+
+  const { error } = await fromUntyped("project_alerts").insert({
+    project_id: projectId,
+    alert_date: input.alertDate,
+    note,
+    created_by: currentUserId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteProjectAlert(id: number) {
+  const { error } = await fromUntyped("project_alerts").delete().eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function attachProjectFile(projectId: number, file: File) {
+  const currentUserId = await getCurrentUserId();
+  if (!currentUserId) {
+    throw new Error("Authentication is required.");
+  }
+
+  const uploaded = await uploadProjectFile(file, projectId, currentUserId);
+
+  try {
+    const { error } = await fromUntyped("project_files").insert({
+      project_id: projectId,
+      storage_path: uploaded.path,
+      file_name: file.name,
+      mime_type: file.type || null,
+      file_size: file.size,
+      uploaded_by: currentUserId,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  } catch (error) {
+    try {
+      await deleteProjectFileByPath(uploaded.path);
+    } catch {
+      // Keep the original database error; the failed upload cleanup can be retried from Storage.
+    }
+    throw error;
+  }
+}
+
+export async function getProjectFileDownloadUrl(file: ProjectFile) {
+  return createSignedProjectFileUrl(file.storagePath);
+}
+
+export async function deleteProjectFile(file: ProjectFile) {
+  const { error } = await fromUntyped("project_files").delete().eq("id", file.id);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  try {
+    await deleteProjectFileByPath(file.storagePath);
+  } catch {
+    // Metadata is already removed, so do not block the UI on a storage cleanup retry.
+  }
 }
 
 export async function createProject(input: ProjectInput) {
@@ -2496,13 +2691,107 @@ export async function listProducts() {
   );
 }
 
+export async function listProductsBySupplierIds(supplierIds: number[]): Promise<Record<number, Product[]>> {
+  const selectedSupplierIds = uniqueFiniteIds(supplierIds);
+
+  if (!selectedSupplierIds.length) {
+    return {};
+  }
+
+  const { data: linkRows, error: linkError } = await fromUntyped("supplier_products")
+    .select("supplier_id, product_id")
+    .in("supplier_id", selectedSupplierIds);
+
+  if (linkError) {
+    throw new Error(linkError.message);
+  }
+
+  const links = ((linkRows ?? []) as Row[])
+    .map((row) => ({
+      supplierId: readNumber(row, "supplier_id", "supplierId"),
+      productId: readNumber(row, "product_id", "productId"),
+    }))
+    .filter((link): link is { supplierId: number; productId: number } => link.supplierId != null && link.productId != null);
+  const productIds = uniqueFiniteIds(links.map((link) => link.productId));
+  const productsBySupplier: Record<number, Product[]> = Object.fromEntries(
+    selectedSupplierIds.map((supplierId) => [supplierId, []]),
+  );
+
+  if (!productIds.length) {
+    return productsBySupplier;
+  }
+
+  const products = await executeSelect(
+    supabase
+      .from("app_products")
+      .select("*")
+      .in("id", productIds)
+      .order("name", { ascending: true }),
+    normalizeProduct,
+  );
+  const productsById = new Map(products.map((product) => [product.id, product]));
+
+  for (const link of links) {
+    const product = productsById.get(link.productId);
+    if (!product) {
+      continue;
+    }
+
+    productsBySupplier[link.supplierId] ??= [];
+    productsBySupplier[link.supplierId].push(product);
+  }
+
+  return productsBySupplier;
+}
+
+export async function updateSupplierProducts(supplierId: number, productIds: number[]) {
+  const selectedIds = uniqueFiniteIds(productIds);
+  const { error: deleteError } = await fromUntyped("supplier_products")
+    .delete()
+    .eq("supplier_id", supplierId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  if (!selectedIds.length) {
+    return;
+  }
+
+  const { error: insertError } = await fromUntyped("supplier_products").insert(
+    selectedIds.map((productId) => ({
+      supplier_id: supplierId,
+      product_id: productId,
+    })),
+  );
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+}
+
 export async function createProduct(input: ProductInput) {
   const payload = normalizeProductInput(input);
-  const { error } = await supabase.from("materials").insert(payload);
+  const { data, error } = await supabase.from("materials").insert(payload).select("id").single();
 
   if (error) {
     throw new Error(error.message);
   }
+
+  const productId = readId(asRow(data), "id");
+
+  if (input.supplierId != null) {
+    const { error: linkError } = await fromUntyped("supplier_products").insert({
+      supplier_id: input.supplierId,
+      product_id: productId,
+    });
+
+    if (linkError) {
+      throw new Error(linkError.message);
+    }
+  }
+
+  return productId;
 }
 
 export async function updateProduct(id: number, input: ProductInput) {
@@ -2511,6 +2800,15 @@ export async function updateProduct(id: number, input: ProductInput) {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (input.supplierId != null) {
+    const { error: linkError } = await fromUntyped("supplier_products")
+      .upsert({ supplier_id: input.supplierId, product_id: id });
+
+    if (linkError) {
+      throw new Error(linkError.message);
+    }
   }
 }
 

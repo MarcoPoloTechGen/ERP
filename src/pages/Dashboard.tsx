@@ -1,12 +1,15 @@
-import type { ElementType } from "react";
+import { useMemo, type ElementType } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AlertTriangle, FolderKanban, Truck, Users } from "lucide-react";
 import { Card, Col, Empty, Progress, Row, Skeleton, Space, Tag, Typography } from "antd";
-import { erpKeys, getDashboardOverview, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
-import { formatCurrencyLabel, formatCurrencyPair } from "@/lib/format";
+import { erpKeys, getDashboardOverview, listInvoices, listProjectAlerts, type InvoiceStatus, type ProjectStatus } from "@/lib/erp";
+import { dateReminderStatus, daysUntilDate, isDateReminderVisible, type DateReminderStatus } from "@/lib/date-reminders";
+import { formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 import { useProjectScope } from "@/lib/project-scope";
+
+const REMINDER_WINDOW_DAYS = 7;
 
 function projectStatusColor(status: ProjectStatus) {
   if (status === "completed") {
@@ -26,6 +29,30 @@ function invoiceStatusColor(status: InvoiceStatus) {
     return "orange";
   }
   return "red";
+}
+
+function reminderColor(status: DateReminderStatus) {
+  if (status === "overdue") {
+    return "red";
+  }
+
+  if (status === "today") {
+    return "gold";
+  }
+
+  return "blue";
+}
+
+function reminderLabel(status: DateReminderStatus, daysUntil: number, t: ReturnType<typeof useLang>["t"]) {
+  if (status === "overdue") {
+    return t.overdueReminder;
+  }
+
+  if (status === "today") {
+    return t.todayReminder;
+  }
+
+  return t.upcomingReminderDays(daysUntil);
 }
 
 function StatCard({
@@ -63,6 +90,69 @@ export default function Dashboard() {
     queryKey: [...erpKeys.dashboard, selectedProjectId],
     queryFn: () => getDashboardOverview(selectedProjectId),
   });
+  const { data: invoices } = useQuery({
+    queryKey: [...erpKeys.invoices, "date-reminders", selectedProjectId],
+    queryFn: listInvoices,
+  });
+  const { data: projectAlerts } = useQuery({
+    queryKey: erpKeys.projectAlerts(selectedProjectId ?? "all"),
+    queryFn: () => listProjectAlerts(selectedProjectId),
+  });
+
+  const dateReminders = useMemo(() => {
+    const invoiceReminders = (invoices ?? [])
+      .filter(
+        (invoice) =>
+          invoice.recordStatus === "active" &&
+          invoice.status !== "paid" &&
+          invoice.dueDate != null &&
+          (selectedProjectId == null || invoice.projectId === selectedProjectId),
+      )
+      .map((invoice) => {
+        const daysUntil = daysUntilDate(invoice.dueDate);
+        return daysUntil == null
+          ? null
+          : {
+              id: `invoice-${invoice.id}`,
+              title: invoice.number,
+              subtitle: [invoice.supplierName ?? t.noSupplier, invoice.projectName].filter(Boolean).join(" - "),
+              href: `/expenses/${invoice.id}`,
+              date: invoice.dueDate,
+              amount: { usd: invoice.remainingAmountUsd, iqd: invoice.remainingAmountIqd },
+              daysUntil,
+              status: dateReminderStatus(daysUntil),
+            };
+      })
+      .filter((reminder) => reminder != null && isDateReminderVisible(reminder.daysUntil, REMINDER_WINDOW_DAYS));
+
+    const manualAlertReminders = (projectAlerts ?? [])
+      .map((alert) => {
+        const daysUntil = daysUntilDate(alert.alertDate);
+        return daysUntil == null
+          ? null
+          : {
+              id: `project-alert-${alert.id}`,
+              title: alert.note,
+              subtitle: t.manualAlert,
+              href: `/projects/${alert.projectId}`,
+              date: alert.alertDate,
+              amount: null,
+              daysUntil,
+              status: dateReminderStatus(daysUntil),
+            };
+      })
+      .filter((reminder) => reminder != null && isDateReminderVisible(reminder.daysUntil, REMINDER_WINDOW_DAYS));
+
+    return [...invoiceReminders, ...manualAlertReminders]
+      .sort(
+        (left, right) =>
+          left.daysUntil - right.daysUntil ||
+          (right.amount?.usd ?? 0) - (left.amount?.usd ?? 0) ||
+          (right.amount?.iqd ?? 0) - (left.amount?.iqd ?? 0) ||
+          left.title.localeCompare(right.title),
+      )
+      .slice(0, 6);
+  }, [invoices, projectAlerts, selectedProjectId, t.manualAlert, t.noSupplier]);
 
   if (isLoading || !data) {
     return (
@@ -114,6 +204,49 @@ export default function Dashboard() {
           <StatCard label={t.unpaidInvoices} value={data.invoicesUnpaid} icon={AlertTriangle} color="#be123c" />
         </Col>
       </Row>
+
+      <Card title={t.dateReminders}>
+        <Typography.Text type="secondary">{t.dateRemindersSub}</Typography.Text>
+        {dateReminders.length === 0 ? (
+          <Empty description={t.noDateReminders} style={{ marginTop: 16 }} />
+        ) : (
+          <Space direction="vertical" size="middle" style={{ width: "100%", marginTop: 16 }}>
+            {dateReminders.map((reminder) => (
+              <Link href={reminder.href} key={reminder.id}>
+                <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <Space size="small" wrap>
+                        <Typography.Text strong ellipsis>
+                          {reminder.title}
+                        </Typography.Text>
+                        <Tag color={reminderColor(reminder.status)}>
+                          {reminderLabel(reminder.status, reminder.daysUntil, t)}
+                        </Tag>
+                      </Space>
+                      <div>
+                        <Typography.Text type="secondary">{reminder.subtitle}</Typography.Text>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", minWidth: 180 }}>
+                      {reminder.amount ? (
+                        <Typography.Text strong>
+                          {formatCurrencyPair(reminder.amount, { hideZero: true })}
+                        </Typography.Text>
+                      ) : null}
+                      <div>
+                        <Typography.Text type={reminder.status === "overdue" ? "danger" : "secondary"}>
+                          {formatDate(reminder.date)}
+                        </Typography.Text>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </Space>
+        )}
+      </Card>
 
       <Card title={t.financialSummary} extra={<Typography.Text type="secondary">{t.paymentProgress}</Typography.Text>}>
         <Row gutter={[16, 16]}>

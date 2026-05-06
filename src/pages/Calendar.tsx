@@ -15,6 +15,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Empty,
   Form,
   Input,
   InputNumber,
@@ -36,6 +37,8 @@ import {
   listIncomeTransactions,
   listInvoices,
   listProducts,
+  listProductsBySupplierIds,
+  listProjectAlerts,
   listProjectBuildings,
   listProjects,
   listSuppliers,
@@ -50,6 +53,7 @@ import {
   parseExpenseAssignmentKey,
 } from "@/lib/expense-assignment";
 import { ModalTitle } from "@/components/ModalTitle";
+import { dateReminderStatus, daysUntilDate, isDateReminderVisible, type DateReminderStatus } from "@/lib/date-reminders";
 import { EXPENSE_TYPES, type ExpenseType } from "@/lib/expense-types";
 import { currencyInputProps, formatCurrencyLabel, formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
@@ -57,8 +61,8 @@ import { useProjectScope } from "@/lib/project-scope";
 import { toErrorMessage } from "@/lib/refine-helpers";
 import { useErpInvalidation } from "@/hooks/use-erp-invalidation";
 
-type CalendarEventKind = "income" | "expense" | "due" | "worker";
-type CalendarEventType = "income" | "expense" | "due" | "worker_credit" | "worker_debit";
+type CalendarEventKind = "income" | "expense" | "due" | "worker" | "alert";
+type CalendarEventType = "income" | "expense" | "due" | "worker_credit" | "worker_debit" | "project_alert";
 type CalendarFilter = CalendarEventKind | "all";
 type CalendarEntryType = "income" | "expense";
 
@@ -112,13 +116,39 @@ type SelectedEvent = CalendarEventDetails & {
 };
 
 const calendarEventsKey = ["calendar-events"] as const;
+const REMINDER_WINDOW_DAYS = 7;
 
 const colorsByKind: Record<CalendarEventKind, { background: string; foreground: string }> = {
   income: { background: "#16a34a", foreground: "#ffffff" },
   expense: { background: "#dc2626", foreground: "#ffffff" },
   due: { background: "#f59e0b", foreground: "#111827" },
   worker: { background: "#2563eb", foreground: "#ffffff" },
+  alert: { background: "#0f766e", foreground: "#ffffff" },
 };
+
+function reminderColor(status: DateReminderStatus) {
+  if (status === "overdue") {
+    return "red";
+  }
+
+  if (status === "today") {
+    return "gold";
+  }
+
+  return "blue";
+}
+
+function reminderLabel(status: DateReminderStatus, daysUntil: number, t: ReturnType<typeof useLang>["t"]) {
+  if (status === "overdue") {
+    return t.overdueReminder;
+  }
+
+  if (status === "today") {
+    return t.todayReminder;
+  }
+
+  return t.upcomingReminderDays(daysUntil);
+}
 
 function readDate(value: string | null | undefined) {
   return value ? value.slice(0, 10) : null;
@@ -135,15 +165,18 @@ function makeEvent(input: CalendarEvent): CalendarEvent {
 }
 
 async function loadCalendarSources() {
-  const [incomes, invoices, workers, workerTransactions] = await Promise.all([
+  const [incomes, invoices, workers, workerTransactions, projectAlerts, projects] = await Promise.all([
     listIncomeTransactions(),
     listInvoices(),
     listWorkers(),
     listWorkerTransactions(),
+    listProjectAlerts(),
+    listProjects(),
   ]);
 
   const workerNamesById = new Map(workers.map((worker) => [worker.id, worker.name]));
-  return { incomes, invoices, workerNamesById, workerTransactions };
+  const projectNamesById = new Map(projects.map((project) => [project.id, project.name]));
+  return { incomes, invoices, projectAlerts, projectNamesById, workerNamesById, workerTransactions };
 }
 
 function eventContent(info: EventContentArg) {
@@ -215,6 +248,11 @@ function CalendarEntryModal({
     : projects?.find((project) => project.id === scopedProjectId)?.name ?? null;
   const { data: suppliers } = useQuery({ queryKey: erpKeys.suppliers, queryFn: listSuppliers });
   const { data: products } = useQuery({ queryKey: erpKeys.products, queryFn: listProducts });
+  const { data: productsBySupplier = {} } = useQuery({
+    queryKey: supplierId == null ? [...erpKeys.supplierProductsList, "none"] : erpKeys.supplierProducts(supplierId),
+    queryFn: () => listProductsBySupplierIds(supplierId == null ? [] : [supplierId]),
+    enabled: supplierId != null,
+  });
   const { data: appSettings } = useQuery({ queryKey: erpKeys.appSettings, queryFn: getAppSettings });
   const { data: workers } = useQuery({ queryKey: erpKeys.workers, queryFn: listWorkers });
   const { data: projectBuildings } = useQuery({
@@ -241,8 +279,10 @@ function CalendarEntryModal({
       return [];
     }
 
-    return projectProducts.filter((product) => product.supplierId === supplierId);
-  }, [projectProducts, supplierId]);
+    const linkedProducts = productsBySupplier[supplierId] ?? [];
+    const linkedProductIds = new Set(linkedProducts.map((product) => product.id));
+    return projectProducts.filter((product) => linkedProductIds.has(product.id));
+  }, [productsBySupplier, projectProducts, supplierId]);
   const showProductField = expenseType === "products" && supplierId != null && supplierProducts.length > 1;
   const workerNameById = useMemo(() => {
     return new Map((workers ?? []).map((worker) => [worker.id, worker.name]));
@@ -791,6 +831,35 @@ export default function CalendarPage() {
       );
     }
 
+    for (const alert of data.projectAlerts) {
+      const date = readDate(alert.alertDate);
+      if (!date) {
+        continue;
+      }
+
+      nextEvents.push(
+        makeEvent({
+          id: `project-alert-${alert.id}`,
+          title: `${t.manualAlert}: ${alert.note}`,
+          start: date,
+          allDay: true,
+          extendedProps: {
+            kind: "alert",
+            type: "project_alert",
+            source: t.manualAlert,
+            amountUsd: 0,
+            amountIqd: 0,
+            date,
+            projectId: alert.projectId,
+            projectName: data.projectNamesById.get(alert.projectId) ?? null,
+            counterparty: null,
+            description: alert.note,
+            path: `/projects/${alert.projectId}`,
+          },
+        }),
+      );
+    }
+
     return nextEvents;
   }, [data, t]);
 
@@ -802,6 +871,30 @@ export default function CalendarPage() {
     });
   }, [events, filter, scopedProjectId]);
 
+  const dateReminders = useMemo(() => {
+    return visibleEvents
+      .filter((event) => event.extendedProps.kind === "due" || event.extendedProps.kind === "alert")
+      .map((event) => {
+        const daysUntil = daysUntilDate(event.extendedProps.date);
+        return daysUntil == null
+          ? null
+          : {
+              event,
+              daysUntil,
+              status: dateReminderStatus(daysUntil),
+            };
+      })
+      .filter((reminder) => reminder != null && isDateReminderVisible(reminder.daysUntil, REMINDER_WINDOW_DAYS))
+      .sort(
+        (left, right) =>
+          left.daysUntil - right.daysUntil ||
+          right.event.extendedProps.amountUsd - left.event.extendedProps.amountUsd ||
+          right.event.extendedProps.amountIqd - left.event.extendedProps.amountIqd ||
+          left.event.title.localeCompare(right.event.title),
+      )
+      .slice(0, 6);
+  }, [visibleEvents]);
+
   const counts = useMemo(() => {
     return visibleEvents.reduce(
       (total, event) => {
@@ -809,7 +902,7 @@ export default function CalendarPage() {
         total[event.extendedProps.kind] += 1;
         return total;
       },
-      { all: 0, income: 0, expense: 0, due: 0, worker: 0 } as Record<CalendarFilter, number>,
+      { all: 0, income: 0, expense: 0, due: 0, worker: 0, alert: 0 } as Record<CalendarFilter, number>,
     );
   }, [visibleEvents]);
 
@@ -858,6 +951,52 @@ export default function CalendarPage() {
         </Col>
       </Row>
 
+      <Card title={t.dateReminders}>
+        <Typography.Text type="secondary">{t.dateRemindersSub}</Typography.Text>
+        {dateReminders.length === 0 ? (
+          <Empty description={t.noDateReminders} style={{ marginTop: 16 }} />
+        ) : (
+          <Space direction="vertical" size="middle" style={{ width: "100%", marginTop: 16 }}>
+            {dateReminders.map(({ event, daysUntil, status }) => (
+              <Link href={event.extendedProps.path ?? "/calendar"} key={event.id}>
+                <div style={{ cursor: "pointer", borderRadius: 8, border: "1px solid #e5e0d5", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <Space size="small" wrap>
+                        <Typography.Text strong ellipsis>
+                          {event.title}
+                        </Typography.Text>
+                        <Tag color={reminderColor(status)}>{reminderLabel(status, daysUntil, t)}</Tag>
+                      </Space>
+                      <div>
+                        <Typography.Text type="secondary">
+                          {[event.extendedProps.counterparty, event.extendedProps.projectName].filter(Boolean).join(" - ")}
+                        </Typography.Text>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", minWidth: 180 }}>
+                      {event.extendedProps.kind !== "alert" ? (
+                        <Typography.Text strong>
+                          {formatCurrencyPair(
+                            { usd: event.extendedProps.amountUsd, iqd: event.extendedProps.amountIqd },
+                            { hideZero: true },
+                          )}
+                        </Typography.Text>
+                      ) : null}
+                      <div>
+                        <Typography.Text type={status === "overdue" ? "danger" : "secondary"}>
+                          {formatDate(event.extendedProps.date)}
+                        </Typography.Text>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </Space>
+        )}
+      </Card>
+
       <Card
         title={t.calendarTitle}
         extra={
@@ -873,6 +1012,7 @@ export default function CalendarPage() {
                 { label: t.expenses, value: "expense" },
                 { label: t.dueDate, value: "due" },
                 { label: t.workers, value: "worker" },
+                { label: t.manualAlert, value: "alert" },
               ]}
             />
             <Button onClick={() => void refetch()} loading={isFetching}>
@@ -933,9 +1073,11 @@ export default function CalendarPage() {
             <Descriptions.Item label={t.calendarSource}>
               <Tag color={colorsByKind[selectedEvent.kind].background}>{selectedEvent.source}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label={t.amount}>
-              {formatCurrencyPair({ usd: selectedEvent.amountUsd, iqd: selectedEvent.amountIqd })}
-            </Descriptions.Item>
+            {selectedEvent.kind !== "alert" ? (
+              <Descriptions.Item label={t.amount}>
+                {formatCurrencyPair({ usd: selectedEvent.amountUsd, iqd: selectedEvent.amountIqd })}
+              </Descriptions.Item>
+            ) : null}
             <Descriptions.Item label={t.date}>{formatDate(selectedEvent.date)}</Descriptions.Item>
             {selectedEvent.status ? (
               <Descriptions.Item label={t.status}>{t[selectedEvent.status]}</Descriptions.Item>

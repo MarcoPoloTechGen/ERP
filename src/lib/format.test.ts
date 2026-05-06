@@ -6,6 +6,7 @@ import {
   formatCurrencyPair,
   formatDate,
   formatDateInput,
+  parseCurrencyInputNumber,
   parseCurrencyInputValue,
 } from "./format";
 
@@ -29,8 +30,11 @@ describe("format helpers", () => {
     expect(parseCurrencyInputValue("123,456.00 $")).toBe("123456.00");
     expect(parseCurrencyInputValue("1,234.56 $")).toBe("1234.56");
     expect(parseCurrencyInputValue("1 234,56 $")).toBe("1234.56");
+    expect(parseCurrencyInputValue("1,2345")).toBe("12345");
     expect(parseCurrencyInputValue("\u0661\u0665\u0665,\u0660\u0660\u0660,\u0660\u0660\u0660,\u0660\u0660\u0660.\u0660\u0660 IQD")).toBe("155000000000.00");
     expect(parseCurrencyInputValue(`${LTR_ISOLATE_START}123,456.00 $${LTR_ISOLATE_END}`)).toBe("123456.00");
+    expect(parseCurrencyInputNumber("155,000,000,000 IQD")).toBe(155000000000);
+    expect(parseCurrencyInputNumber("")).toBe(0);
   });
 
   it("keeps currency inputs left-to-right in rtl layouts", () => {
@@ -41,7 +45,10 @@ describe("format helpers", () => {
       precision: 0,
       step: 1,
       controls: false,
+      inputMode: "numeric",
     });
+    expect(currencyInputProps("USD").formatter?.(12345, { userTyping: true, input: "1,2345" })).toBe("12,345");
+    expect(currencyInputProps("USD").parser?.("155,000")).toBe(155000);
   });
 
   it("formats currency pairs without mixing currencies", () => {
