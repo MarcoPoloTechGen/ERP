@@ -5,9 +5,8 @@ import type { IncomeTransaction, Invoice, Project, ProjectBuilding } from "@/lib
 import { formatCurrencyPair, formatDate } from "@/lib/format";
 import { useLang } from "@/lib/i18n";
 
-type MoneyMovement = {
+type MoneyMovementBase = {
   id: string;
-  type: "expense" | "income";
   projectId: number | null;
   projectName: string | null;
   buildingId: number | null;
@@ -21,6 +20,10 @@ type MoneyMovement = {
   amountUsd: number;
   amountIqd: number;
 };
+
+type MoneyMovement =
+  | (MoneyMovementBase & { source: Invoice; type: "expense" })
+  | (MoneyMovementBase & { source: IncomeTransaction; type: "income" });
 
 type ExpenseSection = {
   buildingId: number | null;
@@ -47,6 +50,7 @@ type ProjectExpenseVisualizationProps = {
   selectedProjectId: number | null;
   onProjectChange: (projectId: number) => void;
   onAddTransaction?: (assignment: ExpenseAssignment) => void;
+  onEditTransaction?: (movement: MoneyMovement) => void;
 };
 
 function compareMovementsByDate(left: MoneyMovement, right: MoneyMovement) {
@@ -151,6 +155,7 @@ function buildSections({
 function invoiceToMovement(invoice: Invoice, t: ReturnType<typeof useLang>["t"]): MoneyMovement {
   return {
     id: `expense-${invoice.id}`,
+    source: invoice,
     type: "expense",
     projectId: invoice.projectId,
     projectName: invoice.projectName,
@@ -170,6 +175,7 @@ function invoiceToMovement(invoice: Invoice, t: ReturnType<typeof useLang>["t"])
 function incomeToMovement(income: IncomeTransaction, fallbackTitle: string): MoneyMovement {
   return {
     id: `income-${income.id}`,
+    source: income,
     type: "income",
     projectId: income.projectId,
     projectName: income.projectName,
@@ -300,6 +306,7 @@ function ExpensePanel({
   totalLabel,
   emptyText,
   onAddTransaction,
+  onEditTransaction,
 }: {
   addTransactionLabel: string;
   columns: TableProps<MoneyMovement>["columns"];
@@ -307,6 +314,7 @@ function ExpensePanel({
   totalLabel: string;
   emptyText: string;
   onAddTransaction?: (assignment: ExpenseAssignment) => void;
+  onEditTransaction?: (movement: MoneyMovement) => void;
 }) {
   const canAddTransaction = section.projectId != null && section.buildingId != null;
 
@@ -345,6 +353,20 @@ function ExpensePanel({
         scroll={{ x: 320 }}
         size="small"
         className="erp-compact-expense-table"
+        onRow={(movement) => ({
+          role: onEditTransaction ? "button" : undefined,
+          tabIndex: onEditTransaction ? 0 : undefined,
+          style: { cursor: onEditTransaction ? "pointer" : undefined },
+          onClick: () => onEditTransaction?.(movement),
+          onKeyDown: (event) => {
+            if (!onEditTransaction || (event.key !== "Enter" && event.key !== " ")) {
+              return;
+            }
+
+            event.preventDefault();
+            onEditTransaction(movement);
+          },
+        })}
       />
 
       <div style={{ display: "flex", minHeight: 44, alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: "1px solid #e5e0d5", background: "#fff", padding: "6px 12px" }}>
@@ -371,6 +393,7 @@ export default function ProjectExpenseVisualization({
   selectedProjectId,
   onProjectChange,
   onAddTransaction,
+  onEditTransaction,
 }: ProjectExpenseVisualizationProps) {
   const { t } = useLang();
   const projectInvoices = invoices.filter(
@@ -399,7 +422,7 @@ export default function ProjectExpenseVisualization({
       render: (_value: string | null, movement) => (
         <Popover
           content={<MovementDetails movement={movement} t={t} />}
-          trigger={["hover", "click"]}
+          trigger="hover"
           placement="topLeft"
         >
           <Typography.Text style={{ cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>
@@ -414,7 +437,7 @@ export default function ProjectExpenseVisualization({
       render: (_value: string, movement) => (
         <Popover
           content={<MovementDetails movement={movement} t={t} />}
-          trigger={["hover", "click"]}
+          trigger="hover"
           placement="topLeft"
         >
           <Typography.Text
@@ -437,7 +460,7 @@ export default function ProjectExpenseVisualization({
       render: (_value: number, movement) => (
         <Popover
           content={<MovementDetails movement={movement} t={t} />}
-          trigger={["hover", "click"]}
+          trigger="hover"
           placement="topRight"
         >
           <Typography.Text
@@ -511,6 +534,7 @@ export default function ProjectExpenseVisualization({
               columns={columns}
               emptyText={t.noExpenses}
               onAddTransaction={onAddTransaction}
+              onEditTransaction={onEditTransaction}
               section={section}
               totalLabel={t.totalAmount}
             />

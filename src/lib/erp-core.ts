@@ -2917,16 +2917,7 @@ export async function markInvoicePaid(id: number, amounts: { totalAmountUsd: num
   }
 }
 
-export async function deleteInvoice(id: number) {
-  if (await currentUserIsSuperAdmin()) {
-    await replaceTransactionPhoto(id, null, null);
-    const { error } = await supabase.from("party_transactions").delete().eq("id", id);
-    if (error) {
-      throw new Error(error.message);
-    }
-    return;
-  }
-
+export async function softDeleteInvoice(id: number) {
   const currentUserId = await getCurrentUserId();
   const payload: SoftDeletePayload = {
     deleted_at: new Date().toISOString(),
@@ -2940,6 +2931,19 @@ export async function deleteInvoice(id: number) {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function deleteInvoice(id: number) {
+  if (await currentUserIsSuperAdmin()) {
+    await replaceTransactionPhoto(id, null, null);
+    const { error } = await supabase.from("party_transactions").delete().eq("id", id);
+    if (error) {
+      throw new Error(error.message);
+    }
+    return;
+  }
+
+  await softDeleteInvoice(id);
 }
 
 export async function listIncomeTransactions() {
@@ -3003,15 +3007,7 @@ export async function updateIncomeTransaction(id: number, input: IncomeTransacti
   }
 }
 
-export async function deleteIncomeTransaction(id: number) {
-  if (await currentUserIsSuperAdmin()) {
-    const { error } = await supabase.from("income_transactions").delete().eq("id", id);
-    if (error) {
-      throw new Error(error.message);
-    }
-    return;
-  }
-
+export async function softDeleteIncomeTransaction(id: number) {
   const currentUserId = await getCurrentUserId();
   const payload: SoftDeletePayload = {
     deleted_at: new Date().toISOString(),
@@ -3026,6 +3022,18 @@ export async function deleteIncomeTransaction(id: number) {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+export async function deleteIncomeTransaction(id: number) {
+  if (await currentUserIsSuperAdmin()) {
+    const { error } = await supabase.from("income_transactions").delete().eq("id", id);
+    if (error) {
+      throw new Error(error.message);
+    }
+    return;
+  }
+
+  await softDeleteIncomeTransaction(id);
 }
 
 // Unified expense functions

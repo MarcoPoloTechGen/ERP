@@ -1,6 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { App, Col, Form, Input, InputNumber, Modal, Row, Select } from "antd";
+import { App, Button, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select } from "antd";
+import { Trash2 } from "lucide-react";
 import { createIncomeTransaction, erpKeys, getAppSettings, updateIncomeTransaction } from "@/lib/erp";
 import { useAuth } from "@/lib/auth";
 import { currencyInputProps, formatCurrencyLabel, formatDateInput } from "@/lib/format";
@@ -17,15 +18,19 @@ export function IncomeModal({
   headerExtra,
   income,
   initialAssignment,
+  deleteLoading = false,
   open,
   onClose,
+  onDelete,
   onSaved,
 }: {
   headerExtra?: ReactNode;
   income: IncomeRow | null;
   initialAssignment?: ExpenseAssignment;
+  deleteLoading?: boolean;
   open: boolean;
   onClose: () => void;
+  onDelete?: () => void;
   onSaved: () => void;
 }) {
   const { t } = useLang();
@@ -194,6 +199,15 @@ export function IncomeModal({
         <Form.Item name="description" label={t.description}>
           <Input.TextArea rows={3} />
         </Form.Item>
+        {income && onDelete ? (
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Popconfirm title={t.deleteIncomeConfirm} okText={t.remove} cancelText={t.cancel} onConfirm={onDelete}>
+              <Button danger icon={<Trash2 size={16} />} loading={deleteLoading}>
+                {t.remove}
+              </Button>
+            </Popconfirm>
+          </div>
+        ) : null}
       </Form>
     </Modal>
   );

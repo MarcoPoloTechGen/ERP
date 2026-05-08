@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { App, Button, Col, Form, Image as AntImage, Input, InputNumber, Modal, Row, Select, Space, Typography, Upload } from "antd";
-import { Image as ImageIcon } from "lucide-react";
+import { App, Button, Col, Form, Image as AntImage, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Typography, Upload } from "antd";
+import { Image as ImageIcon, Trash2 } from "lucide-react";
 import { createInvoice, erpKeys, listProductsBySupplierIds, updateInvoice, type InvoiceStatus } from "@/lib/erp";
 import {
   buildExpenseAssignmentOptions,
@@ -97,13 +97,17 @@ export function InvoiceModal({
   headerExtra,
   invoice,
   initialAssignment,
+  deleteLoading = false,
   onClose,
+  onDelete,
   onSaved,
 }: {
   headerExtra?: ReactNode;
   invoice?: InvoiceRow;
   initialAssignment?: ExpenseAssignment;
+  deleteLoading?: boolean;
   onClose: () => void;
+  onDelete?: () => void;
   onSaved: () => void;
 }) {
   const { t } = useLang();
@@ -539,6 +543,15 @@ export function InvoiceModal({
             setExistingImageUrl(null);
           }}
         />
+        {invoice && onDelete ? (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <Popconfirm title={t.deleteInvoiceConfirm} okText={t.remove} cancelText={t.cancel} onConfirm={onDelete}>
+              <Button danger icon={<Trash2 size={16} />} loading={deleteLoading}>
+                {t.remove}
+              </Button>
+            </Popconfirm>
+          </div>
+        ) : null}
       </Form>
     </Modal>
   );

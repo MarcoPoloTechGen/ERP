@@ -3,6 +3,7 @@ export {
   deleteIncomeTransaction,
   listIncomeTransactionHistory,
   listIncomeTransactions,
+  softDeleteIncomeTransaction,
   updateIncomeTransaction,
   type IncomeTransaction,
   type IncomeTransactionHistoryAction,

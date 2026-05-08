@@ -5,6 +5,7 @@ export {
   listInvoiceHistory,
   listInvoices,
   markInvoicePaid,
+  softDeleteInvoice,
   updateInvoice,
   type Invoice,
   type InvoiceHistoryAction,

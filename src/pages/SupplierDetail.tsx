@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, FileText, Package2, Pencil, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, FileText, Pencil, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import {
   App,
   Button,
@@ -23,11 +23,8 @@ import {
 import AccountFlowChart from "@/components/finance/AccountFlowChart";
 import { ModalTitle } from "@/components/ModalTitle";
 import { invoiceStatusColor, invoiceStatusLabel } from "@/components/invoices/invoice-shared";
-import { ProductModal } from "@/components/products/ProductModal";
-import type { ProductRow } from "@/components/products/product-shared";
 import {
   createSupplierTransaction,
-  deleteProduct,
   deleteSupplier,
   deleteSupplierTransaction,
   erpKeys,
@@ -109,27 +106,6 @@ function productOptionLabel(product: Product) {
   return [product.name, product.unit, formatCurrencyPair({ usd: product.unitPriceUsd, iqd: product.unitPriceIqd }, { hideZero: true })]
     .filter(Boolean)
     .join(" | ");
-}
-
-function toProductRow(product: Product): ProductRow {
-  return {
-    id: product.id,
-    name: product.name,
-    supplier_id: product.supplierId,
-    supplier_name: product.supplierName,
-    supplier_ids: product.supplierIds,
-    supplier_names: product.supplierNames,
-    project_id: product.projectId,
-    project_name: product.projectName,
-    building_id: product.buildingId,
-    building_name: product.buildingName,
-    unit: product.unit,
-    unit_price: product.unitPrice,
-    currency: product.currency,
-    unit_price_usd: product.unitPriceUsd,
-    unit_price_iqd: product.unitPriceIqd,
-    created_at: product.createdAt,
-  };
 }
 
 function SupplierFormModal({
@@ -471,8 +447,6 @@ function SupplierProductsSection({ supplier }: { supplier: { id: number; name: s
   const { message } = App.useApp();
   const erpInvalidation = useErpInvalidation();
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [editedProduct, setEditedProduct] = useState<Product | null>(null);
-  const [showProductModal, setShowProductModal] = useState(false);
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: erpKeys.products,
     queryFn: listProducts,
@@ -498,46 +472,21 @@ function SupplierProductsSection({ supplier }: { supplier: { id: number; name: s
     onError: (error) => void message.error(toErrorMessage(error)),
   });
 
-  const deleteProductMutation = useMutation({
-    mutationFn: (product: Product) => deleteProduct(product.id),
-    onSuccess: async () => {
-      await erpInvalidation.supplierDetail(supplier.id);
-      message.success(t.deleted);
-    },
-    onError: (error) => void message.error(toErrorMessage(error)),
-  });
-
   return (
     <Card
-      title={
-        <Space>
-          <Package2 size={16} />
-          <span>{t.products}</span>
-        </Space>
-      }
+      title={t.products}
       extra={
-        <Space wrap>
-          <Button
-            type="primary"
-            disabled={!hasChanges}
-            loading={saveMutation.isPending}
-            onClick={() => saveMutation.mutate()}
-          >
-            {t.save}
-          </Button>
-          <Button
-            icon={<Plus size={16} />}
-            onClick={() => {
-              setEditedProduct(null);
-              setShowProductModal(true);
-            }}
-          >
-            {t.addProduct}
-          </Button>
-        </Space>
+        <Button
+          type="primary"
+          disabled={!hasChanges}
+          loading={saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+        >
+          {t.save}
+        </Button>
       }
     >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space direction="vertical" size="small" style={{ width: "100%" }}>
         <Select
           allowClear
           mode="multiple"
@@ -554,62 +503,7 @@ function SupplierProductsSection({ supplier }: { supplier: { id: number; name: s
           }))}
         />
         <Typography.Text type="secondary">{t.product_count(supplierProducts.length)}</Typography.Text>
-
-        {!supplierProducts.length ? (
-          <Empty description={t.noProducts} />
-        ) : (
-          <Space direction="vertical" size="small" style={{ width: "100%" }}>
-            {supplierProducts.map((product) => (
-              <Card key={product.id} size="small">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                  <div>
-                    <Typography.Text strong>{product.name}</Typography.Text>
-                    <div>
-                      <Typography.Text type="secondary">
-                        {[product.unit, product.projectName, product.buildingName].filter(Boolean).join(" | ") || t.noDetail}
-                      </Typography.Text>
-                    </div>
-                    <Typography.Text type="secondary">
-                      {t.unitPrice}:{" "}
-                      {formatCurrencyPair({ usd: product.unitPriceUsd, iqd: product.unitPriceIqd }, { hideZero: true })}
-                    </Typography.Text>
-                  </div>
-                  <Space size="small">
-                    <Button
-                      type="text"
-                      icon={<Pencil size={16} />}
-                      onClick={() => {
-                        setEditedProduct(product);
-                        setShowProductModal(true);
-                      }}
-                    />
-                    <Popconfirm
-                      title={t.deleteProductConfirm}
-                      okText={t.remove}
-                      cancelText={t.cancel}
-                      onConfirm={() => deleteProductMutation.mutate(product)}
-                    >
-                      <Button danger type="text" icon={<Trash2 size={16} />} loading={deleteProductMutation.isPending} />
-                    </Popconfirm>
-                  </Space>
-                </div>
-              </Card>
-            ))}
-          </Space>
-        )}
       </Space>
-
-      {showProductModal ? (
-        <ProductModal
-          lockedSupplier={supplier}
-          product={editedProduct ? toProductRow(editedProduct) : undefined}
-          onClose={() => {
-            setShowProductModal(false);
-            setEditedProduct(null);
-          }}
-          onSaved={() => void erpInvalidation.supplierDetail(supplier.id)}
-        />
-      ) : null}
     </Card>
   );
 }
